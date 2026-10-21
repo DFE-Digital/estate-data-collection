@@ -1,7 +1,7 @@
 # Estate Data Collection (EDC) Service
 
 Machine-to-machine data ingestion platform for the Department for Education (DfE) Education Estates Directorate (EED). 
-The service evaluates incoming condition surveys against dynamic JSON Schema contracts, manages file upload landing zones, maintains an append-only document cache, and manages contracts and payloads across dedicated Blob Storage containers (`schemas`, `payloads`, `processed`), preparing for downstream CDE injection.
+The service evaluates incoming condition surveys against dynamic JSON Schema contracts, manages draft upload sessions, maintains an append-only document cache, and orchestrates contracts and payloads across dedicated Blob Storage containers (`schemas`, `payloads`, `processed`), preparing for downstream Common Data Environment (CDE) injection.
 
 ---
 
@@ -53,19 +53,84 @@ sequenceDiagram
 
 ---
 
+## Observability, Logging & Instrumentation
+
+The solution implements a zero-allocation, high-performance structured logging architecture using compile-time source-generated loggers and OpenTelemetry:
+
+```mermaid
+flowchart TD
+    App[Application Use Cases] -->|Typed Calls| IInst[IInstrumentation Classes]
+    Infra[Infrastructure Adapters] -->|Typed Calls| IInst
+    Routes[Function HTTP Routes] -->|Typed Calls| IInst
+
+    IInst -->|[LoggerMessage] Source Generator| MSLog[Microsoft.Extensions.Logging]
+    
+    MSLog --> Console[Console / Terminal Stream]
+    MSLog --> OTEL[OpenTelemetry SDK]
+    MSLog --> AppInsights[Application Insights Worker Service]
+
+    OTEL -->|Traces & Metrics| AzureMon[Azure Monitor / App Insights]
+    OTEL -->|OTLP Exporter| Aspire[OTLP Collector / Aspire Dashboard]
+```
+
+### 1. `IInstrumentation` Pattern
+- **Marker Interface**: All instrumentation classes implement `IInstrumentation` (`EstateDataCollection.Common.Markers.IInstrumentation`).
+- **Automatic Registration**: Scrutor scans and registers all `IInstrumentation` implementations as transient dependencies (`services.AddClasses(c => c.AssignableTo<IInstrumentation>()).AsSelf().WithTransientLifetime()`).
+- **Zero-Allocation Logging**: Methods use C# compile-time `[LoggerMessage]` source generators:
+  - `VerifySchemaUseCaseInstrumentation`
+  - `SubmitSchemaUseCaseInstrumentation`
+  - `CreateSubmissionUseCaseInstrumentation`
+  - `UpdateSubmissionUseCaseInstrumentation`
+  - `FinaliseSubmissionUseCaseInstrumentation`
+  - `BlobSchemaRegistryInstrumentation`
+  - `BlobSubmissionInfrastructureInstrumentation`
+  - `JsonSchemaNetValidatorInstrumentation`
+  - `SchemaFunctionsInstrumentation`
+  - `SubmissionFunctionsInstrumentation`
+
+### 2. Logging & Host Configuration
+- **`host.json`**: Configures log levels for the Azure Functions Host runtime to prevent suppression of custom namespaces:
+  ```json
+  {
+    "version": "2.0",
+    "logging": {
+      "applicationInsights": {
+        "samplingSettings": {
+          "isEnabled": true,
+          "excludedTypes": "Request"
+        }
+      },
+      "logLevel": {
+        "default": "Information",
+        "Function": "Information",
+        "Host.Results": "Information",
+        "Host.Aggregator": "Information",
+        "EstateDataCollection": "Information"
+      }
+    }
+  }
+  ```
+- **`DependencyInjection.AddLogging`**: Centralised in `EstateDataCollection.AzureFunctions`:
+  - Registers `logging.AddConsole()` and sets the minimum log level to `LogLevel.Information`.
+  - Removes the default Application Insights filter that suppresses `< Warning` logs for custom categories.
+  - Automatically configures `ConfigureFunctionsApplicationInsights()` if `APPLICATIONINSIGHTS_CONNECTION_STRING` is present.
+  - Registers OpenTelemetry Tracing (`EstateDataCollection.*`, `Microsoft.Azure.Functions.Worker`) and Metrics.
+
+---
+
 ## Local Development Setup
 
 ### 1. Prerequisites
 - **.NET 10 SDK**
 - **Azure Functions Core Tools v4** (`brew install azure-functions-core-tools@4` on macOS)
 - **Docker** (for Azurite local storage emulator)
-- **Azure CLI** (optional, for creating containers)
+- **Azure CLI** (optional, for cloud deployments)
 
 ---
 
 ### 2. Running Azurite with Docker
 
-If you do not have Azurite running yet, launch it in Docker exposing the default ports:
+Launch Azurite in Docker exposing the default ports:
 
 ```bash
 docker run -d -p 10000:10000 -p 10001:10001 -p 10002:10002 \
@@ -74,7 +139,7 @@ docker run -d -p 10000:10000 -p 10001:10001 -p 10002:10002 \
 ```
 
 #### Create Required Blob Containers
-The application relies on three containers: `schemas`, `payloads`, and `processed`. You can create them automatically via the Azure CLI against your Azurite instance:
+The application relies on three containers: `schemas`, `payloads`, and `processed`:
 
 ```bash
 # Connection string for Azurite default emulator
@@ -86,13 +151,11 @@ az storage container create --name payloads --connection-string "$AZURITE_CONN"
 az storage container create --name processed --connection-string "$AZURITE_CONN"
 ```
 
-*(Alternatively, use **Azure Storage Explorer** connected to `http://127.0.0.1:10000/devstoreaccount1` to right-click and create `schemas`, `payloads`, and `processed`).*
-
 ---
 
 ### 3. Local Configuration (`local.settings.json`)
 
-The `src/EstateDataCollection.AzureFunctions/local.settings.json` file is pre-configured to bind directly to Azurite:
+The file `src/EstateDataCollection.AzureFunctions/local.settings.json` is pre-configured for local testing:
 
 ```json
 {
@@ -100,7 +163,9 @@ The `src/EstateDataCollection.AzureFunctions/local.settings.json` file is pre-co
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
-    "ConnectionStrings:BlobStorage": "UseDevelopmentStorage=true"
+    "AZURE_APPCONFIGURATION_ENDPOINT": "",
+    "ConnectionStrings:BlobStorage": "UseDevelopmentStorage=true",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:57382"
   },
   "Blob:Schema": {
     "ContainerName": "schemas",
@@ -120,10 +185,7 @@ The `src/EstateDataCollection.AzureFunctions/local.settings.json` file is pre-co
 
 ---
 
-### 4. Running the Functions Host Locally
-
-#### Option A: Via Command Line
-Navigate to the Azure Functions project folder and run:
+### 4. Running Locally
 
 ```bash
 cd src/EstateDataCollection.AzureFunctions
@@ -132,19 +194,46 @@ func start
 
 The host will start on `http://localhost:7071/api`.
 
-#### Option B: Via JetBrains Rider / Visual Studio
-1. Open `EstateDataCollection.slnx`.
-2. Select the **EstateDataCollection.AzureFunctions** run configuration.
-3. Click **Run** or **Debug** (`F5`).
+---
+
+### 5. Running Automated Tests
+
+Run the full automated test suite (60 unit and integration tests):
+
+```bash
+dotnet test
+```
+
+All test methods follow the human-readable behavioural naming pattern:
+`When_Condition_It_Should_ExpectedBehavior`
 
 ---
 
-### 5. Testing with the `.http` File
+### 6. Testing with the `.http` File
 
-Use [EstateDataCollection.http](EstateDataCollection.http) directly inside JetBrains Rider or VS Code (REST Client):
+Use [EstateDataCollection.http](src/EstateDataCollection.AzureFunctions/EstateDataCollection.http) directly inside JetBrains Rider or VS Code (REST Client):
 
 1. **Verify Candidate Schema**: Execute `1.1 Verify Schema Candidate` (tests Draft 2020-12 syntax and fixtures).
 2. **Publish Schema v1**: Execute `1.2 Submit & Schedule Schema v1` to upload the contract into Azurite's `schemas` container.
 3. **Start a Survey Session**: Execute `2.2 Create Submission Session` (creates session, pins v1, returns `submissionId`).
 4. **Iterative Draft Uploads**: Execute `2.3` through `2.5` to test partial uploads with real-time JSON Schema validation feedback.
 5. **Finalize**: Execute `2.7 Finalise Submission` to seal the survey and move it to `processed/` with `ReadyForCde`.
+
+---
+
+## Azure Deployment (Flex Consumption)
+
+### Key Configuration Considerations
+1. **`FUNCTIONS_WORKER_RUNTIME`**: On Azure Flex Consumption, do **not** define `FUNCTIONS_WORKER_RUNTIME` in Application Settings; it is managed at the platform site-config level.
+2. **Storage Resolution**: Infrastructure supports connection strings (`AzureWebJobsStorage`, `DEPLOYMENT_STORAGE_CONNECTION_STRING`) or Managed Identity (`AzureWebJobsStorage__accountName`, `EDC_STORAGE_BLOB_ENDPOINT`).
+3. **`.funcignore`**: Pre-configured to prevent local debug symbols, temporary files, and test outputs from inflating the deployment zip.
+
+### Publishing to Azure
+
+#### Via Azure Functions Core Tools
+```bash
+cd src/EstateDataCollection.AzureFunctions
+func azure functionapp publish s251d01-edc-func
+```
+
+> This ability is currently being investigated. May use a Github Actions workflow to automate deployment.

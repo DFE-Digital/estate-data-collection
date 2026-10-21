@@ -27,6 +27,7 @@ public sealed class BlobSchemaRegistry(
     public async Task<Result<ResolvedSchema>> ResolveActiveSchemaAsync(string schemaName, DateTimeOffset timestamp,
         CancellationToken cancellationToken = default)
     {
+        // todo: This will be replaced by a call to the schema registry based on if a schema is active by their effective dates
         return await GetExplicitSchemaAsync(schemaName, 1, cancellationToken);
     }
 
