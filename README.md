@@ -5,7 +5,7 @@ The service evaluates incoming condition surveys against dynamic JSON Schema con
 
 For full architectural deep-dives and design decisions, see:
 - 📖 [**System Architecture Guide**](ARCHITECTURE.md)
-- 🏛️ [**Architecture Decision Records (ADRs)**](docs/adr/DECISIONS.md)
+- 🏛️ [**Architecture Decision Records (ADRs)**](docs/decisions/DECISIONS.md)
 
 ---
 
