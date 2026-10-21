@@ -4,8 +4,8 @@ Machine-to-machine data ingestion platform for the Department for Education (DfE
 The service evaluates incoming condition surveys against dynamic JSON Schema contracts, manages draft upload sessions, maintains an append-only document cache, and orchestrates contracts and payloads across dedicated Blob Storage containers (`schemas`, `payloads`, `processed`), preparing for downstream Common Data Environment (CDE) injection.
 
 For full architectural deep-dives and design decisions, see:
-- 📖 [**System Architecture Guide**](ARCHITECTURE.md)
-- 🏛️ [**Architecture Decision Records (ADRs)**](docs/decisions/DECISIONS.md)
+- [System Architecture Guide](ARCHITECTURE.md)
+- [Architecture Decision Records (ADRs)](docs/decisions/DECISIONS.md)
 
 ---
 
