@@ -10,18 +10,18 @@ We use the [Michael Nygard ADR format](http://thinkrelevance.com/blog/2011/11/15
 
 | ADR | Title | Status | Date |
 | :--- | :--- | :--- | :--- |
-| [**0001**](0001-clean-architecture-and-use-cases.md) | Clean Architecture & Generic Use Case (`IUseCase`) Pattern | `Accepted` | 2026-10 |
-| [**0002**](0002-dynamic-json-schema-contract-validation.md) | Dynamic JSON Schema Validation (Draft 2020-12 via JsonSchema.Net) | `Accepted` | 2026-10 |
-| [**0003**](0003-multi-container-blob-storage-landing-zone.md) | Multi-Container Blob Storage Landing Zone (`schemas`, `payloads`, `processed`) | `Accepted` | 2026-10 |
-| [**0004**](0004-session-based-draft-ingestion-and-schema-pinning.md) | Session-Based Draft Ingestion, Schema Version Pinning & UUIDv7 | `Accepted` | 2026-10 |
-| [**0005**](0005-source-generated-instrumentation-and-opentelemetry.md) | Source-Generated Compile-Time Instrumentation (`IInstrumentation`) & OpenTelemetry | `Accepted` | 2026-10 |
-| [**0006**](0006-flex-consumption-self-contained-deployment.md) | Self-Contained Deployment Strategy on Azure Functions Flex Consumption | `Accepted` | 2026-10 |
-| [**0007**](0007-centralised-configuration-and-strongly-typed-options.md) | Centralised Configuration with Strongly-Typed Options and Azure App Configuration | `Accepted` | 2026-10 |
-| [**0008**](0008-testing-strategy-awesomeassertions-nsubstitute-and-fixtures.md) | Testing Strategy with NSubstitute, AwesomeAssertions, and Reusable Fixtures | `Accepted` | 2026-10 |
-| [**0009**](0009-central-package-management-and-build-props.md) | Central Package Management (CPM) and Solution-Wide Build Properties | `Accepted` | 2026-10 |
-| [**0010**](0010-direct-to-storage-landing-zone-and-user-delegation-sas.md) | Direct-to-Storage Landing Zone with User Delegation SAS and Defender Quarantine | `Accepted` | 2026-10 |
-| [**0011**](0011-architectural-marker-interfaces-and-assembly-scanning.md) | Architectural Marker Interfaces and Assembly-Anchored Scrutor Scanning | `Accepted` | 2026-10 |
-| [**0012**](0012-local-developer-orchestration-and-http-specifications.md) | Local Developer Orchestration with Azurite and Executable HTTP Specifications | `Accepted` | 2026-10 |
+| [**0001**](0001-clean-architecture-and-use-cases.md) | Clean Architecture & Generic Use Case (`IUseCase`) Pattern | `Proposed` | 2026-10 |
+| [**0002**](0002-dynamic-json-schema-contract-validation.md) | Dynamic JSON Schema Validation (Draft 2020-12 via JsonSchema.Net) | `Proposed` | 2026-10 |
+| [**0003**](0003-multi-container-blob-storage-landing-zone.md) | Multi-Container Blob Storage Landing Zone (`schemas`, `payloads`, `processed`) | `Proposed` | 2026-10 |
+| [**0004**](0004-session-based-draft-ingestion-and-schema-pinning.md) | Session-Based Draft Ingestion, Schema Version Pinning & UUIDv7 | `Proposed` | 2026-10 |
+| [**0005**](0005-source-generated-instrumentation-and-opentelemetry.md) | Source-Generated Compile-Time Instrumentation (`IInstrumentation`) & OpenTelemetry | `Proposed` | 2026-10 |
+| [**0006**](0006-flex-consumption-self-contained-deployment.md) | Self-Contained Deployment Strategy on Azure Functions Flex Consumption | `Proposed` | 2026-10 |
+| [**0007**](0007-centralised-configuration-and-strongly-typed-options.md) | Centralised Configuration with Strongly-Typed Options and Azure App Configuration | `Proposed` | 2026-10 |
+| [**0008**](0008-testing-strategy-awesomeassertions-nsubstitute-and-fixtures.md) | Testing Strategy with NSubstitute, AwesomeAssertions, and Reusable Fixtures | `Proposed` | 2026-10 |
+| [**0009**](0009-central-package-management-and-build-props.md) | Central Package Management (CPM) and Solution-Wide Build Properties | `Proposed` | 2026-10 |
+| [**0010**](0010-direct-to-storage-landing-zone-and-user-delegation-sas.md) | Direct-to-Storage Landing Zone with User Delegation SAS and Defender Quarantine | `Proposed` | 2026-10 |
+| [**0011**](0011-architectural-marker-interfaces-and-assembly-scanning.md) | Architectural Marker Interfaces and Assembly-Anchored Scrutor Scanning | `Proposed` | 2026-10 |
+| [**0012**](0012-local-developer-orchestration-and-http-specifications.md) | Local Developer Orchestration with Azurite and Executable HTTP Specifications | `Proposed` | 2026-10 |
 | [**0013**](0013-superseding-relational-document-cache-for-pure-blob-correlation.md) | Superseding Relational SQL Document Cache in Favour of Pure Blob Storage Correlation | `Superseded` | 2026-10 |
 
 ---
