@@ -1,0 +1,82 @@
+# ==============================================================================
+# .NET / C# Build and Output
+# ==============================================================================
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Project & Scaffolding Artifacts
+project.lock.json
+project.fragment.lock.json
+artifacts/
+ScaffoldingReadMe.txt
+publish/
+publish-out/
+*.zip
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+
+# MSBuild Binary and Structured Log
+*.binlog
+
+# Testing & Coverage
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+CodeCoverage/
+*.coverage
+*.coveragexml
+
+# Azure Functions / Secrets / Local Configuration
+appsettings*.Development.json
+local.settings.json
+.env
+.env.*
+!.env.example
+
+# JetBrains Rider & ReSharper
+.idea/
+*.sln.DotSettings.user
+*.DotSettings.user
+_ReSharper*/
+*.user
+*.userprefs
+*.suo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+.DocumentRevisions-V100
+.fseventsd
+
+# Visual Studio / VS Code
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# AI Assistants & Local Tooling
+.agents/
+.gemini/

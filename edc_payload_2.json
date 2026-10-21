@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dfe_cde_edc_integtration/schemas/edc_payload.schema.json",
+  "title": "edc_payload",
+  "description": "JSON Schema for eed_catalogue_30_bronze.cde_edc_integration.edc_payload",
+  "schemaVersion": 2,
+  "createdTimestamp": "2026-10-13T09:43:52Z",
+  "type": "object",
+  "properties": {
+    "urn": {
+      "type": "integer"
+    },
+    "school_name": {
+      "type": "string"
+    },
+    "school_address": {
+      "type": "string"
+    },
+    "local_authority": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "telephone": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "diocese": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "urn",
+    "school_name",
+    "school_address"
+  ],
+  "additionalProperties": false
+}

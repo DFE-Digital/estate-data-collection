@@ -1,0 +1,21 @@
+<Solution>
+    <Folder Name="/solution/">
+        <File Path="README.md" />
+        <File Path="ARCHITECTURE.md" />
+        <File Path="Directory.Build.props" />
+        <File Path="Directory.Packages.props" />
+        <File Path=".gitignore" />
+    </Folder>
+    <Folder Name="/src/">
+        <Project Path="src/EstateDataCollection.Common/EstateDataCollection.Common.csproj" />
+        <Project Path="src/EstateDataCollection.Application/EstateDataCollection.Application.csproj" />
+        <Project Path="src/EstateDataCollection.Domain/EstateDataCollection.Domain.csproj" />
+        <Project Path="src/EstateDataCollection.Infrastructure/EstateDataCollection.Infrastructure.csproj" />
+        <Project Path="src/EstateDataCollection.AzureFunctions/EstateDataCollection.AzureFunctions.csproj" />
+    </Folder>
+    <Folder Name="/test/">
+        <Project Path="test/EstateDataCollection.Tests.Common/EstateDataCollection.Tests.Common.csproj" />
+        <Project Path="test/EstateDataCollection.Tests.Unit/EstateDataCollection.Tests.Unit.csproj" />
+        <Project Path="test/EstateDataCollection.Tests.Integration/EstateDataCollection.Tests.Integration.csproj" />
+    </Folder>
+</Solution>

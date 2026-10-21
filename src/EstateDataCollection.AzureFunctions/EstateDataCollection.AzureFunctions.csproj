@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+        <RootNamespace>EstateDataCollection.AzureFunctions</RootNamespace>
+    </PropertyGroup>
+
+    <!-- 
+        Azure Functions Worker SDK 2.0.0 targets check only up to v9.0. 
+        Ensure net10.0 sets tooling suffix for v4 isolated worker 
+    -->
+    <Target Name="_FixFunctionsToolingSuffixForNet10" BeforeTargets="_FunctionsPreBuild">
+        <PropertyGroup>
+            <_ToolingSuffix Condition="'$(_ToolingSuffix)' == ''">net9-isolated</_ToolingSuffix>
+        </PropertyGroup>
+    </Target>
+
+    <ItemGroup>
+        <PackageReference Include="Scrutor" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.EventGrid" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Timer" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="host.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="local.settings.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\EstateDataCollection.Application\EstateDataCollection.Application.csproj" />
+      <ProjectReference Include="..\EstateDataCollection.Common\EstateDataCollection.Common.csproj" />
+      <ProjectReference Include="..\EstateDataCollection.Domain\EstateDataCollection.Domain.csproj" />
+      <ProjectReference Include="..\EstateDataCollection.Infrastructure\EstateDataCollection.Infrastructure.csproj" />
+    </ItemGroup>
+    
+</Project>

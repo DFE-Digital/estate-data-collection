@@ -1,0 +1,9 @@
+.git*
+.vscode
+local.settings.json
+test/
+*.Tests.*
+bin/Debug
+obj/Debug
+publish-test/
+publish-out/

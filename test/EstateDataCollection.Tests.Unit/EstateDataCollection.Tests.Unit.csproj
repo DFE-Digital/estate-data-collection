@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EstateDataCollection.Tests.Common\EstateDataCollection.Tests.Common.csproj" />
+    <ProjectReference Include="..\..\src\EstateDataCollection.Application\EstateDataCollection.Application.csproj" />
+    <ProjectReference Include="..\..\src\EstateDataCollection.Infrastructure\EstateDataCollection.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

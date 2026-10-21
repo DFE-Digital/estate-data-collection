@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Scrutor" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <ProjectReference Include="..\EstateDataCollection.Common\EstateDataCollection.Common.csproj" />
+    <ProjectReference Include="..\EstateDataCollection.Domain\EstateDataCollection.Domain.csproj" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <Folder Include="Options\" />
+    <Folder Include="UseCases\Schema\" />
+  </ItemGroup>
+  
+</Project>

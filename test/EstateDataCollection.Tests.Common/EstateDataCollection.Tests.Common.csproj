@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Bogus" />
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="JsonSchema.Net" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EstateDataCollection.Domain\EstateDataCollection.Domain.csproj" />
+    <ProjectReference Include="..\..\src\EstateDataCollection.Application\EstateDataCollection.Application.csproj" />
+  </ItemGroup>
+</Project>
