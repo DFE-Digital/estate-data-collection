@@ -6,6 +6,22 @@
         <File Path="Directory.Packages.props" />
         <File Path=".gitignore" />
     </Folder>
+    <Folder Name="/decisions/">
+        <File Path="docs/decisions/DECISIONS.md" />
+        <File Path="docs/decisions/0001-clean-architecture-and-use-cases.md" />
+        <File Path="docs/decisions/0002-dynamic-json-schema-contract-validation.md" />
+        <File Path="docs/decisions/0003-multi-container-blob-storage-landing-zone.md" />
+        <File Path="docs/decisions/0004-session-based-draft-ingestion-and-schema-pinning.md" />
+        <File Path="docs/decisions/0005-source-generated-instrumentation-and-opentelemetry.md" />
+        <File Path="docs/decisions/0006-flex-consumption-self-contained-deployment.md" />
+        <File Path="docs/decisions/0007-centralised-configuration-and-strongly-typed-options.md" />
+        <File Path="docs/decisions/0008-testing-strategy-awesomeassertions-nsubstitute-and-fixtures.md" />
+        <File Path="docs/decisions/0009-central-package-management-and-build-props.md" />
+        <File Path="docs/decisions/0010-direct-to-storage-landing-zone-and-user-delegation-sas.md" />
+        <File Path="docs/decisions/0011-architectural-marker-interfaces-and-assembly-scanning.md" />
+        <File Path="docs/decisions/0012-local-developer-orchestration-and-http-specifications.md" />
+        <File Path="docs/decisions/0013-superseding-relational-document-cache-for-pure-blob-correlation.md" />
+    </Folder>
     <Folder Name="/src/">
         <Project Path="src/EstateDataCollection.Common/EstateDataCollection.Common.csproj" />
         <Project Path="src/EstateDataCollection.Application/EstateDataCollection.Application.csproj" />

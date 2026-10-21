@@ -3,6 +3,10 @@
 Machine-to-machine data ingestion platform for the Department for Education (DfE) Education Estates Directorate (EED). 
 The service evaluates incoming condition surveys against dynamic JSON Schema contracts, manages draft upload sessions, maintains an append-only document cache, and orchestrates contracts and payloads across dedicated Blob Storage containers (`schemas`, `payloads`, `processed`), preparing for downstream Common Data Environment (CDE) injection.
 
+For full architectural deep-dives and design decisions, see:
+- 📖 [**System Architecture Guide**](ARCHITECTURE.md)
+- 🏛️ [**Architecture Decision Records (ADRs)**](docs/adr/DECISIONS.md)
+
 ---
 
 ## Architecture Flow
@@ -230,10 +234,30 @@ Use [EstateDataCollection.http](src/EstateDataCollection.AzureFunctions/EstateDa
 
 ### Publishing to Azure
 
-#### Via Azure Functions Core Tools
+#### Method A: Self-Contained Linux Publish (Recommended for .NET 10 on Linux Flex Consumption)
+Bundles the .NET 10 runtime directly into the deployment package to guarantee compatibility with Linux host images:
+
+```bash
+# 1. Publish self-contained for Linux x64
+dotnet publish src/EstateDataCollection.AzureFunctions \
+  -c Release \
+  -r linux-x64 \
+  --self-contained true \
+  -o ./publish-out
+
+# 2. Package and zip deploy via Azure CLI
+cd ./publish-out && zip -r ../deploy.zip . && cd ..
+az functionapp deployment source config-zip \
+  -g s251d01rg-uks-EstateDataCollection \
+  -n s251d01-edc-func \
+  --src ./deploy.zip
+
+# 3. Clean up build artifacts
+rm -rf ./publish-out ./deploy.zip
+```
+
+#### Method B: Via Azure Functions Core Tools
 ```bash
 cd src/EstateDataCollection.AzureFunctions
 func azure functionapp publish s251d01-edc-func
 ```
-
-> This ability is currently being investigated. May use a Github Actions workflow to automate deployment.

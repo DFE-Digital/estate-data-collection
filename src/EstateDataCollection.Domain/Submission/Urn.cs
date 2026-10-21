@@ -17,7 +17,7 @@ public readonly record struct Urn
     
     public static Result<Urn> Create(int value)
     {
-        if (value < 0)
+        if (value <= 0)
         {
             return Error.Validation(ErrorCodes.PayloadInvalidUrn);
         }
