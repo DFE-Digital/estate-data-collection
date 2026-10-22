@@ -1,6 +1,7 @@
 using System.Reflection;
 using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.Exporter;
+using EstateDataCollection.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -13,6 +14,9 @@ namespace EstateDataCollection.Infrastructure.Monitoring;
 
 public static class MonitoringExtensions
 {
+    private const string LocalIdentifier = $"{nameof(EstateDataCollection)}.*";
+    private const string WorkerIdentifier = "Microsoft.Azure.Functions.Worker";
+    
     /// <summary>
     /// Configures OpenTelemetry distributed tracing, metrics, and structured logging.
     /// Supports Azure Application Insights (via Azure Monitor exporter and Entra ID) and OTLP collectors.
@@ -30,14 +34,8 @@ public static class MonitoringExtensions
 
         logging.AddConsole();
 
-        var appInsightsConnectionString = configuration[options.AppInsightsEnvironmentVariable]
-            ?? configuration[$"Values:{options.AppInsightsEnvironmentVariable}"]
-            ?? Environment.GetEnvironmentVariable(options.AppInsightsEnvironmentVariable);
-
-        var otlpEndpoint = configuration[options.OtlpEndpointEnvironmentVariable]
-            ?? configuration[$"Values:{options.OtlpEndpointEnvironmentVariable}"]
-            ?? Environment.GetEnvironmentVariable(options.OtlpEndpointEnvironmentVariable);
-
+        var appInsightsConnectionString = GetConfigurationItem(configuration,options.AppInsightsEnvironmentVariable);
+        var otlpEndpoint = GetConfigurationItem(configuration, options.OtlpEndpointEnvironmentVariable);
         var hasAppInsights = !string.IsNullOrWhiteSpace(appInsightsConnectionString);
         var hasOtlp = !string.IsNullOrWhiteSpace(otlpEndpoint);
 
@@ -46,16 +44,23 @@ public static class MonitoringExtensions
             return services;
         }
 
-        var version = GetServiceVersion();
         var serviceName = options.ServiceName;
-        if (configuration.GetValue<bool>(options.AppInsightsVersionedEnvironmentVariable) && !string.IsNullOrWhiteSpace(version))
+        var info = GetVersionInfo(configuration, options.ServiceDescriberEnvironmentVariable);
+        
+        if (configuration.GetValue<bool>(options.AppInsightsVersionedEnvironmentVariable))
         {
-            serviceName += ":" + version.Split('+')[0];
+            serviceName += ":" + info.Version;
         }
 
         var resourceBuilder = ResourceBuilder
             .CreateDefault()
-            .AddService(serviceName: serviceName, serviceVersion: version);
+            .AddService(serviceName: serviceName, serviceVersion: info.InformativeVersion)
+            .AddAttributes([
+                new KeyValuePair<string, object>("service.environment", info.Environment),
+                new KeyValuePair<string, object>(AppVersionProvider.Keys.Version, info.Version),
+                new KeyValuePair<string, object>(AppVersionProvider.Keys.InformativeVersion, info.InformativeVersion),
+                new KeyValuePair<string, object>(AppVersionProvider.Keys.Sha, info.CommitSha),
+            ]);
 
         services.AddOpenTelemetry()
             .WithTracing(tracing =>
@@ -63,8 +68,8 @@ public static class MonitoringExtensions
                 tracing
                     .SetResourceBuilder(resourceBuilder)
                     .AddSource(serviceName)
-                    .AddSource("EstateDataCollection.*")
-                    .AddSource("Microsoft.Azure.Functions.Worker")
+                    .AddSource(LocalIdentifier)
+                    .AddSource(WorkerIdentifier)
                     .AddHttpClientInstrumentation()
                     .AddSqlClientInstrumentation(opt => opt.RecordException = true);
 
@@ -86,8 +91,8 @@ public static class MonitoringExtensions
             {
                 metrics.SetResourceBuilder(resourceBuilder)
                     .AddMeter(serviceName)
-                    .AddMeter("EstateDataCollection.*")
-                    .AddMeter("Microsoft.Azure.Functions.Worker")
+                    .AddMeter(LocalIdentifier)
+                    .AddMeter(WorkerIdentifier)
                     .AddHttpClientInstrumentation();
 
                 if (hasAppInsights)
@@ -129,17 +134,18 @@ public static class MonitoringExtensions
         return services;
     }
 
-    /// <summary>
-    /// Retrieves the InformationalVersion or assembly version of the EDC service.
-    /// </summary>
-    public static string GetServiceVersion()
+    private static string? GetConfigurationItem(IConfiguration configuration, string key)
     {
-        var assembly = typeof(MonitoringExtensions).Assembly;
+        return configuration[key]
+               ?? configuration[$"Values:{key}"]
+               ?? Environment.GetEnvironmentVariable(key);
+    }
+    
+    private sealed record EnvironmentInfo(string Version, string InformativeVersion, string CommitSha, string Environment);
 
-        return assembly
-                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-                ?.InformationalVersion
-            ?? assembly.GetName().Version?.ToString()
-            ?? string.Empty;
+    private static EnvironmentInfo GetVersionInfo(IConfiguration configuration, string environmentKey)
+    {
+        var env = GetConfigurationItem(configuration, environmentKey) ?? "UNDECLARED";
+        return new EnvironmentInfo(AppVersionProvider.InformativeVersion, AppVersionProvider.InformativeVersion, AppVersionProvider.Sha, env);
     }
 }

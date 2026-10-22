@@ -1,0 +1,124 @@
+name: 'CD: Release Pipeline (Main)'
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write       # Required for Azure OIDC
+  contents: read
+
+concurrency:
+  group: cd-release-main
+  cancel-in-progress: false
+
+jobs:
+  # =========================================================================
+  # 1. BUILD ONCE WITH CALVER
+  # =========================================================================
+  build-release-artifact:
+    name: Build Release Package
+    runs-on: ubuntu-latest
+    outputs:
+      calver-version: ${{ steps.build.outputs.calver-version }}
+      full-version: ${{ steps.build.outputs.full-version }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup, Test & Package
+        id: build
+        uses: ./.github/actions/setup-and-test
+        with:
+          dotnet-version: '10.0.x'
+          run-number: ${{ github.run_number }}
+          commit-sha: ${{ github.sha }}
+
+      - name: Upload Deployment Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edc-release-bundle
+          path: ${{ steps.build.outputs.package-path }}
+          retention-days: 14
+
+  # =========================================================================
+  # 2. DEPLOY TO DEVELOPMENT
+  # =========================================================================
+  deploy-dev:
+    name: Deploy to Development
+    needs: build-release-artifact
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+      url: ${{ steps.deploy.outputs.app-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: edc-release-bundle
+
+      - id: deploy
+        uses: ./.github/actions/deploy-function
+        with:
+          environment-name: development
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-linux-x64.zip
+
+  # =========================================================================
+  # 3. DEPLOY TO TEST / STAGING (Automatic after Dev passes)
+  # =========================================================================
+  deploy-test:
+    name: Deploy to Test
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    environment:
+      name: test
+      url: ${{ steps.deploy.outputs.app-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: edc-release-bundle
+
+      - id: deploy
+        uses: ./.github/actions/deploy-function
+        with:
+          environment-name: test
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-linux-x64.zip
+
+  # =========================================================================
+  # 4. DEPLOY TO PRODUCTION (Protected by Required Reviewers Approval)
+  # =========================================================================
+  deploy-prod:
+    name: Deploy to Production
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.app-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: edc-release-bundle
+
+      - id: deploy
+        uses: ./.github/actions/deploy-function
+        with:
+          environment-name: production
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-linux-x64.zip

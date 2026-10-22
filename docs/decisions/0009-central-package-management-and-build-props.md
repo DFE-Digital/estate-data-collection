@@ -1,5 +1,6 @@
 ---
 status: "proposed"
+sub-status: "implemented"
 date: 2026-10-21
 decision-makers: ["Chris Kelly"]
 ---

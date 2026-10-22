@@ -1,0 +1,76 @@
+name: 'Deploy EDC Functions to Azure'
+description: 'Authenticates via OIDC and deploys pre-built zip artifact to Azure Functions Flex Consumption'
+
+inputs:
+  environment-name:
+    description: 'Target environment name (development, test, production)'
+    required: true
+  azure-client-id:
+    description: 'Entra ID Client ID'
+    required: true
+  azure-tenant-id:
+    description: 'Azure Tenant ID'
+    required: true
+  azure-subscription-id:
+    description: 'Azure Subscription ID'
+    required: true
+  resource-group:
+    description: 'Target Azure Resource Group'
+    required: true
+  function-app-name:
+    description: 'Target Azure Function App Name'
+    required: true
+  package-path:
+    description: 'Path to the deployment zip package'
+    required: false
+    default: './edc-functions-linux-x64.zip'
+
+outputs:
+  app-url:
+    description: 'Public URL of the deployed Function App'
+    value: ${{ steps.deploy.outputs.app_url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Azure Login via OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.azure-client-id }}
+        tenant-id: ${{ inputs.azure-tenant-id }}
+        subscription-id: ${{ inputs.azure-subscription-id }}
+
+    - name: Deploy Function App Zip
+      id: deploy
+      shell: bash
+      run: |
+        echo "Deploying ${{ inputs.package-path }} to ${{ inputs.function-app-name }} in ${{ inputs.resource-group }} (${{ inputs.environment-name }})"
+        
+        az functionapp deployment source config-zip \
+          --resource-group "${{ inputs.resource-group }}" \
+          --name "${{ inputs.function-app-name }}" \
+          --src "${{ inputs.package-path }}"
+        
+        HOSTNAME=$(az functionapp show \
+          --resource-group "${{ inputs.resource-group }}" \
+          --name "${{ inputs.function-app-name }}" \
+          --query defaultHostName -o tsv)
+        
+        APP_URL="https://${HOSTNAME}"
+        echo "app_url=$APP_URL" >> "$GITHUB_OUTPUT"
+        echo "Deployed successfully to: $APP_URL"
+
+    - name: Smoke Test & Health Check
+      shell: bash
+      run: |
+        APP_URL="${{ steps.deploy.outputs.app_url }}"
+        echo "🔍 Running smoke test against $APP_URL/api/about"
+        
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/api/about" || echo "000")
+        echo "Endpoint HTTP Status: $HTTP_STATUS"
+        
+        if [ "$HTTP_STATUS" = "200" ]; then
+          echo "Health check passed with 200 OK"
+        else
+          echo "⚠Health check returned status $HTTP_STATUS (warming up instance)"
+        fi

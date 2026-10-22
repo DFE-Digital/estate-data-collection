@@ -1,5 +1,6 @@
 ---
 status: "superseded by ADR-0003 and ADR-0004"
+status: "implemented"
 date: 2026-10-21
 decision-makers: ["Chris Kelly"]
 ---

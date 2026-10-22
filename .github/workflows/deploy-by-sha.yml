@@ -1,0 +1,84 @@
+name: 'CD: Deploy by Commit SHA'
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Git Commit SHA to deploy (7 to 40 characters)'
+        required: true
+      target_environment:
+        description: 'Target Environment'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - test
+          - production
+
+permissions:
+  id-token: write       # Required for Azure OIDC
+  contents: read
+
+jobs:
+  # =========================================================================
+  # 1. BUILD ARTIFACT FROM TARGET COMMIT SHA
+  # =========================================================================
+  build-sha:
+    name: Build SHA (${{ inputs.commit_sha }})
+    runs-on: ubuntu-latest
+    outputs:
+      calver-version: ${{ steps.build.outputs.calver-version }}
+      full-version: ${{ steps.build.outputs.full-version }}
+
+    steps:
+      - name: Checkout Target Commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Setup, Test & Package
+        id: build
+        uses: ./.github/actions/setup-and-test
+        with:
+          dotnet-version: '10.0.x'
+          run-number: ${{ github.run_number }}
+          commit-sha: ${{ inputs.commit_sha }}
+
+      - name: Upload Deployment Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edc-sha-bundle
+          path: ${{ steps.build.outputs.package-path }}
+          retention-days: 3
+
+  # =========================================================================
+  # 2. DEPLOY DIRECTLY TO SELECTED TARGET ENVIRONMENT
+  # =========================================================================
+  deploy-target:
+    name: Deploy to ${{ inputs.target_environment }}
+    needs: build-sha
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.target_environment }}
+      url: ${{ steps.deploy.outputs.app-url }}
+    steps:
+      - name: Checkout Actions
+        uses: actions/checkout@v4
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: edc-sha-bundle
+
+      - name: Deploy to Azure
+        id: deploy
+        uses: ./.github/actions/deploy-function
+        with:
+          environment-name: ${{ inputs.target_environment }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-linux-x64.zip

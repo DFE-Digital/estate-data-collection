@@ -1,0 +1,99 @@
+name: 'CI: Pull Request Verification'
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-verify:
+    name: Build & Test PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup, Test & Package
+        id: build
+        uses: ./.github/actions/setup-and-test
+        with:
+          dotnet-version: '10.0.x'
+          run-number: ${{ github.run_number }}
+          commit-sha: ${{ github.sha }}
+
+      - name: Generate Job Summary
+        run: |
+          cat << 'EOF' >> $GITHUB_STEP_SUMMARY
+          ## 🧪 PR Test & Verification Summary
+          
+          | Metric | Value |
+          | :--- | :--- |
+          | **CalVer Candidate** | `${{ steps.build.outputs.calver-version }}` |
+          | **Informational Version** | `${{ steps.build.outputs.full-version }}` |
+          | **Total Tests** | `${{ steps.build.outputs.tests-total }}` |
+          | **Passed** | `✅ ${{ steps.build.outputs.tests-passed }}` |
+          | **Failed** | `❌ ${{ steps.build.outputs.tests-failed }}` |
+          | **Duration** | `${{ steps.build.outputs.tests-duration }}` |
+          | **Packaging** | `.NET 10 Self-Contained Linux x64 Verified` |
+          EOF
+
+      - name: Post or Update PR Sticky Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- edc-pr-test-status -->';
+            const calver = '${{ steps.build.outputs.calver-version }}';
+            const passed = '${{ steps.build.outputs.tests-passed }}';
+            const total = '${{ steps.build.outputs.tests-total }}';
+            const failed = '${{ steps.build.outputs.tests-failed }}';
+            const duration = '${{ steps.build.outputs.tests-duration }}';
+            const sha = context.sha.substring(0, 7);
+            
+            const isFailed = parseInt(failed) > 0;
+            const statusIcon = isFailed ? '❌ **TESTS FAILED**' : '✅ **ALL TESTS PASSED**';
+            
+            const body = `${marker}
+            ### 🧪 EDC PR Quality Gate: ${statusIcon}
+            
+            | Metric | Details |
+            | :--- | :--- |
+            | 🏷️ **CalVer Preview** | \`${calver}\` (\`${sha}\`) |
+            | 📊 **Test Suite** | **${passed} / ${total} passed** (${failed} failed) |
+            | ⏱️ **Duration** | ${duration} |
+            | 📦 **Artifact** | \`edc-functions-linux-x64.zip\` (.NET 10 Self-Contained) |
+            
+            > *This check only validates quality. Automated promotion begins once merged to \`main\`.*
+            
+            *Last updated for commit \`${sha}\` at ${new Date().toISOString()}*`;
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const existingComment = comments.find(c => c.body.includes(marker));
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

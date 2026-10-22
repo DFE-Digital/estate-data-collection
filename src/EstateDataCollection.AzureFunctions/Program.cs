@@ -13,6 +13,7 @@ builder.ConfigureFunctionsWebApplication();
 
 builder.UseMiddleware<RequestSizeLimitMiddleware>();
 builder.UseMiddleware<GlobalExceptionMiddleware>();
+builder.UseMiddleware<VersionLoggingMiddleware>();
 
 builder.Services.AddLogging(builder.Configuration, builder.Logging);
 builder.Services.AddFunctions();

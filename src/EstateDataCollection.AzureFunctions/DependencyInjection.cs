@@ -53,6 +53,10 @@ public static class DependencyInjection
 
         if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
         {
+            services.AddApplicationInsightsTelemetryWorkerService(options =>
+            {
+                options.ConnectionString = appInsightsConnectionString;
+            });
             services.ConfigureFunctionsApplicationInsights();
         }
         
