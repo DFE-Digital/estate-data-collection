@@ -12,18 +12,9 @@ concurrency:
   group: cd-release-main
   cancel-in-progress: false
   
-services:
-  azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:latest
-    ports:
-      - 10000:10000
-      - 10001:10001
-      - 10002:10002
 
 jobs:
-  # =========================================================================
-  # 1. BUILD ONCE WITH CALVER
-  # =========================================================================
+  
   build-release-artifact:
     name: Build Release Package
     runs-on: ubuntu-latest
@@ -50,9 +41,6 @@ jobs:
           path: ${{ steps.build.outputs.package-path }}
           retention-days: 14
 
-  # =========================================================================
-  # 2. DEPLOY TO DEVELOPMENT
-  # =========================================================================
   deploy-dev:
     name: Deploy to Development
     needs: build-release-artifact
@@ -77,9 +65,6 @@ jobs:
           function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-linux-x64.zip
 
-  # =========================================================================
-  # 3. DEPLOY TO TEST / STAGING (Automatic after Dev passes)
-  # =========================================================================
   deploy-test:
     name: Deploy to Test
     needs: deploy-dev
@@ -104,9 +89,6 @@ jobs:
           function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-linux-x64.zip
 
-  # =========================================================================
-  # 4. DEPLOY TO PRODUCTION (Protected by Required Reviewers Approval)
-  # =========================================================================
   deploy-prod:
     name: Deploy to Production
     needs: deploy-test

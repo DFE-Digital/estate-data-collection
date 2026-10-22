@@ -13,14 +13,6 @@ concurrency:
   group: ci-pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-services:
-  azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:latest
-    ports:
-      - 10000:10000
-      - 10001:10001
-      - 10002:10002
-
 jobs:
   test-and-verify:
     name: Build & Test PR
@@ -40,15 +32,15 @@ jobs:
       - name: Generate Job Summary
         run: |
           cat << 'EOF' >> $GITHUB_STEP_SUMMARY
-          ## 🧪 PR Test & Verification Summary
+          ## PR Test & Verification Summary
           
           | Metric | Value |
           | :--- | :--- |
           | **CalVer Candidate** | `${{ steps.build.outputs.calver-version }}` |
           | **Informational Version** | `${{ steps.build.outputs.full-version }}` |
           | **Total Tests** | `${{ steps.build.outputs.tests-total }}` |
-          | **Passed** | `✅ ${{ steps.build.outputs.tests-passed }}` |
-          | **Failed** | `❌ ${{ steps.build.outputs.tests-failed }}` |
+          | **Passed** | `${{ steps.build.outputs.tests-passed }}` |
+          | **Failed** | `${{ steps.build.outputs.tests-failed }}` |
           | **Duration** | `${{ steps.build.outputs.tests-duration }}` |
           | **Packaging** | `.NET 10 Self-Contained Linux x64 Verified` |
           EOF
@@ -66,17 +58,17 @@ jobs:
             const sha = context.sha.substring(0, 7);
             
             const isFailed = parseInt(failed) > 0;
-            const statusIcon = isFailed ? '❌ **TESTS FAILED**' : '✅ **ALL TESTS PASSED**';
+            const statusIcon = isFailed ? '**FAILED**' : '**PASSED**';
             
             const body = `${marker}
-            ### 🧪 EDC PR Quality Gate: ${statusIcon}
+            ### EDC PR Quality Gate: ${statusIcon}
             
             | Metric | Details |
             | :--- | :--- |
-            | 🏷️ **CalVer Preview** | \`${calver}\` (\`${sha}\`) |
-            | 📊 **Test Suite** | **${passed} / ${total} passed** (${failed} failed) |
-            | ⏱️ **Duration** | ${duration} |
-            | 📦 **Artifact** | \`edc-functions-linux-x64.zip\` (.NET 10 Self-Contained) |
+            | **CalVer Preview** | \`${calver}\` (\`${sha}\`) |
+            | **Test Suite** | **${passed} / ${total} passed** (${failed} failed) |
+            | **Duration** | ${duration} |
+            | **Artifact** | \`edc-functions-linux-x64.zip\` (.NET 10 Self-Contained) |
             
             > *This check only validates quality. Automated promotion begins once merged to \`main\`.*
             

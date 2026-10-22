@@ -17,21 +17,11 @@ on:
           - production
 
 permissions:
-  id-token: write       # Required for Azure OIDC
+  id-token: write 
   contents: read
 
-services:
-  azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:latest
-    ports:
-      - 10000:10000
-      - 10001:10001
-      - 10002:10002
-
 jobs:
-  # =========================================================================
-  # 1. BUILD ARTIFACT FROM TARGET COMMIT SHA
-  # =========================================================================
+  
   build-sha:
     name: Build SHA (${{ inputs.commit_sha }})
     runs-on: ubuntu-latest
@@ -60,9 +50,6 @@ jobs:
           path: ${{ steps.build.outputs.package-path }}
           retention-days: 3
 
-  # =========================================================================
-  # 2. DEPLOY DIRECTLY TO SELECTED TARGET ENVIRONMENT
-  # =========================================================================
   deploy-target:
     name: Deploy to ${{ inputs.target_environment }}
     needs: build-sha
