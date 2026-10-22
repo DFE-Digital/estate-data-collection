@@ -23,7 +23,7 @@ public class SubmissionFunctions(
 
     [Function(nameof(CreateSubmission))]
     public async Task<IActionResult> CreateSubmission(
-        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post),
             Route = "submissions/{schemeName}")]
         HttpRequest http,
         string schemeName,
@@ -42,7 +42,7 @@ public class SubmissionFunctions(
 
     [Function(nameof(UpdateSubmission))]
     public async Task<IActionResult> UpdateSubmission(
-        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Put),
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Put),
             Route = "submissions/{submissionId:guid}")]
         HttpRequest http,
         Guid submissionId,
@@ -71,7 +71,7 @@ public class SubmissionFunctions(
 
     [Function(nameof(FinaliseSubmission))]
     public async Task<IActionResult> FinaliseSubmission(
-        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post),
             Route = "submissions/{submissionId:guid}/finalise")]
         HttpRequest http,
         Guid submissionId,
