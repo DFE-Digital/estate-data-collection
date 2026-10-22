@@ -20,6 +20,14 @@ permissions:
   id-token: write       # Required for Azure OIDC
   contents: read
 
+services:
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    ports:
+      - 10000:10000
+      - 10001:10001
+      - 10002:10002
+
 jobs:
   # =========================================================================
   # 1. BUILD ARTIFACT FROM TARGET COMMIT SHA
