@@ -93,7 +93,7 @@ public class FinaliseSubmissionUseCase(
             urn.Value,
             session.Value.SchemaName,
             session.Value.SchemaVersion,
-            null,
+            string.Empty,
             promotion.Value,
             DateTimeOffset.UtcNow
         );

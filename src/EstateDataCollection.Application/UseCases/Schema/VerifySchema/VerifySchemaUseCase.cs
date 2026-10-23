@@ -20,8 +20,8 @@ public class VerifySchemaUseCase(
 
         var verification = await schemaRegistry.VerifyCanditateSchemaAsync(
             request.SchemaJson,
-            request.SampleValidFixtures,
-            request.SampleInvalidFixtures,
+            request.SampleValidFixtures ?? [],
+            request.SampleInvalidFixtures ?? [],
             cancellationToken);
 
         if (verification.IsFailure)

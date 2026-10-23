@@ -11,9 +11,36 @@ public class SchemaMetadataBuilder
     private DateTimeOffset? _effectiveFrom = DateTimeOffset.UtcNow.AddDays(-1);
     private DateTimeOffset? _effectiveTo;
 
-    public SchemaMetadataBuilder WithName(string name) { _name = name; return this; }
-    public SchemaMetadataBuilder WithVersion(int version) { _version = version; return this; }
-    public SchemaMetadataBuilder WithSchema(string json) { _jsonSchema = json; return this; }
+    public SchemaMetadataBuilder WithName(string name)
+    {
+        _name = name;
+        return this;
+    }
+
+    public SchemaMetadataBuilder WithVersion(int version)
+    {
+        _version = version;
+        return this;
+    }
+
+    public SchemaMetadataBuilder WithSchema(string json)
+    {
+        _jsonSchema = json;
+        return this;
+    }
+
+    public SchemaMetadataBuilder WithEffectiveFrom(DateTimeOffset effectiveFrom)
+    {
+        _effectiveFrom = effectiveFrom;
+        return this;
+    }
+
+    public SchemaMetadataBuilder WithEffectiveTo(DateTimeOffset effectiveTo)
+    {
+        _effectiveTo = effectiveTo;
+        return this;
+    }
+
     public SchemaMetadataBuilder ScheduledInFuture(int daysFromNow = 7)
     {
         _effectiveFrom = DateTimeOffset.UtcNow.AddDays(daysFromNow);
@@ -27,6 +54,7 @@ public class SchemaMetadataBuilder
         {
             meta.ScheduleActivation(_effectiveFrom.Value, _effectiveTo);
         }
+
         return meta;
     }
 }

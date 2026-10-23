@@ -1,4 +1,4 @@
-# Estate Data Collection (EDC) — Postman Test Kit
+# Postman Development & Test Kit
 
 This directory contains the official Postman collection and environment configurations for testing, debugging, and 
 automating requests against the **Estate Data Collection (EDC)** platform.
@@ -63,7 +63,7 @@ The collection is organized into three logical folders reflecting the EDC domain
 
 ## Running with Postman
 
-### 4.1 With Postman GUI
+### With Postman GUI
 
 You can execute the entire test kit sequentially via the Postman GUI.
 
@@ -75,7 +75,7 @@ You can execute the entire test kit sequentially via the Postman GUI.
   - `EstateDataCollection.Dev.postman_environment.json`
 4. In the top-right environment selector, select **EstateDataCollection - {enviroment}**.
 
-### 4.2 With Newman CLI
+### With Newman CLI
 
 You can execute the entire test kit sequentially via **Newman** (Postman's CLI runner) in terminal or CI/CD pipelines:
 

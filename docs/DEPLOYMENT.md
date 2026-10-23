@@ -1,29 +1,8 @@
-# Estate Data Collection (EDC) — Deployment Guide
+# Deployment Guide
 
 This document is the authoritative guide for building, packaging, deploying, and verifying the **Estate Data Collection (EDC)** Azure Functions platform across all environments (**Development**, **Test**, and **Production**).
 
----
-
-## Table of Contents
-
-1. [Architectural Overview](#1-architectural-overview)
-2. [Environment Topology](#2-environment-topology)
-3. [Deployment Options](#3-deployment-options)
-   - [Option A: Automated Multi-Environment CI/CD (Recommended)](#option-a-automated-multi-environment-cicd-recommended)
-   - [Option B: On-Demand / Historical SHA Deployment](#option-b-on-demand--historical-sha-deployment)
-   - [Option C: Manual CLI Zip Deploy (`az CLI`)](#option-c-manual-cli-zip-deploy-az-cli)
-   - [Option D: Azure Functions Core Tools (`func`)](#option-d-azure-functions-core-tools-func)
-4. [Zero-Trust Security & Authentication (Entra ID OIDC)](#4-zero-trust-security--authentication-entra-id-oidc)
-5. [Required Environment Variables & Configuration](#5-required-environment-variables--configuration)
-6. [Release Versioning & Observability (CalVer)](#6-release-versioning--observability-calver)
-7. [Verification & Smoke Testing](#7-verification--smoke-testing)
-8. [Rollback Strategy](#8-rollback-strategy)
-9. [Troubleshooting & Common Pitfalls](#9-troubleshooting--common-pitfalls)
-10. [Related Decisions & Documentation](#10-related-decisions--documentation)
-
----
-
-## 1. Architectural Overview
+## Architectural Overview
 
 The EDC platform operates on **Azure Functions (Isolated Worker Model)** targeting **.NET 10** hosted on **Azure Functions Flex Consumption (Linux)**.
 
@@ -52,9 +31,7 @@ The EDC platform operates on **Azure Functions (Isolated Worker Model)** targeti
 - **Sanitised Packages**:
   Local dev settings (`local.settings.json`), REST client files (`*.http`), and symbol files (`*.pdb`) are strictly excluded from all deployable packages.
 
----
-
-## 2. Environment Topology
+## Environment Topology
 
 The platform is partitioned into three distinct Azure environments:
 
@@ -66,7 +43,7 @@ The platform is partitioned into three distinct Azure environments:
 
 ---
 
-## 3. Deployment Options
+## Deployment Options
 
 ### Option A: Automated Multi-Environment CI/CD (Recommended)
 
@@ -92,8 +69,6 @@ flowchart LR
    - Automatically promotes the identical artifact to **Test** and verifies health.
    - Pauses at the **Production** gate for required reviewer approval in GitHub before deploying to live.
 
----
-
 ### Option B: On-Demand / Historical SHA Deployment
 
 For emergency hotfixes, rolling back, or testing specific Git revisions, use [`.github/workflows/deploy-by-sha.yml`](file:///.github/workflows/deploy-by-sha.yml).
@@ -104,8 +79,6 @@ For emergency hotfixes, rolling back, or testing specific Git revisions, use [`.
    - **Commit SHA**: Full 40-character SHA or short 7-character commit hash (e.g., `a1b2c3d`).
    - **Target Environment**: Select `development`, `test`, or `production`.
 4. Click **Run workflow**. The workflow checks out the exact SHA, packages it, and pushes directly to the requested environment (respecting production approval gates if production is selected).
-
----
 
 ### Option C: Manual CLI Zip Deploy (`az CLI`)
 
@@ -155,8 +128,6 @@ az functionapp deployment source config-zip \
 rm -rf ./publish-out ./edc-functions.zip
 ```
 
----
-
 ### Option D: Azure Functions Core Tools (`func`)
 
 > [!CAUTION]
@@ -169,9 +140,7 @@ az login
 func azure functionapp publish <FUNCTION_APP_NAME>
 ```
 
----
-
-## 4. Zero-Trust Security & Authentication (Entra ID OIDC)
+## Zero-Trust Security & Authentication (Entra ID OIDC)
 
 Deployments authenticate using **OpenID Connect (OIDC)** via GitHub Actions federated credentials. No long-lived passwords, client secrets, or publish profile XML files are stored in GitHub.
 
@@ -203,7 +172,7 @@ Configure the following per environment under **GitHub Settings** $\to$ **Enviro
 
 ---
 
-## 5. Required Environment Variables & Configuration
+## Required Environment Variables & Configuration
 
 The following application settings must be configured in Azure Function App Configuration:
 
@@ -217,7 +186,7 @@ The following application settings must be configured in Azure Function App Conf
 
 ---
 
-## 6. Release Versioning & Observability (CalVer)
+## Release Versioning & Observability (CalVer)
 
 Deployments use **Calendar Versioning (CalVer)** ([ADR 0015](decisions/0015-calendar-versioning-calver-and-log-enrichment.md)) formatted as:
 
@@ -231,7 +200,7 @@ $$\text{YYYY.MM.<run\_number>} \quad \text{(e.g., } 2026.10.42\text{)}$$
 
 ---
 
-## 7. Verification & Smoke Testing
+## Verification & Smoke Testing
 
 Every deployment automatically performs a smoke test against the live function endpoint. You can run this test manually:
 
@@ -255,7 +224,7 @@ If the endpoint returns anything other than HTTP `200 OK`, check the Function Ap
 
 ---
 
-## 8. Rollback Strategy
+## Rollback Strategy
 
 If an incident or regression occurs in any environment:
 
@@ -277,7 +246,7 @@ az functionapp deployment slot swap \
 
 ---
 
-## 9. Troubleshooting & Common Pitfalls
+## Troubleshooting & Common Pitfalls
 
 ### 1. `System.IO.FileNotFoundException: Could not load file or assembly`
 - **Cause**: The application was published framework-dependent without .NET 10 installed on the host container.
@@ -300,7 +269,7 @@ az functionapp deployment slot swap \
 
 ---
 
-## 10. Related Decisions & Documentation
+## Related Decisions & Documentation
 
 - [ADR 0006: Flex Consumption Self-Contained Deployment](decisions/0006-flex-consumption-self-contained-deployment.md)
 - [ADR 0010: Direct-to-Storage Landing Zone & SAS](decisions/0010-direct-to-storage-landing-zone-and-user-delegation-sas.md)
