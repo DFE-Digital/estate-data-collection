@@ -7,21 +7,11 @@ automating requests against the **Estate Data Collection (EDC)** platform.
 
 | File | Description |
 | :--- | :--- |
-| **[`EstateDataCollection.postman_collection.json`](./EstateDataCollection.postman_collection.json)** | Main Postman collection (Format v2.1.0) with automated test scripts and state chaining. |
-| **[`EstateDataCollection.Local.postman_environment.json`](./EstateDataCollection.Local.postman_environment.json)** | Environment for local development (`http://localhost:7071/api`). |
-| **[`EstateDataCollection.Dev.postman_environment.json`](./EstateDataCollection.Dev.postman_environment.json)** | Environment for Azure Development Function App. |
+| **[`EstateDataCollection.postman_collection.json`](./postman/EstateDataCollection.postman_collection.json)** | Main Postman collection (Format v2.1.0) with automated test scripts and state chaining. |
+| **[`EstateDataCollection.Local.postman_environment.json`](./postman/EstateDataCollection.Local.postman_environment.json)** | Environment for local development (`http://localhost:7071/api`). |
+| **[`EstateDataCollection.Dev.postman_environment.json`](./postman/EstateDataCollection.Dev.postman_environment.json)** | Environment for Azure Development Function App. |
 
-## 1. Quick Start: Importing into Postman
-
-1. Open the **Postman** desktop app or Postman Web.
-2. Click **Import** (top left).
-3. Drag and drop the following files into the import dialog:
-   - `EstateDataCollection.postman_collection.json`
-   - `EstateDataCollection.Local.postman_environment.json`
-   - (Optional) `EstateDataCollection.Dev.postman_environment.json`
-4. In the top-right environment selector, select **EstateDataCollection - Local** (or your target cloud environment).
-
-## 2. Collection Structure & Features
+## Collection Structure & Features
 
 The collection is organized into three logical folders reflecting the EDC domain:
 
@@ -57,7 +47,7 @@ The collection is organized into three logical folders reflecting the EDC domain
   - Verifies payload integrity, stamps SHA-256 hash, moves blob from `payloads` to `processed` container, and updates 
     status to `ReadyForCde`.
 
-## 3. Environment Variables Reference
+## Environment Variables Reference
 
 | Variable | Description | Local Default | Azure Cloud Example |
 | :--- | :--- | :--- | :--- |
@@ -71,15 +61,19 @@ The collection is organized into three logical folders reflecting the EDC domain
 > (`Function App -> App keys` or `Functions -> Manage function keys`) and paste it into the `functionKey` environment 
 > variable. The collection automatically injects the `x-functions-key: {{functionKey}}` header.
 
-## 4. Running with Postman
+## Running with Postman
 
 ### 4.1 With Postman GUI
 
 You can execute the entire test kit sequentially via the Postman GUI.
 
-1. Import the collection & environment into Postman.
-2. Select the desired environment from the dropdown menu.
-3. Click the "Run" button to execute the tests.
+1. Open the **Postman** desktop app or Postman Web.
+2. Click **Import** (top left).
+3. Drag and drop the following files into the import dialog:
+  - `EstateDataCollection.postman_collection.json`
+  - `EstateDataCollection.Local.postman_environment.json`
+  - `EstateDataCollection.Dev.postman_environment.json`
+4. In the top-right environment selector, select **EstateDataCollection - {enviroment}**.
 
 ### 4.2 With Newman CLI
 
