@@ -1,0 +1,561 @@
+{
+  "info": {
+    "_postman_id": "c1f79f22-9650-48e2-9ef4-7cb45d625d19",
+    "name": "Estate Data Collection (EDC) API",
+    "description": "Comprehensive Postman test kit for the Estate Data Collection (EDC) Azure Functions platform.\n\nCovers:\n1. Health & Version Observability (/api/about)\n2. Schema Management & Dry-Run Validation (/api/schemas/*)\n3. End-to-End Submission Session Lifecycle: Create -> Multi-Draft Ingestion -> Finalisation Promotion (/api/submissions/*)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:7071/api",
+      "type": "string"
+    },
+    {
+      "key": "schemaName",
+      "value": "edc_payload",
+      "type": "string"
+    },
+    {
+      "key": "functionKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "submissionId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Diagnostics & Health",
+      "item": [
+        {
+          "name": "0.1 Get About & Service Version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns expected service metadata and versioning\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.service).to.eql(\"EstateDataCollection\");",
+                  "    pm.expect(jsonData).to.have.property(\"calver\");",
+                  "    pm.expect(jsonData).to.have.property(\"version\");",
+                  "    pm.expect(jsonData).to.have.property(\"commitSha\");",
+                  "    pm.expect(jsonData).to.have.property(\"environment\");",
+                  "    pm.expect(jsonData).to.have.property(\"serverUtc\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/about",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "about"
+              ]
+            },
+            "description": "Anonymous health and diagnostic endpoint returning application metadata, CalVer release stamp, commit SHA, and hosting environment."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1. Schema Management (Data Team & CI)",
+      "item": [
+        {
+          "name": "1.1 Verify Schema Candidate (Dry-Run)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Schema candidate is valid Draft 2020-12\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.isValidSchema).to.be.true;",
+                  "    pm.expect(jsonData.allValidFixturesPassed).to.be.true;",
+                  "    pm.expect(jsonData.allInvalidFixturesRejected).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\":\\\"https://json-schema.org/draft/2020-12/schema\\\",\\\"title\\\":\\\"edc_payload\\\",\\\"schemaVersion\\\":1,\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"urn\\\":{\\\"type\\\":\\\"integer\\\"},\\\"school_name\\\":{\\\"type\\\":\\\"string\\\"},\\\"school_address\\\":{\\\"type\\\":\\\"string\\\"},\\\"school_capacity\\\":{\\\"type\\\":[\\\"integer\\\",\\\"null\\\"]}},\\\"required\\\":[\\\"urn\\\",\\\"school_name\\\",\\\"school_address\\\"],\\\"additionalProperties\\\":false}\",\n  \"sampleValidFixtures\": [\n    \"{\\\"urn\\\":104521,\\\"school_name\\\":\\\"St Mary's High School\\\",\\\"school_address\\\":\\\"High Street, Leeds\\\",\\\"school_capacity\\\":450}\"\n  ],\n  \"sampleInvalidFixtures\": [\n    \"{\\\"school_name\\\":\\\"Missing URN and Address\\\"}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/schemas/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "verify"
+              ]
+            },
+            "description": "Evaluates schema syntax against JSON Schema Draft 2020-12 and tests sample fixtures without persisting anything to Azure Blob Storage."
+          },
+          "response": []
+        },
+        {
+          "name": "1.2 Publish & Schedule Schema v1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Schema version 1 registered successfully\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.schemaName).to.eql(pm.collectionVariables.get(\"schemaName\"));",
+                  "    pm.expect(jsonData.version).to.eql(1);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\":\\\"https://json-schema.org/draft/2020-12/schema\\\",\\\"$id\\\":\\\"https://dfe_cde_edc_integtration/schemas/edc_payload.schema.json\\\",\\\"title\\\":\\\"edc_payload\\\",\\\"description\\\":\\\"JSON Schema for eed_catalogue_30_bronze.cde_edc_integration.edc_payload\\\",\\\"schemaVersion\\\":1,\\\"createdTimestamp\\\":\\\"2026-10-13T09:41:58Z\\\",\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"urn\\\":{\\\"type\\\":\\\"integer\\\"},\\\"school_name\\\":{\\\"type\\\":\\\"string\\\"},\\\"school_address\\\":{\\\"type\\\":\\\"string\\\"},\\\"local_authority\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"telephone\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"diocese\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"school_capacity\\\":{\\\"type\\\":[\\\"integer\\\",\\\"null\\\"]}},\\\"required\\\":[\\\"urn\\\",\\\"school_name\\\",\\\"school_address\\\"],\\\"additionalProperties\\\":false}\",\n  \"effectiveFromUtc\": \"2026-10-01T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/schemas/{{schemaName}}/versions/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{schemaName}}",
+                "versions",
+                "1"
+              ]
+            },
+            "description": "Submits, schedules, and commits a validated schema contract to the 'schemas' Blob container."
+          },
+          "response": []
+        },
+        {
+          "name": "1.3 Publish & Schedule Schema v2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Schema version 2 registered successfully\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.schemaName).to.eql(pm.collectionVariables.get(\"schemaName\"));",
+                  "    pm.expect(jsonData.version).to.eql(2);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\":\\\"https://json-schema.org/draft/2020-12/schema\\\",\\\"$id\\\":\\\"https://dfe_cde_edc_integtration/schemas/edc_payload.schema.json\\\",\\\"title\\\":\\\"edc_payload\\\",\\\"description\\\":\\\"JSON Schema for eed_catalogue_30_bronze.cde_edc_integration.edc_payload\\\",\\\"schemaVersion\\\":2,\\\"createdTimestamp\\\":\\\"2026-10-13T09:43:52Z\\\",\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"urn\\\":{\\\"type\\\":\\\"integer\\\"},\\\"school_name\\\":{\\\"type\\\":\\\"string\\\"},\\\"school_address\\\":{\\\"type\\\":\\\"string\\\"},\\\"local_authority\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"telephone\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"diocese\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]}},\\\"required\\\":[\\\"urn\\\",\\\"school_name\\\",\\\"school_address\\\"],\\\"additionalProperties\\\":false}\",\n  \"effectiveFromUtc\": \"2026-11-01T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/schemas/{{schemaName}}/versions/2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{schemaName}}",
+                "versions",
+                "2"
+              ]
+            },
+            "description": "Publishes v2 of the schema with updated fields (e.g., school_capacity retired/removed)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Submission Lifecycle (Surveyor Flow)",
+      "item": [
+        {
+          "name": "2.1 Create Submission Session (Auto Schedule)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "pm.test(\"Contains valid SubmissionId and Schema\", function () {",
+                  "    pm.expect(jsonData.submissionId).to.be.a(\"string\");",
+                  "    pm.expect(jsonData.schemaName).to.eql(pm.collectionVariables.get(\"schemaName\"));",
+                  "});",
+                  "",
+                  "// Automatically propagate submissionId for subsequent draft updates and finalisation",
+                  "pm.collectionVariables.set(\"submissionId\", jsonData.submissionId);",
+                  "pm.environment.set(\"submissionId\", jsonData.submissionId);",
+                  "console.log(\"Saved submissionId to environment: \" + jsonData.submissionId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{schemaName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{schemaName}}"
+              ]
+            },
+            "description": "Initialises a new submission session. The API automatically resolves the currently active schema version from the schedule."
+          },
+          "response": []
+        },
+        {
+          "name": "2.2 Create Submission Session (Explicitly Pin Version 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "pm.test(\"Pinned explicitly to Version 1\", function () {",
+                  "    pm.expect(jsonData.version).to.eql(1);",
+                  "});",
+                  "",
+                  "// Update submissionId to use this newly created session",
+                  "pm.collectionVariables.set(\"submissionId\", jsonData.submissionId);",
+                  "pm.environment.set(\"submissionId\", jsonData.submissionId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{schemaName}}?version=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{schemaName}}"
+              ],
+              "query": [
+                {
+                  "key": "version",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Creates a submission session explicitly pinned to Schema Version 1 regardless of current date schedule."
+          },
+          "response": []
+        },
+        {
+          "name": "2.3 Upload Draft 1 (Incomplete - Missing Address)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK (Persisted with pending issues)\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "pm.test(\"Reports missing required fields as pending errors\", function () {",
+                  "    pm.expect(jsonData.isSuccessful).to.be.true;",
+                  "    pm.expect(jsonData.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "    const hasAddressError = jsonData.pendingErrors.some(e => e.message && e.message.includes(\"school_address\"));",
+                  "    pm.expect(hasAddressError).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"urn\": 104521,\n  \"school_name\": \"St Mary's High School\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "Demonstrates draft persistence in the 'payloads' landing container. Even though required fields are missing, the draft is safely persisted and returns 200 OK with pending error diagnostic details."
+          },
+          "response": []
+        },
+        {
+          "name": "2.4 Upload Draft 2 (Invalid Data Type - URN is string)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK (Persisted with schema type error)\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "pm.test(\"Detects data type mismatch on URN\", function () {",
+                  "    pm.expect(jsonData.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"urn\": \"NOT_A_NUMBER\",\n  \"school_name\": \"St Mary's High School\",\n  \"school_address\": \"High Street, Leeds\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "Demonstrates schema contract enforcement. The draft is persisted to Blob storage, but reports contract validation failure for the surveyor."
+          },
+          "response": []
+        },
+        {
+          "name": "2.5 Upload Draft 3 (Complete & Valid)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "pm.test(\"Payload conforms to schema with 0 pending errors\", function () {",
+                  "    pm.expect(jsonData.isSuccessful).to.be.true;",
+                  "    pm.expect(jsonData.pendingErrors).to.be.an(\"array\").that.is.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"urn\": 104521,\n  \"school_name\": \"St Mary's High School\",\n  \"school_address\": \"High Street, Leeds\",\n  \"local_authority\": \"Leeds\",\n  \"telephone\": \"0113 123 4567\",\n  \"diocese\": \"Diocese of Leeds\",\n  \"school_capacity\": 450\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "Complete and valid survey payload satisfying all mandatory and optional properties of Schema Version 1."
+          },
+          "response": []
+        },
+        {
+          "name": "2.6 Finalise Submission (Success - Promote to Processed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "pm.test(\"Submission successfully finalised and promoted\", function () {",
+                  "    pm.expect(jsonData.submissionId).to.eql(pm.collectionVariables.get(\"submissionId\"));",
+                  "    pm.expect(jsonData.urn).to.eql(104521);",
+                  "    pm.expect(jsonData.status).to.eql(\"ReadyForCde\");",
+                  "    pm.expect(jsonData.processedBlobUri).to.be.a(\"string\");",
+                  "    pm.expect(jsonData.finalisedAtUtc).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{submissionId}}/finalise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{submissionId}}",
+                "finalise"
+              ]
+            },
+            "description": "Validates the stored draft against the pinned schema version, stamps with SHA-256 integrity hash, moves payload from 'payloads' to 'processed' blob container, and marks status as ReadyForCde."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
