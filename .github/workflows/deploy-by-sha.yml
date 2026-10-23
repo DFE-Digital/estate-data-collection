@@ -22,12 +22,19 @@ permissions:
 
 jobs:
   
-  build-sha:
+  build-sha-and-app:
     name: Build SHA (${{ inputs.commit_sha }})
     runs-on: ubuntu-latest
     outputs:
       calver-version: ${{ steps.build.outputs.calver-version }}
       full-version: ${{ steps.build.outputs.full-version }}
+    services:
+      azurite:
+        image: mcr.microsoft.com/azure-storage/azurite:latest
+        ports:
+          - 10000:10000
+          - 10001:10001
+          - 10002:10002
 
     steps:
       - name: Checkout Target Commit
@@ -52,7 +59,7 @@ jobs:
 
   deploy-target:
     name: Deploy to ${{ inputs.target_environment }}
-    needs: build-sha
+    needs: build-sha-and-app
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.target_environment }}
