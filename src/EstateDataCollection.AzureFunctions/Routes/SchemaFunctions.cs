@@ -31,7 +31,7 @@ public class SchemaFunctions(
     /// </summary>
     [Function(nameof(VerifySchema))]
     public async Task<IActionResult> VerifySchema(
-        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post),
+        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
             Route = "schemas/verify")]
         HttpRequest http,
         CancellationToken cancellationToken)
@@ -68,7 +68,7 @@ public class SchemaFunctions(
     /// </summary>
     [Function(nameof(SubmitSchema))]
     public async Task<IActionResult> SubmitSchema(
-        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post),
+        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
             Route = "schemas/{schemaName}/versions/{version:int}")]
         HttpRequest http,
         string schemaName,
