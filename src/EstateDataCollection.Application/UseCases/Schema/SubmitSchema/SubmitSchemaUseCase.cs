@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Extensions;
 using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
@@ -8,7 +9,8 @@ namespace EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 
 public class SubmitSchemaUseCase(
     ISchemaRegistry schemaRegistry,
-    SubmitSchemaUseCaseInstrumentation? instrumentation = null
+    SubmitSchemaUseCaseInstrumentation? instrumentation = null,
+    IOdcsContractParser? odcsParser = null
 ) : IUseCase<SubmitSchemaResult, SubmitSchemaRequest>
 {
     private readonly SubmitSchemaUseCaseInstrumentation _instrumentation =
@@ -31,11 +33,32 @@ public class SubmitSchemaUseCase(
             return Error.Conflict(ErrorCodes.SchemaAlreadyExists, new { request.SchemaName, request.Version });
         }
 
-        var verification = await schemaRegistry.VerifyCanditateSchemaAsync(
+        var resolvedInputs = odcsParser.ResolveInputs(
             request.SchemaJson,
-            request.SampleValidFixtures ?? [],
-            request.SampleInvalidFixtures ?? [],
-            cancellationToken);
+            request.RulesJson,
+            request.OdcsYaml,
+            request.FileName);
+
+        if (resolvedInputs.IsFailure)
+        {
+            return resolvedInputs.Error;
+        }
+
+        var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, _, _) = resolvedInputs.Value;
+
+        var verification = string.IsNullOrWhiteSpace(effectiveRulesJson)
+            ? await schemaRegistry.VerifyCanditateSchemaAsync(
+                effectiveSchemaJson,
+                null,
+                request.SampleValidFixtures ?? [],
+                request.SampleInvalidFixtures ?? [],
+                cancellationToken)
+            : await schemaRegistry.VerifyCanditateSchemaAsync(
+                effectiveSchemaJson,
+                effectiveRulesJson,
+                request.SampleValidFixtures ?? [],
+                request.SampleInvalidFixtures ?? [],
+                cancellationToken);
         
         if (verification.IsFailure)
         {
@@ -44,9 +67,7 @@ public class SubmitSchemaUseCase(
 
         if (!verification.Value.IsSuccessful)
         {
-            var errors = verification.Value.Errors
-                .Select(x => new ValidationError("schema", x))
-                .ToList();
+            var errors = verification.Value.ToValidationErrors("schema").ToList();
 
             _instrumentation.SchemaCandidateVerificationFailed(
                 request.SchemaName,
@@ -60,8 +81,14 @@ public class SubmitSchemaUseCase(
         SchemaMetadata metadata;
         try
         {
-            metadata = SchemaMetadata.CreateDraft(request.SchemaName, request.Version, request.SchemaJson);
-            metadata.ScheduleActivation(request.EffectiveFromUtc, request.EffectiveToUtc);
+            metadata = SchemaMetadata.CreateDraft(
+                request.SchemaName,
+                request.Version,
+                effectiveSchemaJson ?? string.Empty,
+                request.IdentifierConfig);
+            // Submitted schema packs are always stored in Validated state (unscheduled);
+            // effective dates are assigned separately via the Admin scheduling API.
+            metadata.MarkValidated();
         }
         catch (Exception ex)
         {
@@ -69,7 +96,9 @@ public class SubmitSchemaUseCase(
             return Error.Validation(ErrorCodes.SchemaInvalidSchedule, ex.Message);
         }
         
-        var result = await schemaRegistry.SaveSchemaAsync(metadata, cancellationToken);
+        var result = effectiveRulesJson is not null || rawOdcsYaml is not null
+            ? await schemaRegistry.SaveSchemaAsync(metadata, effectiveRulesJson, rawOdcsYaml, cancellationToken)
+            : await schemaRegistry.SaveSchemaAsync(metadata, cancellationToken);
 
         if (result.IsFailure)
         {
@@ -88,7 +117,8 @@ public class SubmitSchemaUseCase(
             State: metadata.State.ToNode(),
             Sha256Hash: metadata.Sha256Hash,
             EffectiveFromUtc: metadata.EffectiveFromUtc,
-            EffectiveToUtc: metadata.EffectiveToUtc
+            EffectiveToUtc: metadata.EffectiveToUtc,
+            IdentifierConfig: metadata.IdentifierConfig
         );
     }
 }

@@ -29,6 +29,9 @@ public enum ErrorCodes
     [Display(Name = "Schema.PersistFailed", Description = "Could not save schema to blob container: {Message}")]
     SchemaPersistFailed = 1006,
 
+    [Display(Name = "Schema.NotActive", Description = "Schema '{SchemaName}' v{Version} is not active or has not been scheduled yet.")]
+    SchemaNotActive = 1007,
+
     #endregion
 
     #region Payload Validation

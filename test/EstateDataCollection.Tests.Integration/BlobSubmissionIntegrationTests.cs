@@ -1,49 +1,39 @@
-using Azure.Storage.Blobs;
-using EstateDataCollection.Domain.Submission;
-using EstateDataCollection.Infrastructure.Persistence;
-using EstateDataCollection.Tests.Common.Fixtures;
-using EstateDataCollection.Tests.Integration.Fixtures;
 using AwesomeAssertions;
-using Microsoft.Extensions.Options;
+using EstateDataCollection.Tests.Common.Builders;
+using EstateDataCollection.Tests.Common.Extensions;
+using EstateDataCollection.Tests.Common.Fixtures;
+using EstateDataCollection.Tests.Integration.Builders;
+using EstateDataCollection.Tests.Integration.Fixtures;
 using Xunit;
 
 namespace EstateDataCollection.Tests.Integration;
 
-[CollectionDefinition("AzuriteCollection")]
-public class AzuriteCollection : ICollectionFixture<AzuriteFixture>;
-
 [Collection("AzuriteCollection")]
 public class BlobSubmissionIntegrationTests(AzuriteFixture fixture)
 {
-    private readonly BlobSubmissionInfrastructure _sut = new(
-        fixture.Client,
-        Options.Create(new BlobSubmissionRepositoryOptions
-        {
-            PayloadContainerName = "payloads",
-            ProcessedContainerName = "processed",
-            SessionBlobNameFormat = "{submissionId}/session.json",
-            PayloadBlobNameFormat = "{submissionId}/draft.json",
-            ProcessedBlobNameFormat = "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
-        }));
+    private readonly IntegrationEndpointHarness _harness = new(fixture);
 
     [Fact]
     public async Task When_Executing_Complete_Ingestion_Lifecycle_Against_Azurite_It_Should_Persist_Draft_And_Promote_To_Processed()
     {
-        // 1. Create Session
-        var session = SubmissionSession.Create("edc_payload", 1);
-        var createResult = await _sut.CreateSessionAsync(session);
-        createResult.IsSuccess.Should().BeTrue();
+        var session = new SubmissionSessionBuilder()
+            .WithSchema("edc_payload", 1)
+            .Build();
 
-        // 2. Save Draft
-        var draftResult = await _sut.SaveDraftPayloadAsync(session.SubmissionId, 104521, SurveyPayloadFixtures.ValidPayloadJson);
-        draftResult.IsSuccess.Should().BeTrue();
+        (await _harness.SubmissionInfrastructure.CreateSessionAsync(session)).ShouldSucceed();
 
-        // 3. Promote to Processed
-        var promoteResult = await _sut.PromoteToProcessedAsync(session.SubmissionId, 104521, "edc_payload", 1);
-        promoteResult.IsSuccess.Should().BeTrue();
+        (await _harness.SubmissionInfrastructure.SaveDraftPayloadAsync(
+            session.SubmissionId,
+            104521,
+            SurveyPayloadFixtures.ValidPayloadJson)).ShouldSucceed();
 
-        // 4. Verify draft was cleaned up from payloads container
-        var draftExists = await _sut.GetDraftPayloadAsync(session.SubmissionId);
+        (await _harness.SubmissionInfrastructure.PromoteToProcessedAsync(
+            session.SubmissionId,
+            104521,
+            "edc_payload",
+            1)).ShouldSucceed();
+
+        var draftExists = await _harness.SubmissionInfrastructure.GetDraftPayloadAsync(session.SubmissionId);
         draftExists.IsFailure.Should().BeTrue();
     }
 }

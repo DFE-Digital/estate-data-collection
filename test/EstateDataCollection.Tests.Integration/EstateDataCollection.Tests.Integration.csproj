@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\EstateDataCollection.Tests.Common\EstateDataCollection.Tests.Common.csproj" />
     <ProjectReference Include="..\..\src\EstateDataCollection.Infrastructure\EstateDataCollection.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\EstateDataCollection.AzureFunctions\EstateDataCollection.AzureFunctions.csproj" />
+    <ProjectReference Include="..\..\src\EstateDataCollection.AzureFunctions.Public\EstateDataCollection.AzureFunctions.Public.csproj" />
+    <ProjectReference Include="..\..\src\EstateDataCollection.AzureFunctions.Admin\EstateDataCollection.AzureFunctions.Admin.csproj" />
   </ItemGroup>
 </Project>

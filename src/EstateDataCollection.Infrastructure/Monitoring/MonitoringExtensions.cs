@@ -1,4 +1,3 @@
-using System.Reflection;
 using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using EstateDataCollection.Common;
@@ -70,8 +69,7 @@ public static class MonitoringExtensions
                     .AddSource(serviceName)
                     .AddSource(LocalIdentifier)
                     .AddSource(WorkerIdentifier)
-                    .AddHttpClientInstrumentation()
-                    .AddSqlClientInstrumentation(opt => opt.RecordException = true);
+                    .AddHttpClientInstrumentation();
 
                 if (hasAppInsights)
                 {

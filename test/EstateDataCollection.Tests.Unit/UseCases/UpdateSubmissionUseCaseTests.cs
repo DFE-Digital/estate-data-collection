@@ -1,5 +1,5 @@
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Contracts;
+using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 using EstateDataCollection.Application.Validators.Schema;
 using EstateDataCollection.Common.Results;

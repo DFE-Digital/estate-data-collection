@@ -1,7 +1,10 @@
 namespace EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 
-public record VerifySchemaRequest(
-    string SchemaJson,
+public sealed record VerifySchemaRequest(
+    string? SchemaJson,
     IReadOnlyList<string> SampleValidFixtures,
-    IReadOnlyList<string> SampleInvalidFixtures
+    IReadOnlyList<string> SampleInvalidFixtures,
+    string? RulesJson = null,
+    string? OdcsYaml = null,
+    string? FileName = null
 );

@@ -24,10 +24,14 @@
     </Folder>
     <Folder Name="/src/">
         <Project Path="src/EstateDataCollection.Common/EstateDataCollection.Common.csproj" />
+        <Project Path="src/EstateDataCollection.Common.Web/EstateDataCollection.Common.Web.csproj" />
         <Project Path="src/EstateDataCollection.Application/EstateDataCollection.Application.csproj" />
         <Project Path="src/EstateDataCollection.Domain/EstateDataCollection.Domain.csproj" />
         <Project Path="src/EstateDataCollection.Infrastructure/EstateDataCollection.Infrastructure.csproj" />
-        <Project Path="src/EstateDataCollection.AzureFunctions/EstateDataCollection.AzureFunctions.csproj" />
+    </Folder>
+    <Folder Name="/web/">
+        <Project Path="src/EstateDataCollection.AzureFunctions.Public/EstateDataCollection.AzureFunctions.Public.csproj" />
+        <Project Path="src/EstateDataCollection.AzureFunctions.Admin/EstateDataCollection.AzureFunctions.Admin.csproj" />
     </Folder>
     <Folder Name="/test/">
         <Project Path="test/EstateDataCollection.Tests.Common/EstateDataCollection.Tests.Common.csproj" />

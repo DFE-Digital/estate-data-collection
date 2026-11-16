@@ -1,5 +1,5 @@
 name: 'Setup, Test & Package EDC Functions'
-description: 'Sets up .NET 10, executes automated tests with TRX metrics, stamps CalVer, and packages self-contained Linux x64 artifact'
+description: 'Sets up .NET 10, executes automated tests with TRX metrics, stamps CalVer, and packages self-contained Linux x64 artifacts for Public and Admin Function Apps'
 
 inputs:
   dotnet-version:
@@ -36,8 +36,14 @@ outputs:
     description: 'Test execution duration'
     value: ${{ steps.test-metrics.outputs.duration }}
   package-path:
-    description: 'Path to the compiled zip package'
-    value: 'edc-functions-linux-x64.zip'
+    description: 'Path to the compiled Public Function App zip package'
+    value: 'edc-functions-public-linux-x64.zip'
+  public-package-path:
+    description: 'Path to the compiled Public Function App zip package'
+    value: 'edc-functions-public-linux-x64.zip'
+  admin-package-path:
+    description: 'Path to the compiled Admin Function App zip package'
+    value: 'edc-functions-admin-linux-x64.zip'
 
 runs:
   using: 'composite'
@@ -60,13 +66,13 @@ runs:
 
     - name: Restore Dependencies
       shell: bash
-      run: dotnet restore
+      run: dotnet restore EstateDataCollection.slnx
 
     - name: Run Tests with TRX Logger & Coverage
       shell: bash
       run: |
         mkdir -p ./test-results
-        dotnet test --configuration Release --no-restore \
+        dotnet test EstateDataCollection.slnx --configuration Release --no-restore \
           --logger "trx;LogFileName=test-results.trx" \
           --results-directory ./test-results \
           --collect:"XPlat Code Coverage"
@@ -83,7 +89,7 @@ runs:
           SKIPPED=$(grep -o 'executed="[0-9]*"' "$TRX_FILE" | head -1 | cut -d'"' -f2 || echo "0")
           DURATION=$(grep -o 'duration="[^"]*"' "$TRX_FILE" | head -1 | cut -d'"' -f2 || echo "N/A")
         else
-          TOTAL="78"; PASSED="78"; FAILED="0"; SKIPPED="0"; DURATION="~1s"
+          TOTAL="0"; PASSED="0"; FAILED="0"; SKIPPED="0"; DURATION="N/A"
         fi
         
         echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
@@ -93,10 +99,10 @@ runs:
         echo "duration=$DURATION" >> "$GITHUB_OUTPUT"
         echo "Test Results: $PASSED passed / $TOTAL total (Duration: $DURATION)"
 
-    - name: Publish Self-Contained Linux x64 Bundle
+    - name: Publish Self-Contained Linux x64 Bundle (Public Function App)
       shell: bash
       run: |
-        dotnet publish src/EstateDataCollection.AzureFunctions \
+        dotnet publish src/EstateDataCollection.AzureFunctions.Public/EstateDataCollection.AzureFunctions.Public.csproj \
           --configuration Release \
           --runtime linux-x64 \
           --self-contained true \
@@ -104,11 +110,31 @@ runs:
           /p:AssemblyVersion="${{ steps.calver.outputs.version }}" \
           /p:FileVersion="${{ steps.calver.outputs.version }}" \
           /p:InformationalVersion="${{ steps.calver.outputs.full_version }}" \
-          --output ./publish
+          --output ./publish-public
 
-    - name: Package Function App Zip
+    - name: Package Public Function App Zip
       shell: bash
       run: |
-        cd ./publish
-        zip -r ../edc-functions-linux-x64.zip . -x "local.settings.json" "*.http" "*.pdb"
+        cd ./publish-public
+        zip -r ../edc-functions-public-linux-x64.zip . -x "local.settings.json" "*.http" "*.pdb"
+        cd ..
+
+    - name: Publish Self-Contained Linux x64 Bundle (Admin Function App)
+      shell: bash
+      run: |
+        dotnet publish src/EstateDataCollection.AzureFunctions.Admin/EstateDataCollection.AzureFunctions.Admin.csproj \
+          --configuration Release \
+          --runtime linux-x64 \
+          --self-contained true \
+          /p:Version="${{ steps.calver.outputs.version }}" \
+          /p:AssemblyVersion="${{ steps.calver.outputs.version }}" \
+          /p:FileVersion="${{ steps.calver.outputs.version }}" \
+          /p:InformationalVersion="${{ steps.calver.outputs.full_version }}" \
+          --output ./publish-admin
+
+    - name: Package Admin Function App Zip
+      shell: bash
+      run: |
+        cd ./publish-admin
+        zip -r ../edc-functions-admin-linux-x64.zip . -x "local.settings.json" "*.http" "*.pdb"
         cd ..

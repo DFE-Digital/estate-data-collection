@@ -14,6 +14,7 @@ on:
         options:
           - development
           - test
+          - uat
           - production
 
 permissions:
@@ -50,11 +51,13 @@ jobs:
           run-number: ${{ github.run_number }}
           commit-sha: ${{ inputs.commit_sha }}
 
-      - name: Upload Deployment Artifact
+      - name: Upload Deployment Artifacts (Public & Admin)
         uses: actions/upload-artifact@v4
         with:
           name: edc-sha-bundle
-          path: ${{ steps.build.outputs.package-path }}
+          path: |
+            ${{ steps.build.outputs.public-package-path }}
+            ${{ steps.build.outputs.admin-package-path }}
           retention-days: 3
 
   deploy-target:
@@ -63,18 +66,18 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.target_environment }}
-      url: ${{ steps.deploy.outputs.app-url }}
+      url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - name: Checkout Actions
         uses: actions/checkout@v4
 
-      - name: Download Build Artifact
+      - name: Download Build Artifacts
         uses: actions/download-artifact@v4
         with:
           name: edc-sha-bundle
 
-      - name: Deploy to Azure
-        id: deploy
+      - name: Deploy Public Function App to Azure
+        id: deploy-public
         uses: ./.github/actions/deploy-function
         with:
           environment-name: ${{ inputs.target_environment }}
@@ -82,5 +85,17 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
-          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
-          package-path: ./edc-functions-linux-x64.zip
+          function-app-name: ${{ vars.AZURE_PUBLIC_FUNCTION_APP_NAME || vars.AZURE_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-public-linux-x64.zip
+
+      - name: Deploy Admin Function App to Azure
+        id: deploy-admin
+        uses: ./.github/actions/deploy-function
+        with:
+          environment-name: ${{ inputs.target_environment }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          function-app-name: ${{ vars.AZURE_ADMIN_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-admin-linux-x64.zip

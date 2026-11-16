@@ -17,10 +17,11 @@ public sealed class Result<T> : Result
     }
 
     [NotNull]
-    public T Value => IsSuccess
-        ? _value!
-        : throw new InvalidOperationException(
-            $"Cannot access '{nameof(Value)}' on a failed result. Error: {Error.Code} - {Error.Description}");
+    public T Value =>
+        IsSuccess
+            ? _value!
+            : throw new InvalidOperationException(
+                $"Cannot access '{nameof(Value)}' on a failed result. Error: {Error.Code} - {Error.Description}");
 
     public static Result<T> Success(T value)
     {

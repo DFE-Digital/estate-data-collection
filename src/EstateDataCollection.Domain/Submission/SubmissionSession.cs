@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace EstateDataCollection.Domain.Submission;
 
 public sealed class SubmissionSession
@@ -7,13 +9,12 @@ public sealed class SubmissionSession
     public required int SchemaVersion { get; init; }
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     
+    [JsonInclude]
     public int? Urn { get; private set; }
+    [JsonInclude]
     public DateTimeOffset? FinalisedAtUtc { get; private set; }
    
-    public bool IsFinalised
-    {
-        get { return FinalisedAtUtc.HasValue; }
-    }
+    public bool IsFinalised => FinalisedAtUtc.HasValue;
 
     public static SubmissionSession Create(string schemaName, int schemaVersion)
     {

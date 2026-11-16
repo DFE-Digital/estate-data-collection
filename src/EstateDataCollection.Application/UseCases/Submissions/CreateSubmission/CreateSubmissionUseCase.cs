@@ -1,5 +1,5 @@
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Contracts;
+using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -37,6 +37,13 @@ public class CreateSubmissionUseCase(
             {
                 _instrumentation.SchemaRetired(request.SchemaName, request.Version.Value);
                 return Error.Validation(ErrorCodes.SchemaRetired);
+            }
+
+            var meta = @explicit.Value.Metadata;
+            if (!meta.CanAcceptTrafficAt(DateTimeOffset.UtcNow))
+            {
+                _instrumentation.SchemaResolutionFailed(request.SchemaName, $"Schema v{request.Version.Value} is in state '{meta.State}' and cannot accept traffic.");
+                return Error.Validation(ErrorCodes.SchemaNotActive, new { request.SchemaName, Version = request.Version.Value });
             }
 
             resolvedSchema = @explicit.Value;

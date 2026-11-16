@@ -8,7 +8,8 @@ public class UpdateSubmissionUseCase(
     ISubmissionInfrastructure infrastructure,
     ISchemaRegistry registry,
     ISchemaValidator validator,
-    UpdateSubmissionUseCaseInstrumentation? instrumentation = null
+    UpdateSubmissionUseCaseInstrumentation? instrumentation = null,
+    IPayloadValidationService? validationService = null
 ) : IUseCase<UpdateSubmissionResult, UpdateSubmissionRequest>
 {
     private readonly UpdateSubmissionUseCaseInstrumentation _instrumentation =
@@ -40,11 +41,32 @@ public class UpdateSubmissionUseCase(
             return schema.Error;
         }
 
-        var validation = await validator.ValidateAsync(request.Payload, schema.Value.Schema, cancellationToken);
-
-        if (validation.IsFailure)
+        IReadOnlyList<ValidationError> errors;
+        if (validationService is not null)
         {
-            return validation.Error;
+            var combinedResult = await validationService.ValidatePayloadAsync(
+                request.Payload,
+                schema.Value,
+                isDraftUpdate: true,
+                cancellationToken);
+
+            if (combinedResult.IsFailure)
+            {
+                return combinedResult.Error;
+            }
+
+            errors = combinedResult.Value;
+        }
+        else
+        {
+            var validation = await validator.ValidateAsync(request.Payload, schema.Value.Schema, cancellationToken);
+
+            if (validation.IsFailure)
+            {
+                return validation.Error;
+            }
+
+            errors = validation.Value.Errors ?? [];
         }
         
         var save = await infrastructure.SaveDraftPayloadAsync(request.SubmissionId, null, request.Payload,
@@ -56,8 +78,7 @@ public class UpdateSubmissionUseCase(
             return save.Error;
         }
         
-        var isValid = validation.IsSuccess && validation.Value.IsValid;
-        var errors = validation.IsSuccess ? validation.Value.Errors ?? [] : [];
+        var isValid = errors.Count == 0;
 
         if (!isValid)
         {

@@ -37,9 +37,14 @@ public static class ErrorCodesExtensions
     public static string GetMessage(this ErrorCodes code, object? args = null)
     {
         var template = GetMeta(code).Description;
-        return args is null 
-            ? template 
-            : template.FormatWith(ToDictionary(args));
+        return args switch
+        {
+            null => template,
+            string s => string.IsNullOrWhiteSpace(template) || template == "{Message}"
+                ? s
+                : template.FormatWith(new Dictionary<string, object?>(OrdinalIgnoreCase) { ["Message"] = s }),
+            _ => template.FormatWith(ToDictionary(args))
+        };
     }
 
     private static ErrorMeta GetMeta(ErrorCodes code)
@@ -65,6 +70,7 @@ public static class ErrorCodesExtensions
             
             _ => args.GetType()
                 .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.GetIndexParameters().Length == 0)
                 .ToDictionary(p => p.Name, p => p.GetValue(args), OrdinalIgnoreCase)
         };
     }

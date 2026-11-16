@@ -17,7 +17,9 @@ public static class AppVersionProvider
     private static readonly Lazy<VersionInfo> Info = new(ResolveVersionInfo);
 
     public static string Version => Info.Value.Version;
+
     public static string InformativeVersion => Info.Value.InformativeVersion;
+
     public static string Sha => Info.Value.Sha;
 
     private static VersionInfo ResolveVersionInfo()

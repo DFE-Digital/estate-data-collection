@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+        <PackageReference Include="Scrutor" />
+        <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\EstateDataCollection.Common\EstateDataCollection.Common.csproj" />
+        <ProjectReference Include="..\EstateDataCollection.Infrastructure\EstateDataCollection.Infrastructure.csproj" />
+    </ItemGroup>
+
+</Project>
