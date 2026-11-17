@@ -3,7 +3,10 @@ namespace EstateDataCollection.Common.Results;
 public class Result
 {
     public bool IsSuccess { get; }
-    public bool IsFailure => !IsSuccess;
+    public bool IsFailure
+    {
+        get { return !IsSuccess; }
+    }
 
     public Error Error { get; }
 

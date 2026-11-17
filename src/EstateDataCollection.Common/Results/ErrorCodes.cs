@@ -32,8 +32,11 @@ public enum ErrorCodes
     [Display(Name = "Schema.NotActive", Description = "Schema '{SchemaName}' v{Version} is not active or has not been scheduled yet.")]
     SchemaNotActive = 1007,
 
-    #endregion
+    [Display(Name = "Schema.InvalidIdentifierConfig", Description = "{Message}")]
+    SchemaInvalidIdentifierConfig = 1008,
 
+    #endregion
+    
     #region Payload Validation
     
     [Display(Name = "Payload.Empty", Description = "Payload cannot be empty.")]
@@ -45,6 +48,9 @@ public enum ErrorCodes
     [Display(Name = "Payload.NotFound", Description = "Payload not found.")]
     PayloadNotFound = 2002,
 
+    [Display(Name = "Payload.InvalidIdentifier", Description = "{Message}")]
+    PayloadInvalidIdentifier = 2003,
+    
     #endregion
     
     #region Json Validation
@@ -61,13 +67,13 @@ public enum ErrorCodes
     
     [Display(Name = "Storage.UploadFailed", Description = "{Message}")]
     StorageUploadFailed = 4000,
-    
+
     [Display(Name = "Storage.ReadFailed", Description = "{Message}")]
     StorageReadFailed = 4001,
-    
+
     [Display(Name = "Storage.SerialisationError", Description = "{Message}")]
     StorageSerialisationError = 4002,
-    
+
     [Display(Name = "Storage.PromotionFailed", Description = "{Message}")]
     StoragePromotionFailed = 4003,
     
@@ -77,7 +83,7 @@ public enum ErrorCodes
 
     [Display(Name = "Submission.AlreadyFinalised", Description = "This submission has already been finalised and cannot be modified.")]
     SubmissionAlreadyFinalised = 5000,
-    
+
     [Display(Name = "Submission.NotFound", Description = "Submission \"{SubmissionId}\" not found.")]
     SubmissionNotFound = 5001,
 

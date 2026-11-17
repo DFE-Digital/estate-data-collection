@@ -16,11 +16,20 @@ public static class AppVersionProvider
     
     private static readonly Lazy<VersionInfo> Info = new(ResolveVersionInfo);
 
-    public static string Version => Info.Value.Version;
+    public static string Version
+    {
+        get { return Info.Value.Version; }
+    }
 
-    public static string InformativeVersion => Info.Value.InformativeVersion;
+    public static string InformativeVersion
+    {
+        get { return Info.Value.InformativeVersion; }
+    }
 
-    public static string Sha => Info.Value.Sha;
+    public static string Sha
+    {
+        get { return Info.Value.Sha; }
+    }
 
     private static VersionInfo ResolveVersionInfo()
     {

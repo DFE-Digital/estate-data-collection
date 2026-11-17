@@ -31,8 +31,9 @@ public abstract class FunctionEndpointBase(
         Func<Task<Result<TRequest>>> bindRequestAsync,
         int successStatusCode = StatusCodes.Status200OK,
         string? context = null,
-        CancellationToken cancellationToken = default) =>
-        ExecuteAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return ExecuteAsync(
             endpointName,
             useCase,
             bindRequestAsync,
@@ -40,6 +41,7 @@ public abstract class FunctionEndpointBase(
             successStatusCode,
             context,
             cancellationToken);
+    }
 
     protected async Task<IActionResult> ExecuteAsync<TRequest, TUseCaseResult, TResponse>(
         string endpointName,
