@@ -16,6 +16,7 @@ As integration test coverage grew (schema submissions, regression fixture update
 ## Decision Drivers
 
 * **Zero Pollution of Local Development Containers:** Running `dotnet test` against a shared local Azurite instance must never leave test artefacts inside `schemas`, `draft-schemas`, `payloads`, or `processed`.
+* **CI & Dev Container Compatibility:** Connect directly to an already-running Azurite endpoint (`127.0.0.1:10000`, CI service container, or Dev Container service via `AZURE_STORAGE_CONNECTION_STRING` / `ConnectionStrings__BlobStorage`) without spawning child `docker` processes from test code.
 * **Parallel / Repeat Run Safety:** Test runs must not collide with previous runs or crashed test runs.
 * **Best-Effort Orphan Recovery:** If a test run is aborted (`SIGINT`/IDE stop) before `DisposeAsync`, stale ephemeral test containers must be cleaned up automatically on subsequent runs.
 * **Fixture Write Atomicity:** Updating valid/invalid test fixtures in `BlobSchemaRegistry` must roll back or delete cleared fixture blobs cleanly so stale JSON fixtures do not linger.
@@ -24,13 +25,14 @@ As integration test coverage grew (schema submissions, regression fixture update
 
 * **Option 1: Per-Run Unique Ephemeral Container Names (`test-{runId}-*`) with `DisposeAsync` Deletion and Stale Container Sweeps**
 * **Option 2: Wipe Shared `schemas` / `payloads` / `processed` Containers Before/After Each Test Run**
-* **Option 3: Always Launch a Separate Docker Azurite Container Even When Local Azurite Is Running**
+* **Option 3: Launch a Separate Docker Azurite Child Process from `AzuriteFixture`**
 
 ## Decision Outcome
 
 Chosen option: **"Option 1: Per-Run Unique Ephemeral Container Names (`test-{runId}-*`) with `DisposeAsync` Deletion and Stale Container Sweeps"**, combined with clean fixture rollback in `BlobSchemaRegistry`:
 
 1. **Per-Run Ephemeral Test Containers ([`AzuriteFixture.cs`](../../test/EstateDataCollection.Tests.Integration/Fixtures/AzuriteFixture.cs)):**
+   - Connects to an existing Azurite instance (`AZURE_STORAGE_CONNECTION_STRING`, `ConnectionStrings__BlobStorage`, or default `127.0.0.1:10000` for local Docker, Dev Containers, and GitHub Actions service containers) without shelling out to external `docker` processes.
    - Each `AzuriteFixture` instance generates a 12-character hex run identifier (`_runId`) and binds `BlobSchemaRegistryOptions` / `BlobSubmissionRepositoryOptions` in `IntegrationEndpointHarness` to isolated container names:
      - `test-{runId}-schemas`
      - `test-{runId}-draft-schemas`
@@ -45,7 +47,9 @@ Chosen option: **"Option 1: Per-Run Unique Ephemeral Container Names (`test-{run
 
 * Good, because developers can keep local `func start` schemas and payloads in Azurite while running `dotnet test` repeatedly with zero cross-contamination.
 * Good, because Azurite retains zero leftover `test-*` containers after normal test runs, while orphaned containers from killed processes are self-cleaned after one hour.
+* Good, because integration tests work cleanly inside Dev Containers and GitHub Actions service containers without requiring Docker-in-Docker socket access.
 * Good, because verification and test runs (`RunSchemaTestsUseCase` / `VerifySchemaUseCase`) run purely in-memory against validation services without writing temporary payload blobs into `payloads` or `processed`.
+* Bad, because developers running tests outside a Dev Container or CI must ensure Azurite is started beforehand (or `AZURE_STORAGE_CONNECTION_STRING` is set).
 * Bad, because custom integration tests wiring `BlobSchemaRegistryOptions` or `BlobSubmissionRepositoryOptions` manually must consume container names from `AzuriteFixture` rather than hardcoding defaults.
 
 ### Confirmation

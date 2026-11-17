@@ -1,6 +1,3 @@
-using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using Azure.Storage.Blobs;
 using Xunit;
@@ -9,8 +6,8 @@ namespace EstateDataCollection.Tests.Integration.Fixtures;
 
 /// <summary>
 /// Provides an isolated, live Azurite Blob Storage client for integration tests.
-/// Uses an already-running Azurite instance on 127.0.0.1:10000 if available (e.g. local dev or CI service container),
-/// and otherwise launches an ephemeral Azurite Docker container automatically on a free host port.
+/// Connects to an already-running Azurite instance via <c>AZURE_STORAGE_CONNECTION_STRING</c>,
+/// <c>ConnectionStrings__BlobStorage</c>, or the default local/CI endpoint (<c>127.0.0.1:10000</c>).
 /// Every run operates inside unique <c>test-{runId}-*</c> containers and deletes them on <see cref="DisposeAsync"/>
 /// so local development containers (<c>schemas</c>, <c>draft-schemas</c>, <c>payloads</c>, <c>processed</c>) stay clean.
 /// </summary>
@@ -24,8 +21,6 @@ public sealed partial class AzuriteFixture : IAsyncLifetime
         $"DefaultEndpointsProtocol=http;AccountName={AccountName};AccountKey={AccountKey};BlobEndpoint=http://127.0.0.1:10000/{AccountName};";
 
     private readonly string _runId = Guid.NewGuid().ToString("N")[..12];
-    private string? _ownedContainerId;
-    private string? _dockerExecutable;
 
     public string SchemasContainerName => $"test-{_runId}-schemas";
     public string DraftSchemasContainerName => $"test-{_runId}-draft-schemas";
@@ -45,19 +40,7 @@ public sealed partial class AzuriteFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        if (await IsPortOpenAsync("127.0.0.1", 10000))
-        {
-            ConnectionString = DefaultConnectionString;
-        }
-        else
-        {
-            var hostPort = GetFreeTcpPort();
-            await StartEphemeralDockerAzuriteAsync(hostPort);
-            ConnectionString =
-                $"DefaultEndpointsProtocol=http;AccountName={AccountName};AccountKey={AccountKey};BlobEndpoint=http://127.0.0.1:{hostPort}/{AccountName};";
-            await WaitForPortOpenAsync("127.0.0.1", hostPort, TimeSpan.FromSeconds(20));
-        }
-
+        ConnectionString = ResolveConnectionString();
         Client = new BlobServiceClient(ConnectionString);
         await EnsureContainersAsync();
         await CleanupStaleTestContainersAsync(TimeSpan.FromHours(1));
@@ -79,18 +62,6 @@ public sealed partial class AzuriteFixture : IAsyncLifetime
                 }
             }
         }
-
-        if (!string.IsNullOrWhiteSpace(_ownedContainerId) && !string.IsNullOrWhiteSpace(_dockerExecutable))
-        {
-            try
-            {
-                await RunProcessAsync(_dockerExecutable, $"rm -f {_ownedContainerId}");
-            }
-            catch
-            {
-                // Best-effort cleanup of ephemeral container
-            }
-        }
     }
 
     public static bool IsTestContainerName(string name)
@@ -101,8 +72,20 @@ public sealed partial class AzuriteFixture : IAsyncLifetime
     [GeneratedRegex(@"^test-[0-9a-f]{12}-(schemas|draft-schemas|payloads|processed)$", RegexOptions.CultureInvariant)]
     private static partial Regex TestContainerPattern();
 
+    private static string ResolveConnectionString()
+    {
+        var envConnection =
+            Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING") ??
+            Environment.GetEnvironmentVariable("ConnectionStrings__BlobStorage");
+
+        return string.IsNullOrWhiteSpace(envConnection)
+            ? DefaultConnectionString
+            : envConnection.Trim();
+    }
+
     private async Task EnsureContainersAsync()
     {
+        Exception? lastError = null;
         for (var attempt = 0; attempt < 10; attempt++)
         {
             try
@@ -114,11 +97,21 @@ public sealed partial class AzuriteFixture : IAsyncLifetime
 
                 return;
             }
-            catch when (attempt < 9)
+            catch (Exception ex) when (attempt < 9)
             {
+                lastError = ex;
                 await Task.Delay(300);
             }
+            catch (Exception ex)
+            {
+                lastError = ex;
+            }
         }
+
+        throw new InvalidOperationException(
+            "Could not connect to Azurite Blob Storage for integration tests. " +
+            "Ensure Azurite is running on 127.0.0.1:10000 (or set AZURE_STORAGE_CONNECTION_STRING / ConnectionStrings__BlobStorage).",
+            lastError);
     }
 
     private async Task CleanupStaleTestContainersAsync(TimeSpan maxAge)
@@ -144,127 +137,5 @@ public sealed partial class AzuriteFixture : IAsyncLifetime
         {
             // Best-effort sweep of orphaned containers from aborted runs
         }
-    }
-
-    private async Task StartEphemeralDockerAzuriteAsync(int hostPort)
-    {
-        _dockerExecutable = ResolveDockerExecutable();
-        if (string.IsNullOrWhiteSpace(_dockerExecutable))
-        {
-            throw new InvalidOperationException(
-                "Azurite is not listening on 127.0.0.1:10000 and Docker CLI could not be found to auto-start an Azurite container.");
-        }
-
-        var containerName = $"edc-azurite-{Guid.NewGuid():N}";
-        var args =
-            $"run -d --rm --name {containerName} -p {hostPort}:10000 mcr.microsoft.com/azure-storage/azurite:latest " +
-            "azurite-blob --blobHost 0.0.0.0 --blobPort 10000";
-
-        var (exitCode, stdout, stderr) = await RunProcessAsync(_dockerExecutable, args);
-        if (exitCode != 0 || string.IsNullOrWhiteSpace(stdout))
-        {
-            throw new InvalidOperationException(
-                $"Failed to start Azurite Docker container (exit {exitCode}): {stderr}");
-        }
-
-        _ownedContainerId = stdout.Trim();
-    }
-
-    private static string? ResolveDockerExecutable()
-    {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var candidates = new[]
-        {
-            Path.Combine(home, ".docker", "bin", "docker"),
-            "/usr/local/bin/docker",
-            "/opt/homebrew/bin/docker",
-            "/usr/bin/docker"
-        };
-
-        foreach (var path in candidates)
-        {
-            if (File.Exists(path))
-            {
-                return path;
-            }
-        }
-
-        var pathEnv = Environment.GetEnvironmentVariable("PATH");
-        if (!string.IsNullOrWhiteSpace(pathEnv))
-        {
-            foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-            {
-                var candidate = Path.Combine(dir.Trim(), OperatingSystem.IsWindows() ? "docker.exe" : "docker");
-                if (File.Exists(candidate))
-                {
-                    return candidate;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static int GetFreeTcpPort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    private static async Task<bool> IsPortOpenAsync(string host, int port)
-    {
-        try
-        {
-            using var client = new TcpClient();
-            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
-            await client.ConnectAsync(host, port, cts.Token);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static async Task WaitForPortOpenAsync(string host, int port, TimeSpan timeout)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (await IsPortOpenAsync(host, port))
-            {
-                return;
-            }
-
-            await Task.Delay(200);
-        }
-
-        throw new TimeoutException($"Timed out waiting for Azurite on {host}:{port}.");
-    }
-
-    private static async Task<(int ExitCode, string StdOut, string StdErr)> RunProcessAsync(string fileName, string arguments)
-    {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = fileName,
-                Arguments = arguments,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        process.Start();
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-
-        return (process.ExitCode, await stdoutTask, await stderrTask);
     }
 }

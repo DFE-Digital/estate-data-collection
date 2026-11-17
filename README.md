@@ -123,7 +123,7 @@ flowchart TD
 ### 1. Prerequisites
 - **.NET 10 SDK**
 - **Azure Functions Core Tools v4** (`brew install azure-functions-core-tools@4` on macOS)
-- **Docker** (for Azurite local storage emulator; also auto-managed by integration tests)
+- **Docker** (for Azurite local storage emulator)
 - **Azure CLI** (optional, for cloud deployments)
 
 ### 2. Running Azurite with Docker
@@ -183,7 +183,7 @@ Run the full automated solution suite (**227 tests**: 169 unit tests + 58 integr
 dotnet test EstateDataCollection.slnx
 ```
 
-> **Storage Isolation ([ADR 0021](docs/decisions/0021-isolated-ephemeral-azurite-test-containers.md)):** `AzuriteFixture` executes integration tests inside unique `test-{runId}-*` containers and deletes them on teardown. If local Azurite on port `10000` is not running, the fixture automatically starts and tears down an ephemeral Azurite Docker container on a free port—leaving local development containers untouched.
+> **Storage Isolation ([ADR 0021](docs/decisions/0021-isolated-ephemeral-azurite-test-containers.md)):** `AzuriteFixture` connects to the running Azurite instance (`AZURE_STORAGE_CONNECTION_STRING`, `ConnectionStrings__BlobStorage`, or default `127.0.0.1:10000` — local Docker, Dev Container, or CI service container), executes integration tests inside unique `test-{runId}-*` containers, and deletes them on teardown—leaving local development containers untouched.
 
 ### 6. Testing with the `.http` Files
 
