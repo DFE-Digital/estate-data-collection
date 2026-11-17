@@ -1,0 +1,30 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "ConnectionStrings:BlobStorage": "UseDevelopmentStorage=true",
+    "AdminUi:ExecutionMode": "Direct",
+    "AdminUi:AdminApiBaseUrl": "http://localhost:7072/api",
+    "AdminUi:AdminApiFunctionKey": ""
+  },
+  "Host": {
+    "LocalHttpPort": 7073
+  },
+  "Blob:Schema": {
+    "ContainerName": "schemas",
+    "DraftContainerName": "draft-schemas",
+    "CacheKey": "schema:{schemaName}:v{version}",
+    "SchemaBlobDirectory": "{schemaName}/v{version}.schema.json",
+    "RulesBlobDirectory": "{schemaName}/v{version}.rules.json",
+    "OdcsBlobDirectory": "{schemaName}/v{version}.odcs.yaml",
+    "MetaBlobDirectory": "{schemaName}/v{version}.meta.json"
+  },
+  "Blob:Submission": {
+    "PayloadsContainerName": "payloads",
+    "ProcessedContainerName": "processed",
+    "DraftSessionBlobFormat": "{submissionId}/session.json",
+    "DraftPayloadBlobFormat": "{submissionId}/draft.json",
+    "ProcessedBlobFormat": "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
+  }
+}

@@ -1,0 +1,12 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+
+@namespace EstateDataCollection.Admin.UI.Components
+
+@if (Model is not null)
+{
+    <strong class="@Model.CssClass">@Model.Text</strong>
+}
+
+@code {
+    [Parameter, EditorRequired] public LifecycleTagViewModel? Model { get; set; }
+}

@@ -1,0 +1,12 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Components
+
+<h2 class="govuk-heading-m govuk-!-margin-bottom-2">Schema Fields</h2>
+<p class="govuk-body-m">
+    A breakdown of all the fields with their paths and property types, this schema contains @Model.TopLevelFieldCount top-level fields.
+</p>
+<SchemaFieldTree Model="Model.Tree" />
+
+@code {
+    [Parameter, EditorRequired] public FieldsViewerViewModel Model { get; set; } = default!;
+}

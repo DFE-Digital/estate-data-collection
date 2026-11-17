@@ -1,0 +1,156 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Pages
+
+<DfeAdminLayout Meta="Model.Page">
+    <a href="/manage" class="govuk-back-link">Back to Schema Catalogue</a>
+
+    <div class="govuk-grid-row">
+        <div class="govuk-grid-column-full">
+            <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">Contract Workbench</h1>
+            <p class="govuk-body-l">
+                Allows you to: dry-run and verify ODCS YAML contracts or JSON Schemas; identifier paths; quality rules; and sample fixtures before saving a new ingested version.
+            </p>
+        </div>
+    </div>
+
+    <ErrorSummary Model="Model.ErrorSummary" />
+
+    <div id="workbench-verify-result">
+        <VerifyResultPanel Model="Model.Verification" />
+    </div>
+
+    <form id="workbench-form" method="post" action="/manage/workbench/submit">
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-two-thirds">
+                <div class="govuk-form-group">
+                    <fieldset class="govuk-fieldset">
+                        <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                            Contract format
+                        </legend>
+                        <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="mode-odcs" name="inputMode" type="radio" value="odcs"
+                                       checked="@Model.IsOdcsMode" />
+                                <label class="govuk-label govuk-radios__label" for="mode-odcs">
+                                    ODCS v3 YAML Contract
+                                </label>
+                            </div>
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="mode-json" name="inputMode" type="radio" value="json"
+                                       checked="@Model.IsJsonMode" />
+                                <label class="govuk-label govuk-radios__label" for="mode-json">
+                                    JSON Schema + Quality Rules
+                                </label>
+                            </div>
+                        </div>
+                    </fieldset>
+                </div>
+
+                <div class="govuk-grid-row">
+                    <div class="govuk-grid-column-two-thirds">
+                        <div class="govuk-form-group">
+                            <label class="govuk-label govuk-label--s" for="schemaName">
+                                Schema name
+                            </label>
+                            <div class="govuk-hint">Required when committing (e.g. <code class="dfe-code-badge">edc-school-site</code>).</div>
+                            <input class="govuk-input" id="schemaName" name="schemaName" type="text" value="@Model.SchemaName" />
+                        </div>
+                    </div>
+                    <div class="govuk-grid-column-one-third">
+                        <div class="govuk-form-group">
+                            <label class="govuk-label govuk-label--s" for="version">
+                                Version
+                            </label>
+                            <div class="govuk-hint">Integer (&ge; 1).</div>
+                            <input class="govuk-input govuk-input--width-5" id="version" name="version" type="number" min="1" value="@Model.Version" />
+                        </div>
+                    </div>
+                </div>
+
+                <input type="hidden" id="fileName" name="fileName" value="@Model.FileName" />
+
+                <div data-workbench-panel="odcs" hidden="@Model.IsJsonMode">
+                    <div class="govuk-form-group">
+                        <label class="govuk-label govuk-label--s" for="odcsFile">
+                            Load <code class="dfe-code-badge">.odcs.yaml</code> from disk (optional)
+                        </label>
+                        <input class="govuk-file-upload" id="odcsFile" type="file" accept=".yaml,.yml" data-load-target="odcsYaml" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label govuk-label--s" for="odcsYaml">
+                            ODCS YAML Content
+                        </label>
+                        <textarea class="govuk-textarea dfe-code-textarea" id="odcsYaml" name="odcsYaml" rows="16">@Model.OdcsYaml</textarea>
+                    </div>
+                </div>
+
+                <div data-workbench-panel="json" hidden="@Model.IsOdcsMode">
+                    <div class="govuk-form-group">
+                        <label class="govuk-label govuk-label--s" for="schemaFile">
+                            Load <code class="dfe-code-badge">.schema.json</code> from disk (optional)
+                        </label>
+                        <input class="govuk-file-upload" id="schemaFile" type="file" accept=".json" data-load-target="schemaJson" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label govuk-label--s" for="schemaJson">
+                            JSON Schema (Draft 2020-12 / Draft-07)
+                        </label>
+                        <textarea class="govuk-textarea dfe-code-textarea" id="schemaJson" name="schemaJson" rows="12">@Model.SchemaJson</textarea>
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label govuk-label--s" for="rulesJson">
+                            Quality Rules JSON Array (JsonLogic / CEL — optional)
+                        </label>
+                        <textarea class="govuk-textarea dfe-code-textarea" id="rulesJson" name="rulesJson" rows="8">@Model.RulesJson</textarea>
+                    </div>
+                </div>
+
+                <details class="govuk-details govuk-!-margin-bottom-5" data-module="govuk-details"
+                         open="@Model.AreFixturesExpanded">
+                    <summary class="govuk-details__summary">
+                        <span class="govuk-details__summary-text">
+                            Optional sample payload fixtures (valid &amp; invalid golden test cases)
+                        </span>
+                    </summary>
+                    <div class="govuk-details__text">
+                        <div class="govuk-form-group">
+                            <label class="govuk-label govuk-label--s" for="validFixtureJson">
+                                Sample valid payload JSON (single object or array)
+                            </label>
+                            <textarea class="govuk-textarea dfe-code-textarea" id="validFixtureJson" name="validFixtureJson" rows="6">@Model.ValidFixtureJson</textarea>
+                        </div>
+                        <div class="govuk-form-group">
+                            <label class="govuk-label govuk-label--s" for="invalidFixtureJson">
+                                Sample invalid payload JSON (must fail validation)
+                            </label>
+                            <textarea class="govuk-textarea dfe-code-textarea" id="invalidFixtureJson" name="invalidFixtureJson" rows="6">@Model.InvalidFixtureJson</textarea>
+                        </div>
+                    </div>
+                </details>
+
+                <IdentifierConfigFieldset Model="Model.IdentifierConfig" />
+
+                <div class="govuk-button-group">
+                    <button type="submit"
+                            formaction="/manage/workbench/verify"
+                            data-verify-button="true"
+                            class="govuk-button govuk-button--secondary"
+                            data-module="govuk-button">
+                        Dry-Run Verify
+                    </button>
+                    <button type="submit" class="govuk-button" data-module="govuk-button">
+                        Save as Validated
+                    </button>
+                </div>
+            </div>
+
+            <div class="govuk-grid-column-one-third">
+            </div>
+        </div>
+    </form>
+</DfeAdminLayout>
+
+@code {
+    [Parameter, EditorRequired] public WorkbenchViewModel Model { get; set; } = default!;
+}

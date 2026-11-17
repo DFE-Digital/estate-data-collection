@@ -1,0 +1,114 @@
+using EstateDataCollection.Admin.UI.Models;
+using EstateDataCollection.Admin.UI.Models.ViewModels;
+using EstateDataCollection.Admin.UI.Pages;
+using EstateDataCollection.Admin.UI.Rendering;
+using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Application.UseCases;
+using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
+using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
+using EstateDataCollection.AzureFunctions.AdminUi.Helpers;
+using EstateDataCollection.AzureFunctions.AdminUi.Options;
+using EstateDataCollection.AzureFunctions.AdminUi.PageBase;
+using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Web.Endpoints;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+
+namespace EstateDataCollection.AzureFunctions.AdminUi.Routes;
+
+public sealed class UpdateSchemaVersionTestsEndpoint(
+    IUseCase<UpdateSchemaTestsResult, UpdateSchemaTestsRequest> updateSchemaTestsUseCase,
+    IUseCase<SchemaVersionDetail, GetSchemaDetailRequest> getSchemaDetailUseCase,
+    RazorComponentRenderer renderer,
+    IOptions<AdminUiOptions> uiOptions,
+    IHostEnvironment hostEnvironment,
+    FunctionEndpointInstrumentation? instrumentation = null
+) : FunctionPageBase(renderer, uiOptions, hostEnvironment, instrumentation)
+{
+    public const string EndpointName = "AdminUiUpdateSchemaVersionTests";
+
+    [Function(EndpointName)]
+    public async Task<IActionResult> HandleAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post),
+            Route = "manage/schemas/{schemaName}/{version:int}/tests")]
+        HttpRequest http,
+        string schemaName,
+        int version,
+        CancellationToken cancellationToken)
+    {
+        InstrumentInvoked(EndpointName, $"{schemaName} v{version}");
+
+        var form = await ReadFormSafeAsync(http, cancellationToken);
+        var validRaw = form["validFixtureJson"].ToString();
+        var invalidRaw = form["invalidFixtureJson"].ToString();
+
+        var validationErrors = new List<ValidationError>();
+
+        var validParsed = WorkbenchFormParser.ParseFixtures(validRaw, "validFixtureJson");
+        if (validParsed.IsFailure)
+        {
+            validationErrors.AddRange(validParsed.Error.ValidationErrors);
+        }
+
+        var invalidParsed = WorkbenchFormParser.ParseFixtures(invalidRaw, "invalidFixtureJson");
+        if (invalidParsed.IsFailure)
+        {
+            validationErrors.AddRange(invalidParsed.Error.ValidationErrors);
+        }
+
+        if (validationErrors.Count > 0)
+        {
+            return await RenderFailureAsync(
+                Error.Validation("SchemaTests.InvalidFixtureJson", "One or more test JSON payloads are invalid.", validationErrors),
+                StatusCodes.Status422UnprocessableEntity);
+        }
+
+        var result = await updateSchemaTestsUseCase.ExecuteAsync(
+            new UpdateSchemaTestsRequest(
+                SchemaName: schemaName,
+                Version: version,
+                ValidFixtures: validParsed.Value,
+                InvalidFixtures: invalidParsed.Value),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return await RenderFailureAsync(result.Error, MapErrorToStatusCode(result.Error));
+        }
+
+        InstrumentCompleted(EndpointName, StatusCodes.Status302Found);
+        return new RedirectResult(
+            $"/manage/schemas/{Uri.EscapeDataString(schemaName)}/{version}/tests?notice=updated",
+            permanent: false);
+
+        async Task<IActionResult> RenderFailureAsync(Error error, int statusCode)
+        {
+            var detailResult = await getSchemaDetailUseCase.ExecuteAsync(
+                new GetSchemaDetailRequest(
+                    SchemaName: schemaName,
+                    Version: version,
+                    IncludeUnscheduled: true,
+                    IncludeRawJsonSchema: false),
+                cancellationToken);
+
+            var meta = CreatePageMeta(http, $"Tests - {schemaName} v{version}", activeNav: "schemas");
+
+            var model = new SchemaTestsViewModel(
+                Page: meta,
+                SchemaName: detailResult.IsSuccess ? detailResult.Value.SchemaName : schemaName,
+                Version: detailResult.IsSuccess ? detailResult.Value.Version : version,
+                Detail: detailResult.IsSuccess ? detailResult.Value : null,
+                PageError: error,
+                ValidFixtureInput: validRaw,
+                InvalidFixtureInput: invalidRaw);
+
+            return await RenderPageAsync<SchemaTestsPage, SchemaTestsViewModel>(
+                EndpointName,
+                model,
+                statusCode);
+        }
+    }
+}

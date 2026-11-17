@@ -1,0 +1,96 @@
+@namespace EstateDataCollection.Admin.UI.Layouts
+
+<!DOCTYPE html>
+<html lang="en" class="govuk-template">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#003a69" />
+    <title>@Meta.DocumentTitle</title>
+    <link rel="icon" sizes="48x48" href="/assets/images/favicon.ico" />
+    <link rel="icon" sizes="any" href="/assets/images/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/assets/css/govuk-frontend.min.css" />
+    <link rel="stylesheet" href="/assets/css/dfe-branding.css" />
+</head>
+<body class="govuk-template__body">
+    <script>document.body.className += ' js-enabled' + ('no-touch' in document.documentElement ? ' no-touch' : ' touch');</script>
+    <a href="#main-content" class="govuk-skip-link" data-module="govuk-skip-link">Skip to main content</a>
+
+    <header class="dfe-header" role="banner">
+        <div class="govuk-width-container dfe-header__container dfe-width-container">
+            <a href="/manage" class="dfe-header__brand">
+                <span class="dfe-header__logo-text">Department for Education</span>
+                <span class="dfe-header__divider" aria-hidden="true"></span>
+                <span class="dfe-header__service-name">Estate Data Collection</span>
+            </a>
+
+            <div class="dfe-header__meta">
+                @if (Meta.HasSignedInUser)
+                {
+                    <span>@Meta.SignedInUser</span>
+                }
+            </div>
+        </div>
+    </header>
+
+    <nav class="dfe-service-nav" aria-label="Service navigation">
+        <div class="govuk-width-container dfe-width-container">
+            <ul class="dfe-service-nav__list">
+                <li>
+                    <a href="/manage" class="@Meta.SchemasNavLinkCssClass">
+                        Schemas &amp; Lifecycle
+                    </a>
+                </li>
+                <li>
+                    <a href="/manage/workbench" class="@Meta.WorkbenchNavLinkCssClass">
+                        Contract Workbench
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="govuk-width-container dfe-width-container">
+        <div class="govuk-phase-banner">
+            <p class="govuk-phase-banner__content">
+                <strong class="govuk-tag govuk-phase-banner__content__tag">Internal</strong>
+                <span class="govuk-phase-banner__text">
+                    DfE Education Estates internal administration portal. Contracts are validated before activation.
+                </span>
+            </p>
+        </div>
+
+        <main class="govuk-main-wrapper" id="main-content" role="main">
+            @ChildContent
+        </main>
+    </div>
+
+    <footer class="govuk-footer" role="contentinfo">
+        <div class="govuk-width-container dfe-width-container">
+            <div class="govuk-footer__meta">
+                <div class="govuk-footer__meta-item govuk-footer__meta-item--grow">
+                    <span class="govuk-footer__licence-description">
+                        Department for Education &bull; Education Estates Directorate &bull; Estate Data Collection (EDC)
+                        @if (Meta.HasAppVersion)
+                        {
+                            <span> &bull; Build <code class="dfe-code-badge">@Meta.AppVersion</code></span>
+                        }
+                    </span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module" src="/assets/js/govuk-frontend.min.js"></script>
+    <script type="module">
+        import { initAll } from '/assets/js/govuk-frontend.min.js';
+        initAll();
+    </script>
+    <script src="/assets/js/workbench.js"></script>
+</body>
+</html>
+
+@code {
+    [Parameter, EditorRequired] public AdminPageMeta Meta { get; set; } = default!;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

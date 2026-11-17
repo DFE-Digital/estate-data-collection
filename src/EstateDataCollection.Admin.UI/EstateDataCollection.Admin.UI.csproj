@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <RootNamespace>EstateDataCollection.Admin.UI</RootNamespace>
+    <AddRazorSupportForMvc>false</AddRazorSupportForMvc>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="wwwroot\**" />
+    <EmbeddedResource Include="wwwroot\**">
+      <LogicalName>$([System.String]::Copy('wwwroot/%(RecursiveDir)%(Filename)%(Extension)').Replace('\', '/'))</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EstateDataCollection.Application\EstateDataCollection.Application.csproj" />
+    <ProjectReference Include="..\EstateDataCollection.Common\EstateDataCollection.Common.csproj" />
+    <ProjectReference Include="..\EstateDataCollection.Domain\EstateDataCollection.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

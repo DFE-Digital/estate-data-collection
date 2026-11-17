@@ -1,0 +1,37 @@
+using EstateDataCollection.Admin.UI.Models;
+using EstateDataCollection.Admin.UI.Models.ViewModels;
+using EstateDataCollection.Admin.UI.Pages;
+using EstateDataCollection.Admin.UI.Rendering;
+using EstateDataCollection.AzureFunctions.AdminUi.Options;
+using EstateDataCollection.AzureFunctions.AdminUi.PageBase;
+using EstateDataCollection.Common.Web.Endpoints;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+
+namespace EstateDataCollection.AzureFunctions.AdminUi.Routes;
+
+public sealed class WorkbenchPageEndpoint(
+    RazorComponentRenderer renderer,
+    IOptions<AdminUiOptions> uiOptions,
+    IHostEnvironment hostEnvironment,
+    FunctionEndpointInstrumentation? instrumentation = null
+) : FunctionPageBase(renderer, uiOptions, hostEnvironment, instrumentation)
+{
+    public const string EndpointName = "AdminUiWorkbenchPage";
+
+    [Function(EndpointName)]
+    public async Task<IActionResult> HandleAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get), Route = "manage/workbench")]
+        HttpRequest http)
+    {
+        InstrumentInvoked(EndpointName, "workbench");
+
+        var meta = CreatePageMeta(http, "Contract Workbench", activeNav: "workbench");
+        var model = new WorkbenchViewModel(meta);
+
+        return await RenderPageAsync<WorkbenchPage, WorkbenchViewModel>(EndpointName, model);
+    }
+}
