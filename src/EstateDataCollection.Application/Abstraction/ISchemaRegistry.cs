@@ -40,6 +40,19 @@ public interface ISchemaRegistry : IInfrastructure
     }
 
     /// <summary>
+    /// Updates the stored valid/invalid golden test fixtures (.valid.json / .invalid.json) for an existing schema version.
+    /// </summary>
+    Task<Result> UpdateSchemaFixturesAsync(
+        string schemaName,
+        int version,
+        IReadOnlyList<string> validFixtures,
+        IReadOnlyList<string> invalidFixtures,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(Result.Success());
+    }
+
+    /// <summary>
     /// Validates a candidate schema and/or companion quality rules (JsonLogic, CEL) and executes dry-run golden test fixtures.
     /// </summary>
     Task<Result<SchemaVerificationResult>> VerifyCanditateSchemaAsync(
@@ -48,6 +61,26 @@ public interface ISchemaRegistry : IInfrastructure
         IReadOnlyList<string> sampleValidPayloads,
         IReadOnlyList<string> sampleInvalidPayloads,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Validates a candidate schema, quality rules, identifier pointer alignment against the schema,
+    /// and executes dry-run golden test fixtures.
+    /// </summary>
+    Task<Result<SchemaVerificationResult>> VerifyCanditateSchemaAsync(
+        string? rawSchemaJson,
+        string? rawRulesJson,
+        IReadOnlyList<string> sampleValidPayloads,
+        IReadOnlyList<string> sampleInvalidPayloads,
+        SchemaIdentifierConfig? identifierConfig,
+        CancellationToken cancellationToken = default)
+    {
+        return VerifyCanditateSchemaAsync(
+            rawSchemaJson,
+            rawRulesJson,
+            sampleValidPayloads,
+            sampleInvalidPayloads,
+            cancellationToken);
+    }
 
     /// <summary>
     /// Checks whether a schema version already exists in storage.
@@ -62,9 +95,20 @@ public interface ISchemaRegistry : IInfrastructure
         string? rawOdcsYaml = null,
         CancellationToken cancellationToken = default);
 
+    Task<Result> SaveSchemaAsync(
+        SchemaMetadata metadata,
+        string? rawRulesJson,
+        string? rawOdcsYaml,
+        IReadOnlyList<string>? sampleValidFixtures,
+        IReadOnlyList<string>? sampleInvalidFixtures,
+        CancellationToken cancellationToken = default)
+    {
+        return SaveSchemaAsync(metadata, rawRulesJson, rawOdcsYaml, cancellationToken);
+    }
+
     /// <summary>
     /// Reads a newly uploaded contract (ODCS YAML, .schema.json, or .rules.json) and any companion files
-    /// from the draft/staging schema container.
+    /// (.meta.json, .valid.json, .invalid.json) from the draft/staging schema container.
     /// </summary>
     Task<Result<DraftSchemaArtifact>> GetDraftArtifactAsync(
         string blobPath,

@@ -12,7 +12,10 @@ namespace EstateDataCollection.Infrastructure.Validation.Engines;
 
 public sealed class JsonLogicQualityEngine : IQualityRuleEngine
 {
-    public string EngineName => "jsonlogic";
+    public string EngineName
+    {
+        get { return "jsonlogic"; }
+    }
 
     private readonly ConcurrentDictionary<string, JsonNode> _normalizedAstCache = new(StringComparer.Ordinal);
 

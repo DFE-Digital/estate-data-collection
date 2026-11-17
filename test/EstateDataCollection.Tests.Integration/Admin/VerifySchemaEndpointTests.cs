@@ -1,5 +1,7 @@
 using AwesomeAssertions;
+using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
@@ -53,6 +55,101 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
             SchemaJson: JsonSchemaFixtures.ValidV1Schema,
             SampleValidFixtures: [new SurveyPayloadBuilder().WithoutUrn().BuildJson()],
             SampleInvalidFixtures: []);
+
+        var result = await _harness.VerifySchema.HandleAsync(
+            HttpRequestBuilder.FromJson(dto),
+            CancellationToken.None);
+
+        result.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task When_Custom_LAEstab_IdentifierConfig_Is_Valid_Should_Return_200_With_Resolved_Required_True()
+    {
+        const string schemaJson = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["establishment"],
+          "properties": {
+            "establishment": {
+              "type": "object",
+              "required": ["laestab"],
+              "properties": {
+                "laestab": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+        """;
+
+        var dto = new VerifySchemaBodyDto(
+            SchemaJson: schemaJson,
+            SampleValidFixtures: ["""{"establishment":{"laestab":"201-3614"}}"""],
+            SampleInvalidFixtures: ["""{"establishment":{}}"""],
+            IdentifierConfig: new SchemaIdentifierConfig
+            {
+                Type = "LAEstab",
+                JsonPointer = "/establishment/laestab",
+                Required = false
+            });
+
+        var result = await _harness.VerifySchema.HandleAsync(
+            HttpRequestBuilder.FromJson(dto),
+            CancellationToken.None);
+
+        var data = result.ShouldBeApiSuccess<VerifySchemaResult>(StatusCodes.Status200OK);
+        data.ResolvedIdentifierConfig.Should().NotBeNull();
+        data.ResolvedIdentifierConfig!.Type.Should().Be("LAEstab");
+        data.ResolvedIdentifierConfig.JsonPointer.Should().Be("/establishment/laestab");
+        data.ResolvedIdentifierConfig.Required.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task When_IdentifierPointer_Does_Not_Exist_In_Schema_Should_Return_422_UnprocessableEntity()
+    {
+        var dto = new VerifySchemaBodyDto(
+            SchemaJson: JsonSchemaFixtures.ValidV1Schema,
+            IdentifierConfig: new SchemaIdentifierConfig
+            {
+                Type = "LAEstab",
+                JsonPointer = "/nonexistent/laestab"
+            });
+
+        var result = await _harness.VerifySchema.HandleAsync(
+            HttpRequestBuilder.FromJson(dto),
+            CancellationToken.None);
+
+        result.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+    }
+
+    [Theory]
+    [InlineData("/meta")]
+    [InlineData("/is_active")]
+    public async Task When_IdentifierPointer_Targets_NonScalar_Property_Should_Return_422_UnprocessableEntity(string pointer)
+    {
+        const string schemaJson = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["meta", "is_active"],
+          "properties": {
+            "meta": {
+              "type": "object",
+              "properties": { "code": { "type": "string" } }
+            },
+            "is_active": { "type": "boolean" }
+          }
+        }
+        """;
+
+        var dto = new VerifySchemaBodyDto(
+            SchemaJson: schemaJson,
+            IdentifierConfig: new SchemaIdentifierConfig
+            {
+                Type = "CustomId",
+                JsonPointer = pointer
+            });
 
         var result = await _harness.VerifySchema.HandleAsync(
             HttpRequestBuilder.FromJson(dto),

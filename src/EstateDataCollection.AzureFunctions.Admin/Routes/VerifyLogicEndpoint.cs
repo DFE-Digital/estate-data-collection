@@ -27,13 +27,15 @@ public sealed class VerifyLogicEndpoint(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
             Route = "logic/verify")]
         HttpRequest http,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(
             EndpointName,
             verifyUseCase,
             () => BindAsync(http, cancellationToken),
             StatusCodes.Status200OK,
             cancellationToken: cancellationToken);
+    }
 
     private static async Task<Result<VerifySchemaRequest>> BindAsync(HttpRequest http, CancellationToken cancellationToken)
     {

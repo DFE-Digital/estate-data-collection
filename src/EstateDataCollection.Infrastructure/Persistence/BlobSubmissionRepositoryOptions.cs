@@ -4,7 +4,10 @@ namespace EstateDataCollection.Infrastructure.Persistence;
 
 public class BlobSubmissionRepositoryOptions : Common.Markers.IOption<BlobSubmissionRepositoryOptions>
 {
-    public static string SectionName => "Blob:Submission";
+    public static string SectionName
+    {
+        get { return "Blob:Submission"; }
+    }
 
     [Required, MinLength(1)]
     public string PayloadContainerName { get; init; } = "payloads";

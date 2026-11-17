@@ -4,7 +4,10 @@ namespace EstateDataCollection.Infrastructure.Registry;
 
 public class BlobSchemaRegistryOptions : Common.Markers.IOption<BlobSchemaRegistryOptions>
 {
-    public static string SectionName => "Blob:Schema";
+    public static string SectionName
+    {
+        get { return "Blob:Schema"; }
+    }
 
     [Required, MinLength(1)]
     public string ContainerName { get; init; } = "schemas";
@@ -48,4 +51,16 @@ public class BlobSchemaRegistryOptions : Common.Markers.IOption<BlobSchemaRegist
     /// </summary>
     [Required, MinLength(1)]
     public string OdcsBlobDirectory { get; init; } = "{schemaName}/v{version}.odcs.yaml";
+
+    /// <summary>
+    /// Blob path format for stored valid regression test JSON fixtures ({schemaName}/v{version}.valid.json).
+    /// </summary>
+    [Required, MinLength(1)]
+    public string ValidFixturesBlobDirectory { get; init; } = "{schemaName}/v{version}.valid.json";
+
+    /// <summary>
+    /// Blob path format for stored invalid regression test JSON fixtures ({schemaName}/v{version}.invalid.json).
+    /// </summary>
+    [Required, MinLength(1)]
+    public string InvalidFixturesBlobDirectory { get; init; } = "{schemaName}/v{version}.invalid.json";
 }

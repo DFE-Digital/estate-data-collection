@@ -25,13 +25,15 @@ public sealed class GetAdminSchemasEndpoint(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Get),
             Route = "schemas")]
         HttpRequest http,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(
             EndpointName,
             getSchemasUseCase,
             () => Task.FromResult(Bind(http)),
             StatusCodes.Status200OK,
             cancellationToken: cancellationToken);
+    }
 
     private static Result<GetSchemasRequest> Bind(HttpRequest http)
     {

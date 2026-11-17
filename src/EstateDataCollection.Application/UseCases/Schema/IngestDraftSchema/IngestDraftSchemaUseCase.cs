@@ -47,6 +47,25 @@ public sealed partial class IngestDraftSchemaUseCase(
                 Status: "IgnoredCompanionBlob");
         }
 
+        if (artifact.IdentifierConfig is not null)
+        {
+            var idDefValidation = artifact.IdentifierConfig.ValidateDefinition();
+            if (idDefValidation.IsFailure)
+            {
+                var idErrMsg = idDefValidation.Error.ValidationErrors.FirstOrDefault()?.Message
+                               ?? idDefValidation.Error.Description
+                               ?? "Invalid identifier configuration in draft .meta.json.";
+                await schemaRegistry.RecordDraftIngestionFailureAsync(
+                    request.BlobPath,
+                    artifact.SchemaName,
+                    artifact.Version,
+                    [idErrMsg],
+                    cancellationToken);
+
+                return idDefValidation.Error;
+            }
+        }
+
         var resolvedInputs = odcsParser.ResolveInputs(
             artifact.RawSchemaJson,
             artifact.RawRulesJson,
@@ -134,17 +153,23 @@ public sealed partial class IngestDraftSchemaUseCase(
             }
         }
 
-        // Verify structural JSON schema + quality rules + in-flight fixtures
-        var verification = string.IsNullOrWhiteSpace(effectiveRulesJson)
+        // Verify structural JSON schema + quality rules + identifier alignment + in-flight fixtures
+        var schemaParam = string.IsNullOrWhiteSpace(effectiveRulesJson)
+            ? (effectiveSchemaJson ?? string.Empty)
+            : effectiveSchemaJson;
+        var rulesParam = string.IsNullOrWhiteSpace(effectiveRulesJson) ? null : effectiveRulesJson;
+
+        var verification = artifact.IdentifierConfig is not null
             ? await schemaRegistry.VerifyCanditateSchemaAsync(
-                effectiveSchemaJson ?? string.Empty,
-                null,
+                schemaParam,
+                rulesParam,
                 artifact.SampleValidFixtures,
                 artifact.SampleInvalidFixtures,
+                artifact.IdentifierConfig,
                 cancellationToken)
             : await schemaRegistry.VerifyCanditateSchemaAsync(
-                effectiveSchemaJson,
-                effectiveRulesJson,
+                schemaParam,
+                rulesParam,
                 artifact.SampleValidFixtures,
                 artifact.SampleInvalidFixtures,
                 cancellationToken);
@@ -175,10 +200,12 @@ public sealed partial class IngestDraftSchemaUseCase(
             return Error.Validation(ErrorCodes.SchemaVerificationFailed, errors: errors);
         }
 
+        var effectiveIdentifierConfig = verification.Value.ResolvedIdentifierConfig ?? artifact.IdentifierConfig;
+
         SchemaMetadata metadata;
         try
         {
-            metadata = SchemaMetadata.CreateDraft(schemaName, version, effectiveSchemaJson!);
+            metadata = SchemaMetadata.CreateDraft(schemaName, version, effectiveSchemaJson!, effectiveIdentifierConfig);
             // Schema packs ingested from draft-schemas do not carry effective dates;
             // they are promoted in Validated state (EffectiveFromUtc = null, EffectiveToUtc = null)
             // until scheduled via the Admin API.
@@ -196,9 +223,18 @@ public sealed partial class IngestDraftSchemaUseCase(
             return Error.Validation(ErrorCodes.SchemaInvalidSchedule, ex.Message);
         }
 
-        var saveResult = effectiveRulesJson is not null || rawOdcsYaml is not null
-            ? await schemaRegistry.SaveSchemaAsync(metadata, effectiveRulesJson, rawOdcsYaml, cancellationToken)
-            : await schemaRegistry.SaveSchemaAsync(metadata, cancellationToken);
+        var hasFixtures = artifact.SampleValidFixtures.Count > 0 || artifact.SampleInvalidFixtures.Count > 0;
+        var saveResult = hasFixtures
+            ? await schemaRegistry.SaveSchemaAsync(
+                metadata,
+                effectiveRulesJson,
+                rawOdcsYaml,
+                artifact.SampleValidFixtures,
+                artifact.SampleInvalidFixtures,
+                cancellationToken)
+            : (effectiveRulesJson is not null || rawOdcsYaml is not null
+                ? await schemaRegistry.SaveSchemaAsync(metadata, effectiveRulesJson, rawOdcsYaml, cancellationToken)
+                : await schemaRegistry.SaveSchemaAsync(metadata, cancellationToken));
 
         if (saveResult.IsFailure)
         {

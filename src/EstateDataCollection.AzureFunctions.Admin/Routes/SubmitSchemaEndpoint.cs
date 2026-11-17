@@ -29,14 +29,16 @@ public sealed class SubmitSchemaEndpoint(
         HttpRequest http,
         string schemaName,
         int version,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(
             EndpointName,
             submitUseCase,
             () => BindAsync(http, schemaName, version, cancellationToken),
             StatusCodes.Status201Created,
             context: $"{schemaName} v{version}",
             cancellationToken: cancellationToken);
+    }
 
     private static async Task<Result<SubmitSchemaRequest>> BindAsync(
         HttpRequest http,

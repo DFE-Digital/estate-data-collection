@@ -4,8 +4,10 @@ using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.Application.UseCases.Schema.IngestDraftSchema;
+using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
+using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Application.UseCases.Submissions.CreateSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
@@ -35,7 +37,13 @@ namespace EstateDataCollection.Tests.Integration.Builders;
 /// </summary>
 public sealed class IntegrationEndpointHarness
 {
+    public AzuriteFixture Fixture { get; }
     public BlobServiceClient BlobClient { get; }
+    public string SchemasContainerName => Fixture.SchemasContainerName;
+    public string DraftSchemasContainerName => Fixture.DraftSchemasContainerName;
+    public string PayloadsContainerName => Fixture.PayloadsContainerName;
+    public string ProcessedContainerName => Fixture.ProcessedContainerName;
+
     public BlobSchemaRegistry SchemaRegistry { get; }
     public BlobSubmissionInfrastructure SubmissionInfrastructure { get; }
 
@@ -45,6 +53,8 @@ public sealed class IntegrationEndpointHarness
     public ScheduleSchemaEndpoint ScheduleSchema { get; }
     public GetAdminSchemasEndpoint GetAdminSchemas { get; }
     public GetAdminSchemaVersionDetailEndpoint GetAdminSchemaVersionDetail { get; }
+    public RunSchemaTestsEndpoint RunSchemaTests { get; }
+    public UpdateSchemaTestsEndpoint UpdateSchemaTests { get; }
     public IngestDraftSchemaEvent IngestDraftSchema { get; }
 
     public GetSchemasEndpoint PublicGetSchemas { get; }
@@ -56,13 +66,14 @@ public sealed class IntegrationEndpointHarness
 
     public IntegrationEndpointHarness(AzuriteFixture fixture, Action<ValidationOptions>? configureValidation = null)
     {
+        Fixture = fixture;
         BlobClient = fixture.Client;
         var memoryCache = new MemoryCache(new MemoryCacheOptions());
 
         var schemaOptions = Options.Create(new BlobSchemaRegistryOptions
         {
-            ContainerName = "schemas",
-            DraftContainerName = "draft-schemas",
+            ContainerName = fixture.SchemasContainerName,
+            DraftContainerName = fixture.DraftSchemasContainerName,
             CacheKey = "schema:{schemaName}:v{version}",
             SchemaBlobDirectory = "{schemaName}/v{version}.schema.json",
             RulesBlobDirectory = "{schemaName}/v{version}.rules.json",
@@ -72,8 +83,8 @@ public sealed class IntegrationEndpointHarness
 
         var submissionOptions = Options.Create(new BlobSubmissionRepositoryOptions
         {
-            PayloadContainerName = "payloads",
-            ProcessedContainerName = "processed",
+            PayloadContainerName = fixture.PayloadsContainerName,
+            ProcessedContainerName = fixture.ProcessedContainerName,
             SessionBlobNameFormat = "{submissionId}/session.json",
             PayloadBlobNameFormat = "{submissionId}/draft.json",
             ProcessedBlobNameFormat = "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
@@ -110,6 +121,8 @@ public sealed class IntegrationEndpointHarness
         var getSchemasUseCase = new GetSchemasUseCase(SchemaRegistry);
         var getSchemaDetailUseCase = new GetSchemaDetailUseCase(SchemaRegistry);
         var ingestDraftUseCase = new IngestDraftSchemaUseCase(SchemaRegistry, odcsParser: odcsParser);
+        var runSchemaTestsUseCase = new RunSchemaTestsUseCase(SchemaRegistry);
+        var updateSchemaTestsUseCase = new UpdateSchemaTestsUseCase(SchemaRegistry);
         var createUseCase = new CreateSubmissionUseCase(SchemaRegistry, SubmissionInfrastructure);
         var updateUseCase = new UpdateSubmissionUseCase(SubmissionInfrastructure, SchemaRegistry, validator, validationService: payloadValidationService);
         var finaliseUseCase = new FinaliseSubmissionUseCase(SubmissionInfrastructure, SchemaRegistry, validator, validationService: payloadValidationService, validationOptions: validationOptions);
@@ -121,6 +134,8 @@ public sealed class IntegrationEndpointHarness
         GetAdminSchemas = new GetAdminSchemasEndpoint(getSchemasUseCase);
         GetAdminSchemaVersionDetail = new GetAdminSchemaVersionDetailEndpoint(getSchemaDetailUseCase);
         IngestDraftSchema = new IngestDraftSchemaEvent(ingestDraftUseCase);
+        RunSchemaTests = new RunSchemaTestsEndpoint(runSchemaTestsUseCase);
+        UpdateSchemaTests = new UpdateSchemaTestsEndpoint(updateSchemaTestsUseCase);
 
         PublicGetSchemas = new GetSchemasEndpoint(getSchemasUseCase);
         PublicGetSchemaByName = new GetSchemaByNameEndpoint(getSchemasUseCase);
@@ -130,7 +145,10 @@ public sealed class IntegrationEndpointHarness
         FinaliseSubmission = new FinaliseSubmissionEndpoint(finaliseUseCase);
     }
 
-    public static string UniqueName(string prefix) => $"{prefix}_{Guid.NewGuid():N}"[..Math.Min(prefix.Length + 9, 48)];
+    public static string UniqueName(string prefix)
+    {
+        return $"{prefix}_{Guid.NewGuid():N}"[..Math.Min(prefix.Length + 9, 48)];
+    }
 
     public async Task<SubmitSchemaResult> SubmitAndActivateSchemaAsync(
         string schemaName,

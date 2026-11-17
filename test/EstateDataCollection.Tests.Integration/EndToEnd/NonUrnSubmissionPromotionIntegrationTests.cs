@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
+using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Integration.Builders;
 using EstateDataCollection.Tests.Integration.Extensions;
@@ -54,5 +55,63 @@ public sealed class NonUrnSubmissionPromotionIntegrationTests(AzuriteFixture fix
         finaliseData.Urn.Should().Be(0);
         finaliseData.ProcessedBlobUri.Should().NotContain("urn");
         finaliseData.ProcessedBlobUri.Should().Contain($"schema%3D{nonUrnSchemaName}/v%3D1/{subId}.json");
+    }
+
+    [Fact]
+    public async Task Custom_LAEstab_String_Identifier_Should_Flag_PendingErrors_On_Draft_And_Promote_Under_LAEstab_Prefix()
+    {
+        var laestabSchemaName = IntegrationEndpointHarness.UniqueName("edc_laestab");
+        const string laestabSchemaJson = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["establishment", "answers"],
+          "properties": {
+            "establishment": {
+              "type": "object",
+              "required": ["laestab"],
+              "properties": { "laestab": { "type": "string" } }
+            },
+            "answers": { "type": "array" }
+          }
+        }
+        """;
+
+        await _harness.SubmitAndActivateSchemaAsync(
+            laestabSchemaName,
+            1,
+            laestabSchemaJson,
+            new SchemaIdentifierConfig { Type = "LAEstab", JsonPointer = "/establishment/laestab" });
+
+        var subId = await _harness.CreateDraftSubmissionAsync(laestabSchemaName);
+
+        // 1. PUT draft missing identifier -> 200 OK with PendingErrors; Finalise -> 422
+        const string missingIdPayload = """{"establishment":{},"answers":[]}""";
+        var badDraft = (await _harness.UpdateSubmission.HandleAsync(
+                HttpRequestBuilder.FromRaw(missingIdPayload), subId, CancellationToken.None))
+            .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
+        badDraft.IsSuccessful.Should().BeFalse();
+        badDraft.PendingErrors.Should().NotBeEmpty();
+
+        (await _harness.FinaliseSubmission.HandleAsync(
+                HttpRequestBuilder.Empty(), subId, CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+
+        // 2. PUT valid draft with string LAEstab -> Finalise -> promoted under laestab=201-3614/...
+        const string validPayload = """{"establishment":{"laestab":"201-3614"},"answers":[]}""";
+        var validDraft = (await _harness.UpdateSubmission.HandleAsync(
+                HttpRequestBuilder.FromRaw(validPayload), subId, CancellationToken.None))
+            .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
+        validDraft.IsSuccessful.Should().BeTrue();
+        validDraft.PendingErrors.Should().BeEmpty();
+
+        var finaliseData = (await _harness.FinaliseSubmission.HandleAsync(
+                HttpRequestBuilder.Empty(), subId, CancellationToken.None))
+            .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
+
+        finaliseData.Urn.Should().Be(0);
+        finaliseData.Identifier.Should().Be("201-3614");
+        finaliseData.IdentifierType.Should().Be("LAEstab");
+        finaliseData.ProcessedBlobUri.Should().Contain($"laestab%3D201-3614/schema%3D{laestabSchemaName}/v%3D1/{subId}.json");
     }
 }

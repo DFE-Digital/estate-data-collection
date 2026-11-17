@@ -35,6 +35,31 @@ public class GetSchemasAndDetailUseCaseTests
     }
 
     [Fact]
+    public async Task GetSchemasUseCase_Should_Map_LastTestRun_Telemetry_Including_Warnings()
+    {
+        var registry = Substitute.For<ISchemaRegistry>();
+        var meta = new SchemaMetadataBuilder().WithName("cdc_survey").WithVersion(1).Build();
+        meta.RecordTestRun(
+            passed: true,
+            appVersion: "2026.11.1+sha",
+            errors: [],
+            warnings: ["SampleInvalidFixtures:0 failed validation, but unknown if expected."]);
+
+        registry.ListSchemasAsync(null, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<SchemaMetadata>>.Success([meta]));
+
+        var useCase = new GetSchemasUseCase(registry);
+
+        var result = (await useCase.ExecuteAsync(new GetSchemasRequest(IncludeUnscheduled: true), CancellationToken.None)).ShouldSucceed();
+        var summary = result.Schemas.Should().ContainSingle().Subject.Versions.Should().ContainSingle().Subject;
+        summary.LastTestRunAtUtc.Should().NotBeNull();
+        summary.LastTestRunAppVersion.Should().Be("2026.11.1+sha");
+        summary.LastTestRunPassed.Should().BeTrue();
+        summary.LastTestRunWarnings.Should().ContainSingle()
+            .Which.Should().Contain("SampleInvalidFixtures:0");
+    }
+
+    [Fact]
     public async Task GetSchemaDetailUseCase_Should_Return_NotFound_When_Schema_Is_Unscheduled_And_IncludeUnscheduled_Is_False()
     {
         var registry = Substitute.For<ISchemaRegistry>();

@@ -23,6 +23,24 @@ public class SchemaMetadata
     [JsonInclude]
     public SchemaIdentifierConfig? IdentifierConfig { get; private set; }
 
+    [JsonInclude]
+    public DateTimeOffset? LastTestRunAtUtc { get; private set; }
+
+    [JsonInclude]
+    public string? LastTestRunAppVersion { get; private set; }
+
+    [JsonInclude]
+    public bool? LastTestRunPassed { get; private set; }
+
+    [JsonInclude]
+    public IReadOnlyList<string>? LastTestRunErrors { get; private set; }
+
+    [JsonInclude]
+    public IReadOnlyList<InvalidFixtureOutcome>? LastTestRunInvalidFixtures { get; private set; }
+
+    [JsonInclude]
+    public IReadOnlyList<string>? LastTestRunWarnings { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     
     #region Domain Factories
@@ -41,6 +59,8 @@ public class SchemaMetadata
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(version);
         ArgumentException.ThrowIfNullOrWhiteSpace(rawJsonSchema);
 
+        var normalizedConfig = ValidateAndNormalizeIdentifier(identifierConfig);
+
         return new SchemaMetadata
         {
             Name = name,
@@ -48,7 +68,7 @@ public class SchemaMetadata
             RawJsonSchema = rawJsonSchema,
             Sha256Hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawJsonSchema))),
             State = SchemaLifecycleState.Draft,
-            IdentifierConfig = identifierConfig
+            IdentifierConfig = normalizedConfig
         };
     }
 
@@ -133,11 +153,51 @@ public class SchemaMetadata
     }
 
     /// <summary>
-    /// Configures or updates the per-schema-version establishment identifier (e.g. URN pointer) metadata.
+    /// Configures or updates the per-schema-version establishment identifier (e.g. URN, UKPRN, LAEstab, custom pointer) metadata.
     /// </summary>
     public void ConfigureIdentifier(SchemaIdentifierConfig? identifierConfig)
     {
-        IdentifierConfig = identifierConfig;
+        IdentifierConfig = ValidateAndNormalizeIdentifier(identifierConfig);
+    }
+
+    /// <summary>
+    /// Records the result and app version of executing the stored schema regression tests
+    /// (schema syntax, business logic rules, identifier extraction, and valid/invalid fixtures).
+    /// </summary>
+    public void RecordTestRun(
+        bool passed,
+        string appVersion,
+        IReadOnlyList<string>? errors = null,
+        IReadOnlyList<InvalidFixtureOutcome>? invalidFixtureOutcomes = null,
+        IReadOnlyList<string>? warnings = null)
+    {
+        LastTestRunAtUtc = DateTimeOffset.UtcNow;
+        LastTestRunAppVersion = string.IsNullOrWhiteSpace(appVersion) ? null : appVersion.Trim();
+        LastTestRunPassed = passed;
+        LastTestRunErrors = errors is { Count: > 0 } ? errors.ToArray() : [];
+        LastTestRunInvalidFixtures = invalidFixtureOutcomes is { Count: > 0 }
+            ? invalidFixtureOutcomes.ToArray()
+            : [];
+        LastTestRunWarnings = warnings is { Count: > 0 } ? warnings.ToArray() : [];
+    }
+
+    private static SchemaIdentifierConfig? ValidateAndNormalizeIdentifier(SchemaIdentifierConfig? identifierConfig)
+    {
+        if (identifierConfig is null)
+        {
+            return null;
+        }
+
+        var validation = identifierConfig.ValidateDefinition();
+        if (validation.IsFailure)
+        {
+            var reason = validation.Error.ValidationErrors.FirstOrDefault()?.Message
+                         ?? validation.Error.Description
+                         ?? "Invalid identifier configuration.";
+            throw new ArgumentException(reason, nameof(identifierConfig));
+        }
+
+        return identifierConfig.Normalize();
     }
 
     public void ScheduleActivation(DateTimeOffset effectiveFromUtc, DateTimeOffset? effectiveToUtc = null)

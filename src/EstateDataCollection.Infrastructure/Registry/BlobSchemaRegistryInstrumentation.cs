@@ -38,6 +38,12 @@ public sealed partial class BlobSchemaRegistryInstrumentation(
     public partial void SchemaSavedToBlob(string schemaName, int version);
 
     [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Updated stored test fixtures for {SchemaName} v{Version}: {ValidCount} valid, {InvalidCount} invalid"
+    )]
+    public partial void SchemaFixturesUpdated(string schemaName, int version, int validCount, int invalidCount);
+
+    [LoggerMessage(
         Level = LogLevel.Error,
         Message = "Failed to upload schema blobs for {SchemaName} v{Version}: {Error}"
     )]

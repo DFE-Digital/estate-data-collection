@@ -1,3 +1,5 @@
+using EstateDataCollection.Domain.Schema;
+
 namespace EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 
 public sealed record VerifySchemaRequest(
@@ -6,5 +8,6 @@ public sealed record VerifySchemaRequest(
     IReadOnlyList<string> SampleInvalidFixtures,
     string? RulesJson = null,
     string? OdcsYaml = null,
-    string? FileName = null
+    string? FileName = null,
+    SchemaIdentifierConfig? IdentifierConfig = null
 );

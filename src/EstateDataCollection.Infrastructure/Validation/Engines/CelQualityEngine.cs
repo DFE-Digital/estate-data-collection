@@ -19,7 +19,10 @@ public sealed partial class CelQualityEngine(
     IOptions<ValidationOptions>? options = null
 ) : IQualityRuleEngine
 {
-    public string EngineName => "cel";
+    public string EngineName
+    {
+        get { return "cel"; }
+    }
 
     private readonly ValidationOptions _options = options?.Value ?? new ValidationOptions();
 

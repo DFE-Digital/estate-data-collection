@@ -35,8 +35,10 @@ public sealed class IngestDraftSchemaEvent(
             cancellationToken);
     }
 
-    private static Result<IngestDraftSchemaRequest> Bind(string? blobPath) =>
-        string.IsNullOrWhiteSpace(blobPath)
+    private static Result<IngestDraftSchemaRequest> Bind(string? blobPath)
+    {
+        return string.IsNullOrWhiteSpace(blobPath)
             ? Error.Failure(ErrorCodes.PayloadEmpty, "Draft blob path cannot be empty.")
             : new IngestDraftSchemaRequest(BlobPath: blobPath);
+    }
 }

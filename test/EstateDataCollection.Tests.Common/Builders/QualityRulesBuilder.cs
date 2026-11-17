@@ -69,8 +69,13 @@ public sealed class QualityRulesBuilder
         return this;
     }
 
-    public string BuildJson() => JsonSerializer.Serialize(_rawRules, JsonOptions);
+    public string BuildJson()
+    {
+        return JsonSerializer.Serialize(_rawRules, JsonOptions);
+    }
 
-    public IReadOnlyList<BusinessRule> BuildList() =>
-        JsonSerializer.Deserialize<List<BusinessRule>>(BuildJson(), JsonOptions) ?? [];
+    public IReadOnlyList<BusinessRule> BuildList()
+    {
+        return JsonSerializer.Deserialize<List<BusinessRule>>(BuildJson(), JsonOptions) ?? [];
+    }
 }

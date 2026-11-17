@@ -6,6 +6,7 @@ using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Extensions;
+using EstateDataCollection.Tests.Common.Fixtures;
 using NSubstitute;
 using Xunit;
 
@@ -13,12 +14,31 @@ namespace EstateDataCollection.Tests.Unit.UseCases;
 
 public class ScheduleSchemaUseCaseTests
 {
+    private const string OptionalUkprnSchema = """
+    {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "required": ["survey"],
+      "properties": {
+        "establishment": {
+          "type": "object",
+          "properties": {
+            "ukprn": { "type": "string" }
+          }
+        },
+        "survey": { "type": "string" }
+      }
+    }
+    """;
+
     [Fact]
-    public async Task Should_Assign_Effective_Dates_And_IdentifierConfig_To_Unscheduled_Schema()
+    public async Task Should_Assign_Effective_Dates_And_Verified_IdentifierConfig_To_Unscheduled_Schema()
     {
         var registry = Substitute.For<ISchemaRegistry>();
+        var nestedSchemaJson = CdeContractFixtureLoader.LoadFile("schemas/edc-school-site.schema.json");
         var existingContract = new ResolvedSchemaBuilder()
-            .ConfigureMetadata(m => m.WithName("school-workforce").Unscheduled())
+            .ConfigureMetadata(m => m.WithName("school-workforce").WithSchema(nestedSchemaJson).Unscheduled())
+            .WithSchemaJson(nestedSchemaJson)
             .Build();
 
         registry.GetExplicitSchemaAsync("school-workforce", 1, Arg.Any<CancellationToken>())
@@ -29,7 +49,7 @@ public class ScheduleSchemaUseCaseTests
         var useCase = new ScheduleSchemaUseCase(registry);
         var from = DateTimeOffset.UtcNow.AddMinutes(-5);
         var to = DateTimeOffset.UtcNow.AddDays(30);
-        var idConfig = new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/school/urn", Required = true };
+        var idConfig = new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/school/urn", Required = null };
 
         var result = (await useCase.ExecuteAsync(
             new ScheduleSchemaRequest("school-workforce", 1, from, to, IdentifierConfig: idConfig),
@@ -39,6 +59,7 @@ public class ScheduleSchemaUseCaseTests
         result.EffectiveFromUtc.Should().Be(from);
         result.EffectiveToUtc.Should().Be(to);
         result.IdentifierConfig!.JsonPointer.Should().Be("/school/urn");
+        result.IdentifierConfig.Required.Should().BeTrue();
 
         await registry.Received(1).UpdateSchemaMetadataAsync(
             Arg.Is<SchemaMetadata>(m =>
@@ -46,12 +67,66 @@ public class ScheduleSchemaUseCaseTests
                 m.EffectiveFromUtc == from &&
                 m.EffectiveToUtc == to &&
                 m.IdentifierConfig != null &&
-                m.IdentifierConfig.JsonPointer == "/school/urn"),
+                m.IdentifierConfig.JsonPointer == "/school/urn" &&
+                m.IdentifierConfig.Required == true),
             Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Should_Allow_Updating_IdentifierConfig_Independently()
+    public async Task When_IdentifierPointer_Does_Not_Exist_In_Schema_Should_Fail_And_Not_Save()
+    {
+        var registry = Substitute.For<ISchemaRegistry>();
+        var existingContract = new ResolvedSchemaBuilder()
+            .ConfigureMetadata(m => m.WithName("school-workforce").Unscheduled())
+            .Build();
+
+        registry.GetExplicitSchemaAsync("school-workforce", 1, Arg.Any<CancellationToken>())
+            .Returns(Result<ResolvedSchema>.Success(existingContract));
+
+        var useCase = new ScheduleSchemaUseCase(registry);
+        var invalidConfig = new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/school/urn" };
+
+        var result = await useCase.ExecuteAsync(
+            new ScheduleSchemaRequest("school-workforce", 1, IdentifierConfig: invalidConfig),
+            CancellationToken.None);
+
+        result.ShouldFailWith("Schema.InvalidIdentifierConfig");
+        await registry.DidNotReceive().UpdateSchemaMetadataAsync(Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Should_Derive_Required_From_Schema_Required_Array_Even_If_Caller_Passes_Override()
+    {
+        var registry = Substitute.For<ISchemaRegistry>();
+        var existingContract = new ResolvedSchemaBuilder()
+            .ConfigureMetadata(m => m.WithName("optional-ukprn").WithSchema(OptionalUkprnSchema).Unscheduled())
+            .WithSchemaJson(OptionalUkprnSchema)
+            .Build();
+
+        registry.GetExplicitSchemaAsync("optional-ukprn", 1, Arg.Any<CancellationToken>())
+            .Returns(Result<ResolvedSchema>.Success(existingContract));
+        registry.UpdateSchemaMetadataAsync(Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+
+        var useCase = new ScheduleSchemaUseCase(registry);
+        var idConfig = new SchemaIdentifierConfig
+        {
+            Type = "UKPRN",
+            JsonPointer = "/establishment/ukprn",
+            Required = true
+        };
+
+        var result = (await useCase.ExecuteAsync(
+            new ScheduleSchemaRequest("optional-ukprn", 1, IdentifierConfig: idConfig),
+            CancellationToken.None)).ShouldSucceed();
+
+        result.IdentifierConfig!.Type.Should().Be("UKPRN");
+        result.IdentifierConfig.JsonPointer.Should().Be("/establishment/ukprn");
+        result.IdentifierConfig.Required.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Should_Allow_Updating_IdentifierConfig_To_None_Independently()
     {
         var registry = Substitute.For<ISchemaRegistry>();
         var existingContract = new ResolvedSchemaBuilder()

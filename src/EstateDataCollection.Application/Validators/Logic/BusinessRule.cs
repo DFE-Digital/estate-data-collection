@@ -51,10 +51,16 @@ public sealed class BusinessRule
     public JsonNode? Assert { get; init; }
 
     [JsonIgnore]
-    public JsonNode? EffectiveAssertion => Implementation ?? Assert;
+    public JsonNode? EffectiveAssertion
+    {
+        get { return Implementation ?? Assert; }
+    }
 
     [JsonIgnore]
-    public string EffectiveMessage => !string.IsNullOrWhiteSpace(Message) ? Message : Description;
+    public string EffectiveMessage
+    {
+        get { return !string.IsNullOrWhiteSpace(Message) ? Message : Description; }
+    }
 
     public string ResolveEngine(string defaultEngine = "jsonlogic")
     {

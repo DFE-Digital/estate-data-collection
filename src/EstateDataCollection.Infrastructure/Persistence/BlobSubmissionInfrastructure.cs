@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -7,6 +8,7 @@ using Azure.Storage.Blobs.Models;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Common.Extensions;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -24,7 +26,14 @@ public class BlobSubmissionInfrastructure(
 
     public async Task<Result<Guid>> SaveSubmissionAsync(SubmissionEnvelope submission, CancellationToken cancellationToken = default)
     {
-        var blobName = ResolveProcessedBlobName(submission.Urn, submission.SchemaName, submission.SchemaVersion, submission.SubmissionId);
+        var urnValue = submission.Urn > 0 ? submission.Urn.ToString(CultureInfo.InvariantCulture) : null;
+        var blobName = ResolveProcessedBlobName(
+            urnValue is not null ? SchemaIdentifierConfig.DefaultUrnType : null,
+            urnValue,
+            submission.Urn,
+            submission.SchemaName,
+            submission.SchemaVersion,
+            submission.SubmissionId);
         var payloadsContainer = blobServiceClient.GetBlobContainerClient(options.Value.PayloadContainerName);
         var blobClient = payloadsContainer.GetBlobClient(blobName);
         Response<BlobContentInfo>? envelopeUpload = null;
@@ -43,7 +52,9 @@ public class BlobSubmissionInfrastructure(
 
             if (submission.Urn > 0)
             {
-                metadata["urn"] = submission.Urn.ToString();
+                metadata["urn"] = submission.Urn.ToString(CultureInfo.InvariantCulture);
+                metadata["identifier"] = submission.Urn.ToString(CultureInfo.InvariantCulture);
+                metadata["identifier_type"] = SchemaIdentifierConfig.DefaultUrnType;
             }
 
             var uploadOptions = new BlobUploadOptions
@@ -208,14 +219,48 @@ public class BlobSubmissionInfrastructure(
         }
     }
 
-    public async Task<Result<string>> PromoteToProcessedAsync(Guid submissionId, int urn, string schemaName, int schemaVersion,
+    public Task<Result<string>> PromoteToProcessedAsync(Guid submissionId, int urn, string schemaName, int schemaVersion,
         CancellationToken cancellationToken = default)
+    {
+        var urnValue = urn > 0 ? urn.ToString(CultureInfo.InvariantCulture) : null;
+        var urnType = urn > 0 ? SchemaIdentifierConfig.DefaultUrnType : null;
+        return PromoteToProcessedCoreAsync(submissionId, urnType, urnValue, urn, schemaName, schemaVersion, cancellationToken);
+    }
+
+    public Task<Result<string>> PromoteToProcessedAsync(
+        Guid submissionId,
+        string? identifierType,
+        string? identifierValue,
+        string schemaName,
+        int schemaVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var legacyUrn = int.TryParse(identifierValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+            ? parsed
+            : 0;
+        return PromoteToProcessedCoreAsync(submissionId, identifierType, identifierValue, legacyUrn, schemaName, schemaVersion, cancellationToken);
+    }
+
+    private async Task<Result<string>> PromoteToProcessedCoreAsync(
+        Guid submissionId,
+        string? identifierType,
+        string? identifierValue,
+        int legacyUrn,
+        string schemaName,
+        int schemaVersion,
+        CancellationToken cancellationToken)
     {
         var payloadContainer = blobServiceClient.GetBlobContainerClient(options.Value.PayloadContainerName);
         var draftBlob = payloadContainer.GetBlobClient(options.Value.PayloadBlobNameFormat.FormatWith(new { submissionId }));
         var sessionBlob = payloadContainer.GetBlobClient(options.Value.SessionBlobNameFormat.FormatWith(new { submissionId }));
 
-        var targetBlobName = ResolveProcessedBlobName(urn, schemaName, schemaVersion, submissionId);
+        var targetBlobName = ResolveProcessedBlobName(
+            identifierType,
+            identifierValue,
+            legacyUrn,
+            schemaName,
+            schemaVersion,
+            submissionId);
 
         var processedContainer = blobServiceClient.GetBlobContainerClient(options.Value.ProcessedContainerName);
         var processedBlob = processedContainer.GetBlobClient(targetBlobName);
@@ -246,9 +291,18 @@ public class BlobSubmissionInfrastructure(
                 ["finalized_at_utc"] = DateTimeOffset.UtcNow.ToString("O")
             };
 
-            if (urn > 0)
+            if (!string.IsNullOrWhiteSpace(identifierValue))
             {
-                metadata["urn"] = urn.ToString();
+                metadata["identifier"] = identifierValue.Trim();
+                if (!string.IsNullOrWhiteSpace(identifierType))
+                {
+                    metadata["identifier_type"] = identifierType.Trim();
+                }
+            }
+
+            if (legacyUrn > 0)
+            {
+                metadata["urn"] = legacyUrn.ToString(CultureInfo.InvariantCulture);
             }
 
             var uploadOptions = new BlobUploadOptions
@@ -267,9 +321,13 @@ public class BlobSubmissionInfrastructure(
                 originalSessionSnapshot = JsonSerializer.Deserialize<SubmissionSession>(JsonSerializer.Serialize(session));
 
                 session.Finalise();
-                if (urn > 0)
+                if (!string.IsNullOrWhiteSpace(identifierValue))
                 {
-                    session.AssignUrn(urn);
+                    session.AssignIdentifier(identifierType, identifierValue);
+                }
+                else if (legacyUrn > 0)
+                {
+                    session.AssignUrn(legacyUrn);
                 }
                 var sessionSaveResult = await CreateSessionAsync(session, cancellationToken);
                 if (sessionSaveResult.IsFailure)
@@ -286,7 +344,7 @@ public class BlobSubmissionInfrastructure(
             // Best-effort cleanup of the source draft payload now that processedBlob and session.json are committed
             await SafeDeleteIfExistsAsync(draftBlob);
 
-            _instrumentation.PayloadPromotedToProcessed(submissionId, urn, processedBlob.Uri.ToString());
+            _instrumentation.PayloadPromotedToProcessed(submissionId, legacyUrn, processedBlob.Uri.ToString());
             return processedBlob.Uri.ToString();
         }
         catch (Exception ex)
@@ -313,25 +371,63 @@ public class BlobSubmissionInfrastructure(
         }
     }
 
-    private string ResolveProcessedBlobName(int urn, string schemaName, int schemaVersion, Guid submissionId)
+    private string ResolveProcessedBlobName(
+        string? identifierType,
+        string? identifierValue,
+        int legacyUrn,
+        string schemaName,
+        int schemaVersion,
+        Guid submissionId)
     {
         var format = options.Value.ProcessedBlobNameFormat;
-        if (urn <= 0)
+        var effectiveValue = !string.IsNullOrWhiteSpace(identifierValue)
+            ? identifierValue.Trim()
+            : legacyUrn > 0
+                ? legacyUrn.ToString(CultureInfo.InvariantCulture)
+                : null;
+
+        if (string.IsNullOrWhiteSpace(effectiveValue))
         {
             format = format
                 .Replace("urn={urn}/", string.Empty, StringComparison.OrdinalIgnoreCase)
                 .Replace("/urn={urn}", string.Empty, StringComparison.OrdinalIgnoreCase)
                 .TrimStart('/');
+
+            return format.FormatWith(new
+            {
+                urn = legacyUrn,
+                schemaName,
+                schemaVersion,
+                submissionId
+            });
+        }
+
+        var safeValue = SanitizeBlobPathSegment(effectiveValue);
+        var effectiveType = string.IsNullOrWhiteSpace(identifierType)
+            ? SchemaIdentifierConfig.DefaultUrnType
+            : identifierType.Trim();
+
+        if (!string.Equals(effectiveType, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase))
+        {
+            var safeType = SanitizeBlobPathSegment(effectiveType.ToLowerInvariant());
+            format = format.Replace("urn={urn}", $"{safeType}={safeValue}", StringComparison.OrdinalIgnoreCase);
         }
 
         return format.FormatWith(new
         {
-            urn,
+            urn = safeValue,
+            identifier = safeValue,
             schemaName,
             schemaVersion,
             submissionId
         });
     }
+
+    private static string SanitizeBlobPathSegment(string value) =>
+        value.Trim()
+            .Replace('/', '-')
+            .Replace('\\', '-')
+            .Replace("..", "_", StringComparison.Ordinal);
 
     private static async Task<Response<BlobContentInfo>> UploadSessionBlobAsync(
         BlobClient blobClient,

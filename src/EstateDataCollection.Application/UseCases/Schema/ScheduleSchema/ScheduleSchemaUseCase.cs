@@ -1,17 +1,24 @@
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Models.Options;
+using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 
 public sealed class ScheduleSchemaUseCase(
     ISchemaRegistry schemaRegistry,
-    ScheduleSchemaUseCaseInstrumentation? instrumentation = null
+    ScheduleSchemaUseCaseInstrumentation? instrumentation = null,
+    IOptions<ValidationOptions>? validationOptions = null
 ) : IUseCase<ScheduleSchemaResult, ScheduleSchemaRequest>
 {
     private readonly ScheduleSchemaUseCaseInstrumentation _instrumentation =
         instrumentation ?? new ScheduleSchemaUseCaseInstrumentation(NullLogger<ScheduleSchemaUseCase>.Instance);
+
+    private readonly ValidationOptions _validationOptions =
+        validationOptions?.Value ?? new ValidationOptions();
 
     public async Task<Result<ScheduleSchemaResult>> ExecuteAsync(
         ScheduleSchemaRequest request,
@@ -32,16 +39,46 @@ public sealed class ScheduleSchemaUseCase(
             return Error.Validation(ErrorCodes.SchemaRetired, new { request.SchemaName, request.Version });
         }
 
-        try
+        var action = request.LifecycleAction?.Trim();
+        var isRetireOrDeprecateOnly = request.IdentifierConfig is null &&
+                                      (string.Equals(action, "Retire", StringComparison.OrdinalIgnoreCase) ||
+                                       string.Equals(action, "Deprecate", StringComparison.OrdinalIgnoreCase) && !request.EffectiveFromUtc.HasValue);
+
+        if (!isRetireOrDeprecateOnly)
         {
-            if (request.IdentifierConfig is not null)
+            var effectiveCandidate = request.IdentifierConfig ?? metadata.IdentifierConfig;
+            var alignment = IdentifierSchemaValidator.ValidateAndAlign(
+                metadata.RawJsonSchema,
+                effectiveCandidate,
+                _validationOptions.UrnJsonPaths,
+                _validationOptions.RequireUrnOnFinalise);
+
+            if (!alignment.IsValid)
             {
-                metadata.ConfigureIdentifier(request.IdentifierConfig);
+                var validationErrors = alignment.Errors
+                    .Select(e => new ValidationError(
+                        string.IsNullOrWhiteSpace(e.Identifier) ? "identifierConfig.jsonPointer" : e.Identifier,
+                        e.Message))
+                    .ToList();
+                var summary = string.Join("; ", validationErrors.Select(e => e.Message));
+
+                _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, summary);
+                return Error.Validation(
+                    ErrorCodes.SchemaInvalidIdentifierConfig,
+                    new { Message = summary },
+                    validationErrors);
             }
 
-            if (!string.IsNullOrWhiteSpace(request.LifecycleAction))
+            if (effectiveCandidate is not null)
             {
-                var action = request.LifecycleAction.Trim();
+                metadata.ConfigureIdentifier(alignment.EffectiveConfig);
+            }
+        }
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(action))
+            {
                 if (string.Equals(action, "Deprecate", StringComparison.OrdinalIgnoreCase))
                 {
                     if (request.EffectiveFromUtc.HasValue)

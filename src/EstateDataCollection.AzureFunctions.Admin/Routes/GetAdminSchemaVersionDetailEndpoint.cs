@@ -28,19 +28,23 @@ public sealed class GetAdminSchemaVersionDetailEndpoint(
         HttpRequest http,
         string schemaName,
         int version,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(
             EndpointName,
             getSchemaDetailUseCase,
             () => Task.FromResult(Bind(http, schemaName, version)),
             StatusCodes.Status200OK,
             context: $"{schemaName} v{version}",
             cancellationToken: cancellationToken);
+    }
 
-    private static Result<GetSchemaDetailRequest> Bind(HttpRequest http, string schemaName, int version) =>
-        new GetSchemaDetailRequest(
+    private static Result<GetSchemaDetailRequest> Bind(HttpRequest http, string schemaName, int version)
+    {
+        return new GetSchemaDetailRequest(
             SchemaName: schemaName,
             Version: version,
             IncludeUnscheduled: http.GetBoolFromQuery("includeUnscheduled", defaultValue: true),
             IncludeRawJsonSchema: http.GetBoolFromQuery("includeRawJsonSchema", defaultValue: true));
+    }
 }

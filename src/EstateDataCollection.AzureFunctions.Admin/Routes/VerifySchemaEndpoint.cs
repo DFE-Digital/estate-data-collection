@@ -15,7 +15,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 /// <summary>
 /// Dry-run verification endpoint for the Data Team / CI pipelines.
 /// Evaluates schema syntax (Draft-07 / Draft 2020-12), validates quality rules (JsonLogic / CEL),
-/// supports direct ODCS YAML contracts, and runs in-flight golden fixture checks without persisting to Blob.
+/// validates identifier extraction alignment, supports direct ODCS YAML contracts, and runs in-flight golden fixture checks without persisting to Blob.
 /// Route: POST /schemas/verify
 /// </summary>
 public sealed class VerifySchemaEndpoint(
@@ -30,13 +30,15 @@ public sealed class VerifySchemaEndpoint(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
             Route = "schemas/verify")]
         HttpRequest http,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(
             EndpointName,
             verifyUseCase,
             () => BindAsync(http, cancellationToken),
             StatusCodes.Status200OK,
             cancellationToken: cancellationToken);
+    }
 
     private static async Task<Result<VerifySchemaRequest>> BindAsync(HttpRequest http, CancellationToken cancellationToken)
     {
@@ -73,7 +75,8 @@ public sealed class VerifySchemaEndpoint(
                 SampleValidFixtures: [],
                 SampleInvalidFixtures: [],
                 OdcsYaml: rawBody,
-                FileName: AdminRequestHelpers.GetFileNameHint(http));
+                FileName: AdminRequestHelpers.GetFileNameHint(http),
+                IdentifierConfig: AdminRequestHelpers.GetIdentifierConfigHint(http));
         }
 
         if (body is null ||
@@ -90,6 +93,7 @@ public sealed class VerifySchemaEndpoint(
             SampleInvalidFixtures: body.SampleInvalidFixtures ?? [],
             RulesJson: body.EffectiveRulesJson,
             OdcsYaml: body.OdcsYaml,
-            FileName: body.FileName ?? AdminRequestHelpers.GetFileNameHint(http));
+            FileName: body.FileName ?? AdminRequestHelpers.GetFileNameHint(http),
+            IdentifierConfig: body.IdentifierConfig ?? AdminRequestHelpers.GetIdentifierConfigHint(http));
     }
 }

@@ -12,4 +12,16 @@ public interface ISubmissionInfrastructure : IInfrastructure
     Task<Result> SaveDraftPayloadAsync(Guid submissionId, int? urn, string rawPayloadJson, CancellationToken cancellationToken = default);
     Task<Result<string>> GetDraftPayloadAsync(Guid submissionId, CancellationToken cancellationToken = default);
     Task<Result<string>> PromoteToProcessedAsync(Guid submissionId, int urn, string schemaName, int schemaVersion, CancellationToken cancellationToken = default);
+
+    Task<Result<string>> PromoteToProcessedAsync(
+        Guid submissionId,
+        string? identifierType,
+        string? identifierValue,
+        string schemaName,
+        int schemaVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var legacyUrn = int.TryParse(identifierValue, out var u) && u > 0 ? u : 0;
+        return PromoteToProcessedAsync(submissionId, legacyUrn, schemaName, schemaVersion, cancellationToken);
+    }
 }

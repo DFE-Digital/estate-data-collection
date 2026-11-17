@@ -227,7 +227,7 @@ public class JsonLogicValidator : IBusinessLogicValidator
                             if (evalOutcome.IsFailure)
                             {
                                 var errPath = string.IsNullOrWhiteSpace(instancePath) ? rule.Path : instancePath;
-                                violations.Add(new ValidationError(errPath, evalOutcome.Error.Description ?? $"Rule '{rule.Id}' evaluation failed."));
+                                violations.Add(new ValidationError(errPath, evalOutcome.Error.Description ?? $"Rule '{rule.Id}' evaluation failed.", RuleId: rule.Id));
                                 continue;
                             }
 
@@ -235,7 +235,7 @@ public class JsonLogicValidator : IBusinessLogicValidator
                             {
                                 var failurePath = string.IsNullOrWhiteSpace(instancePath) ? rule.Path : instancePath;
                                 _instrumentation.RuleViolation(rule.Id, engine.EngineName, failurePath, rule.EffectiveMessage);
-                                violations.Add(new ValidationError(failurePath, rule.EffectiveMessage));
+                                violations.Add(new ValidationError(failurePath, rule.EffectiveMessage, RuleId: rule.Id));
                             }
                         }
                     }

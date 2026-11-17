@@ -1,3 +1,5 @@
+using EstateDataCollection.Domain.Schema;
+
 namespace EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 
 public record VerifySchemaBodyDto(
@@ -7,7 +9,11 @@ public record VerifySchemaBodyDto(
     string? LogicJson = null,
     string? RulesJson = null,
     string? OdcsYaml = null,
-    string? FileName = null)
+    string? FileName = null,
+    SchemaIdentifierConfig? IdentifierConfig = null)
 {
-    public string? EffectiveRulesJson => !string.IsNullOrWhiteSpace(RulesJson) ? RulesJson : LogicJson;
+    public string? EffectiveRulesJson
+    {
+        get { return !string.IsNullOrWhiteSpace(RulesJson) ? RulesJson : LogicJson; }
+    }
 }

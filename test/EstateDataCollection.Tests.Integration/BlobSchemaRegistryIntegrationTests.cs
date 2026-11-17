@@ -53,7 +53,7 @@ public class BlobSchemaRegistryIntegrationTests(AzuriteFixture fixture)
         var draftBlobPath = $"{schemaName}/v1.odcs.yaml";
         var odcsYaml = CdeContractFixtureLoader.LoadFile("contracts/edc-school-site-jsonlogic.odcs.yaml");
 
-        var draftContainer = fixture.Client.GetBlobContainerClient("draft-schemas");
+        var draftContainer = fixture.Client.GetBlobContainerClient(fixture.DraftSchemasContainerName);
         await draftContainer.GetBlobClient(draftBlobPath)
             .UploadAsync(new MemoryStream(Encoding.UTF8.GetBytes(odcsYaml)), overwrite: true);
 
@@ -69,5 +69,67 @@ public class BlobSchemaRegistryIntegrationTests(AzuriteFixture fixture)
 
         var resolved = (await _harness.SchemaRegistry.GetExplicitSchemaAsync(schemaName, 1)).ShouldSucceed();
         resolved.Rules.Should().ContainSingle(r => r.Id == "CDC-DQ1-JSONLogic");
+    }
+
+    [Fact]
+    public async Task When_AzuriteFixture_Disposes_Should_Isolate_And_Delete_All_Test_Containers()
+    {
+        var ephemeral = new AzuriteFixture();
+        await ephemeral.InitializeAsync();
+
+        var isolatedNames = ephemeral.ContainerNames;
+        isolatedNames.Should().AllSatisfy(name => AzuriteFixture.IsTestContainerName(name).Should().BeTrue());
+        isolatedNames.Should().NotContain(["schemas", "draft-schemas", "payloads", "processed"]);
+
+        foreach (var name in isolatedNames)
+        {
+            (await ephemeral.Client.GetBlobContainerClient(name).ExistsAsync()).Value.Should().BeTrue();
+        }
+
+        // Write a blob into the isolated schema container before disposing
+        var tempBlob = ephemeral.Client.GetBlobContainerClient(ephemeral.SchemasContainerName).GetBlobClient("cleanup-check/v1.schema.json");
+        await tempBlob.UploadAsync(BinaryData.FromString(JsonSchemaFixtures.ValidV1Schema), overwrite: true);
+
+        await ephemeral.DisposeAsync();
+
+        // Check via the active fixture client that all 4 isolated containers were removed
+        foreach (var name in isolatedNames)
+        {
+            (await fixture.Client.GetBlobContainerClient(name).ExistsAsync()).Value.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task When_Updating_Schema_Fixtures_In_Azurite_Should_Replace_Invalidate_Cache_And_Allow_Clearing()
+    {
+        var metadata = new SchemaMetadataBuilder()
+            .WithUniqueName("fixture_update_schema")
+            .WithVersion(1)
+            .WithSchema(JsonSchemaFixtures.ValidV1Schema)
+            .Build();
+
+        (await _harness.SchemaRegistry.SaveSchemaAsync(
+            metadata,
+            rawRulesJson: null,
+            rawOdcsYaml: null,
+            sampleValidFixtures: ["""{"urn":100001,"schoolName":"Initial School"}"""],
+            sampleInvalidFixtures: ["""{"urn":"bad"}"""])).ShouldSucceed();
+
+        // Prime memory cache
+        var initial = (await _harness.SchemaRegistry.GetExplicitSchemaAsync(metadata.Name, 1)).ShouldSucceed();
+        initial.ValidFixtures.Should().HaveCount(1);
+        initial.InvalidFixtures.Should().HaveCount(1);
+
+        // Replace fixtures
+        (await _harness.SchemaRegistry.UpdateSchemaFixturesAsync(
+            metadata.Name,
+            1,
+            ["""{"urn":100001,"schoolName":"Updated A"}""", """{"urn":100002,"schoolName":"Updated B"}"""],
+            [])).ShouldSucceed();
+
+        var updated = (await _harness.SchemaRegistry.GetExplicitSchemaAsync(metadata.Name, 1)).ShouldSucceed();
+        updated.ValidFixtures.Should().HaveCount(2);
+        updated.ValidFixtures![1].Should().Contain("Updated B");
+        updated.InvalidFixtures.Should().BeEmpty();
     }
 }

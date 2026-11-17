@@ -12,5 +12,8 @@ public record SubmitSchemaBodyDto(
     string? FileName = null,
     SchemaIdentifierConfig? IdentifierConfig = null)
 {
-    public string? EffectiveRulesJson => !string.IsNullOrWhiteSpace(RulesJson) ? RulesJson : LogicJson;
+    public string? EffectiveRulesJson
+    {
+        get { return !string.IsNullOrWhiteSpace(RulesJson) ? RulesJson : LogicJson; }
+    }
 }

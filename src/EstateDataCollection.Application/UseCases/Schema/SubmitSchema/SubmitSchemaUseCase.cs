@@ -20,6 +20,15 @@ public class SubmitSchemaUseCase(
     {
         _instrumentation.SubmittingSchema(request.SchemaName, request.Version);
 
+        if (request.IdentifierConfig is not null)
+        {
+            var idDefValidation = request.IdentifierConfig.ValidateDefinition();
+            if (idDefValidation.IsFailure)
+            {
+                return idDefValidation.Error;
+            }
+        }
+
         var exists = await schemaRegistry.ExistsAsync(request.SchemaName, request.Version, cancellationToken);
 
         if (exists.IsFailure)
@@ -45,19 +54,23 @@ public class SubmitSchemaUseCase(
         }
 
         var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, _, _) = resolvedInputs.Value;
+        var rulesParam = string.IsNullOrWhiteSpace(effectiveRulesJson) ? null : effectiveRulesJson;
+        var validFixtures = request.SampleValidFixtures ?? [];
+        var invalidFixtures = request.SampleInvalidFixtures ?? [];
 
-        var verification = string.IsNullOrWhiteSpace(effectiveRulesJson)
+        var verification = request.IdentifierConfig is not null
             ? await schemaRegistry.VerifyCanditateSchemaAsync(
                 effectiveSchemaJson,
-                null,
-                request.SampleValidFixtures ?? [],
-                request.SampleInvalidFixtures ?? [],
+                rulesParam,
+                validFixtures,
+                invalidFixtures,
+                request.IdentifierConfig,
                 cancellationToken)
             : await schemaRegistry.VerifyCanditateSchemaAsync(
                 effectiveSchemaJson,
-                effectiveRulesJson,
-                request.SampleValidFixtures ?? [],
-                request.SampleInvalidFixtures ?? [],
+                rulesParam,
+                validFixtures,
+                invalidFixtures,
                 cancellationToken);
         
         if (verification.IsFailure)
@@ -77,7 +90,9 @@ public class SubmitSchemaUseCase(
 
             return Error.Validation(ErrorCodes.SchemaVerificationFailed, errors: errors);
         }
-        
+
+        var effectiveIdentifierConfig = verification.Value.ResolvedIdentifierConfig ?? request.IdentifierConfig;
+
         SchemaMetadata metadata;
         try
         {
@@ -85,9 +100,9 @@ public class SubmitSchemaUseCase(
                 request.SchemaName,
                 request.Version,
                 effectiveSchemaJson ?? string.Empty,
-                request.IdentifierConfig);
+                effectiveIdentifierConfig);
             // Submitted schema packs are always stored in Validated state (unscheduled);
-            // effective dates are assigned separately via the Admin scheduling API.
+            // effective dates are assigned separately via the Admin API.
             metadata.MarkValidated();
         }
         catch (Exception ex)
@@ -95,10 +110,13 @@ public class SubmitSchemaUseCase(
             _instrumentation.SchemaInvalidSchedule(request.SchemaName, request.Version, ex.Message);
             return Error.Validation(ErrorCodes.SchemaInvalidSchedule, ex.Message);
         }
-        
-        var result = effectiveRulesJson is not null || rawOdcsYaml is not null
-            ? await schemaRegistry.SaveSchemaAsync(metadata, effectiveRulesJson, rawOdcsYaml, cancellationToken)
-            : await schemaRegistry.SaveSchemaAsync(metadata, cancellationToken);
+
+        var hasFixtures = validFixtures.Count > 0 || invalidFixtures.Count > 0;
+        var result = hasFixtures
+            ? await schemaRegistry.SaveSchemaAsync(metadata, effectiveRulesJson, rawOdcsYaml, validFixtures, invalidFixtures, cancellationToken)
+            : (effectiveRulesJson is not null || rawOdcsYaml is not null
+                ? await schemaRegistry.SaveSchemaAsync(metadata, effectiveRulesJson, rawOdcsYaml, cancellationToken)
+                : await schemaRegistry.SaveSchemaAsync(metadata, cancellationToken));
 
         if (result.IsFailure)
         {

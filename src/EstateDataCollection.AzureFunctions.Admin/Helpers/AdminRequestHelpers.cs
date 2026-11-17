@@ -51,36 +51,49 @@ internal static class AdminRequestHelpers
 
     public static SchemaIdentifierConfig? GetIdentifierConfigHint(HttpRequest http)
     {
-        string? urnPointer = null;
-        if (http.Query.TryGetValue("urnPointer", out var qPtr) && !string.IsNullOrWhiteSpace(qPtr))
-        {
-            urnPointer = qPtr.ToString();
-        }
-        else if (http.Headers.TryGetValue("X-Urn-Pointer", out var hPtr) && !string.IsNullOrWhiteSpace(hPtr))
-        {
-            urnPointer = hPtr.ToString();
-        }
+        var identifierType = TryGetQueryOrHeader(http, ["identifierType", "urnType"], ["X-Identifier-Type", "X-Urn-Type"]);
+        var identifierPointer = TryGetQueryOrHeader(http, ["identifierPointer", "urnPointer"], ["X-Identifier-Pointer", "X-Urn-Pointer"]);
 
-        if (string.IsNullOrWhiteSpace(urnPointer))
+        if (string.IsNullOrWhiteSpace(identifierType) && string.IsNullOrWhiteSpace(identifierPointer))
         {
             return null;
         }
 
         bool? required = null;
-        if (http.Query.TryGetValue("urnRequired", out var qReq) && bool.TryParse(qReq, out var parsedQReq))
+        var rawRequired = TryGetQueryOrHeader(http, ["identifierRequired", "urnRequired"], ["X-Identifier-Required", "X-Urn-Required"]);
+        if (!string.IsNullOrWhiteSpace(rawRequired) && bool.TryParse(rawRequired, out var parsedReq))
         {
-            required = parsedQReq;
-        }
-        else if (http.Headers.TryGetValue("X-Urn-Required", out var hReq) && bool.TryParse(hReq, out var parsedHReq))
-        {
-            required = parsedHReq;
+            required = parsedReq;
         }
 
         return new SchemaIdentifierConfig
         {
-            Type = "URN",
-            JsonPointer = urnPointer,
+            Type = string.IsNullOrWhiteSpace(identifierType)
+                ? SchemaIdentifierConfig.DefaultUrnType
+                : identifierType.Trim(),
+            JsonPointer = string.IsNullOrWhiteSpace(identifierPointer) ? null : identifierPointer.Trim(),
             Required = required
         };
+    }
+
+    private static string? TryGetQueryOrHeader(HttpRequest http, string[] queryKeys, string[] headerKeys)
+    {
+        foreach (var qk in queryKeys)
+        {
+            if (http.Query.TryGetValue(qk, out var qv) && !string.IsNullOrWhiteSpace(qv))
+            {
+                return qv.ToString();
+            }
+        }
+
+        foreach (var hk in headerKeys)
+        {
+            if (http.Headers.TryGetValue(hk, out var hv) && !string.IsNullOrWhiteSpace(hv))
+            {
+                return hv.ToString();
+            }
+        }
+
+        return null;
     }
 }

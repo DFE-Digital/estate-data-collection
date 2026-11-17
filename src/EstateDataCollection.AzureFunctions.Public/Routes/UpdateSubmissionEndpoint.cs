@@ -26,14 +26,16 @@ public sealed class UpdateSubmissionEndpoint(
             Route = "submissions/{submissionId:guid}")]
         HttpRequest http,
         Guid submissionId,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(
             EndpointName,
             updateUseCase,
             () => BindAsync(http, submissionId, cancellationToken),
             StatusCodes.Status200OK,
             context: submissionId.ToString(),
             cancellationToken: cancellationToken);
+    }
 
     private static async Task<Result<UpdateSubmissionRequest>> BindAsync(
         HttpRequest http,

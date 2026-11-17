@@ -5,7 +5,10 @@ namespace EstateDataCollection.Application.Models.Options;
 
 public sealed class ValidationOptions : IOption<ValidationOptions>
 {
-    public static string SectionName => "Validation";
+    public static string SectionName
+    {
+        get { return "Validation"; }
+    }
 
     /// <summary>
     /// Quality rule engines enabled at runtime and during schema verification.
@@ -32,6 +35,12 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
     public bool RunQualityRulesOnDraftUpdate { get; init; } = true;
 
     /// <summary>
+    /// Whether school/establishment identifier extraction is checked during draft updates (PUT /submissions/{id})
+    /// and surfaced in PendingErrors.
+    /// </summary>
+    public bool ValidateIdentifierOnDraftUpdate { get; init; } = true;
+
+    /// <summary>
     /// Whether rules with Severity = "WARNING" are treated as blocking validation errors.
     /// </summary>
     public bool TreatWarningsAsErrors { get; init; } = false;
@@ -56,12 +65,13 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
     ];
 
     /// <summary>
-    /// Whether a school URN is required when finalising a submission.
+    /// Whether a school identifier (URN) is required by default when a schema lacks an explicit IdentifierConfig
+    /// and does not declare one as optional.
     /// </summary>
     public bool RequireUrnOnFinalise { get; init; } = true;
 
     /// <summary>
-    /// Ordered dot-separated JSON paths searched to extract the URN from a submission payload.
+    /// Ordered JSON paths searched to extract the identifier when a schema does not specify an explicit JsonPointer.
     /// Supports both nested ODCS schemas ("school.urn") and flat schemas ("urn").
     /// </summary>
     [Required]

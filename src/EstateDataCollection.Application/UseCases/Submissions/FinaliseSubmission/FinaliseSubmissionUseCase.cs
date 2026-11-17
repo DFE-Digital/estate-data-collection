@@ -1,7 +1,8 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
+using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common.Results;
-using EstateDataCollection.Domain.Submission;
+using EstateDataCollection.Domain.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -91,40 +92,32 @@ public class FinaliseSubmissionUseCase(
             return Error.Validation(ErrorCodes.SchemaContractViolation, errors: validationErrors);
         }
 
-        var identifierConfig = schema.Value.Metadata.IdentifierConfig;
-        var isIdentifierDisabled = string.Equals(identifierConfig?.Type, "None", StringComparison.OrdinalIgnoreCase);
-
-        int resolvedUrn;
-        if (isIdentifierDisabled)
+        var identifierEval = PayloadIdentifierExtractor.Evaluate(draftPayload.Value, schema.Value, _options);
+        if (!identifierEval.IsValid)
         {
-            resolvedUrn = 0;
+            _instrumentation.InvalidUrn(request.SubmissionId, 0);
+            return identifierEval.FailureError ?? Error.Validation(ErrorCodes.PayloadInvalidIdentifier);
         }
-        else
-        {
-            var searchPaths = !string.IsNullOrWhiteSpace(identifierConfig?.JsonPointer)
-                ? [identifierConfig.JsonPointer]
-                : _options.UrnJsonPaths;
 
-            var requireUrn = identifierConfig?.Required ?? _options.RequireUrnOnFinalise;
-            var urn = Urn.ExtractFromPayload(draftPayload.Value, searchPaths);
+        var extractedIdentifier = identifierEval.Identifier;
+        var resolvedUrn = extractedIdentifier?.AsPositiveInt ?? 0;
+        var isLegacyCompatibleUrnCall = extractedIdentifier is null ||
+            (resolvedUrn > 0 && string.Equals(extractedIdentifier.Value.Type, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase));
 
-            if (urn.IsFailure)
-            {
-                if (requireUrn)
-                {
-                    _instrumentation.InvalidUrn(request.SubmissionId, 0);
-                    return urn.Error;
-                }
-                resolvedUrn = 0;
-            }
-            else
-            {
-                resolvedUrn = urn.Value;
-            }
-        }
-        
-        var promotion = await infrastructure.PromoteToProcessedAsync(session.Value.SubmissionId, resolvedUrn,
-            session.Value.SchemaName, session.Value.SchemaVersion, cancellationToken);
+        var promotion = isLegacyCompatibleUrnCall
+            ? await infrastructure.PromoteToProcessedAsync(
+                session.Value.SubmissionId,
+                resolvedUrn,
+                session.Value.SchemaName,
+                session.Value.SchemaVersion,
+                cancellationToken)
+            : await infrastructure.PromoteToProcessedAsync(
+                session.Value.SubmissionId,
+                extractedIdentifier!.Value.Type,
+                extractedIdentifier.Value.Value,
+                session.Value.SchemaName,
+                session.Value.SchemaVersion,
+                cancellationToken);
 
         if (promotion.IsFailure)
         {
@@ -146,7 +139,9 @@ public class FinaliseSubmissionUseCase(
             session.Value.SchemaVersion,
             string.Empty,
             promotion.Value,
-            DateTimeOffset.UtcNow
+            DateTimeOffset.UtcNow,
+            Identifier: extractedIdentifier?.Value,
+            IdentifierType: extractedIdentifier?.Type
         );
     }
 }

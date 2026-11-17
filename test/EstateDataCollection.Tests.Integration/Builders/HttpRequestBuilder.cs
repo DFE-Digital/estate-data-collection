@@ -12,12 +12,20 @@ public sealed class HttpRequestBuilder
     private readonly Dictionary<string, StringValues> _query = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _headers = new(StringComparer.OrdinalIgnoreCase);
 
-    public static HttpRequest Empty() => new HttpRequestBuilder().Build();
+    public static HttpRequest Empty()
+    {
+        return new HttpRequestBuilder().Build();
+    }
 
-    public static HttpRequest FromJson<T>(T dto) => new HttpRequestBuilder().WithJsonBody(dto).Build();
+    public static HttpRequest FromJson<T>(T dto)
+    {
+        return new HttpRequestBuilder().WithJsonBody(dto).Build();
+    }
 
-    public static HttpRequest FromRaw(string rawBody, string contentType = "application/json") =>
-        new HttpRequestBuilder().WithRawBody(rawBody, contentType).Build();
+    public static HttpRequest FromRaw(string rawBody, string contentType = "application/json")
+    {
+        return new HttpRequestBuilder().WithRawBody(rawBody, contentType).Build();
+    }
 
     public HttpRequestBuilder WithJsonBody<T>(T dto)
     {
@@ -51,7 +59,10 @@ public sealed class HttpRequestBuilder
         return this;
     }
 
-    public HttpRequestBuilder WithFileName(string fileName) => WithHeader("X-File-Name", fileName);
+    public HttpRequestBuilder WithFileName(string fileName)
+    {
+        return WithHeader("X-File-Name", fileName);
+    }
 
     public HttpRequestBuilder WithUrnHeaders(string pointer, bool required = true)
     {

@@ -62,6 +62,14 @@ public sealed class GetSchemaDetailUseCase(
             Fields: fields,
             QualityRules: rules,
             RawJsonSchema: request.IncludeRawJsonSchema ? metadata.RawJsonSchema : null,
-            IdentifierConfig: metadata.IdentifierConfig);
+            IdentifierConfig: metadata.IdentifierConfig,
+            ValidFixtures: resolvedResult.Value.ValidFixtures ?? [],
+            InvalidFixtures: resolvedResult.Value.InvalidFixtures ?? [],
+            LastTestRunAtUtc: metadata.LastTestRunAtUtc,
+            LastTestRunAppVersion: metadata.LastTestRunAppVersion,
+            LastTestRunPassed: metadata.LastTestRunPassed,
+            LastTestRunErrors: metadata.LastTestRunErrors ?? [],
+            LastTestRunInvalidFixtures: metadata.LastTestRunInvalidFixtures ?? [],
+            LastTestRunWarnings: metadata.LastTestRunWarnings ?? []);
     }
 }

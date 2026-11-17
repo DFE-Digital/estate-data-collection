@@ -53,5 +53,8 @@ public sealed class SurveyPayloadBuilder
         return this;
     }
 
-    public string BuildJson() => _root.ToJsonString();
+    public string BuildJson()
+    {
+        return _root.ToJsonString();
+    }
 }

@@ -7,6 +7,7 @@ using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Application.Validators.Schema;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Validation;
 using EstateDataCollection.Tests.Common.Builders;
@@ -73,6 +74,8 @@ public class FinaliseSubmissionUseCaseTests
         var result = (await _sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId))).ShouldSucceed();
 
         result.Urn.Should().Be(104521);
+        result.Identifier.Should().Be("104521");
+        result.IdentifierType.Should().Be("URN");
         result.ProcessedBlobUri.Should().Contain("processed/urn=104521");
     }
 
@@ -99,6 +102,56 @@ public class FinaliseSubmissionUseCaseTests
         var result = (await _sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId))).ShouldSucceed();
 
         result.Urn.Should().Be(139876);
+    }
+
+    [Fact]
+    public async Task When_Schema_Uses_Custom_String_Identifier_Should_Promote_Via_String_Overload()
+    {
+        const string laestabSchema = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["establishment"],
+          "properties": {
+            "establishment": {
+              "type": "object",
+              "required": ["laestab"],
+              "properties": { "laestab": { "type": "string" } }
+            }
+          }
+        }
+        """;
+
+        var session = new SubmissionSessionBuilder().WithSchemaName("edc-estab").Build();
+        const string payload = """{"establishment":{"laestab":"201-3614"}}""";
+        var resolved = new ResolvedSchemaBuilder()
+            .ConfigureMetadata(m => m
+                .WithName("edc-estab")
+                .WithSchema(laestabSchema)
+                .WithIdentifierConfig(new SchemaIdentifierConfig { Type = "LAEstab", JsonPointer = "/establishment/laestab", Required = true }))
+            .WithSchemaJson(laestabSchema)
+            .Build();
+
+        _repository.GetSessionAsync(session.SubmissionId, Arg.Any<CancellationToken>())
+            .Returns(Result<SubmissionSession>.Success(session));
+        _repository.GetDraftPayloadAsync(session.SubmissionId, Arg.Any<CancellationToken>())
+            .Returns(Result<string>.Success(payload));
+        _registry.GetExplicitSchemaAsync("edc-estab", 1, Arg.Any<CancellationToken>())
+            .Returns(Result<ResolvedSchema>.Success(resolved));
+        _validator.ValidateAsync(payload, resolved.Schema, Arg.Any<CancellationToken>())
+            .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult([])));
+        _repository.PromoteToProcessedAsync(session.SubmissionId, "LAEstab", "201-3614", "edc-estab", 1, Arg.Any<CancellationToken>())
+            .Returns(Result<string>.Success($"https://storage/processed/laestab=201-3614/schema=edc-estab/v=1/{session.SubmissionId}.json"));
+
+        var result = (await _sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId))).ShouldSucceed();
+
+        result.Urn.Should().Be(0);
+        result.Identifier.Should().Be("201-3614");
+        result.IdentifierType.Should().Be("LAEstab");
+        result.ProcessedBlobUri.Should().Contain("laestab=201-3614");
+
+        await _repository.Received(1).PromoteToProcessedAsync(
+            session.SubmissionId, "LAEstab", "201-3614", "edc-estab", 1, Arg.Any<CancellationToken>());
     }
 
     [Fact]

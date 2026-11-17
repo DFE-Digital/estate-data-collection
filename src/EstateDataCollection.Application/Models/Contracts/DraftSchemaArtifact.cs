@@ -1,8 +1,10 @@
+using EstateDataCollection.Domain.Schema;
+
 namespace EstateDataCollection.Application.Models.Contracts;
 
 /// <summary>
 /// Represents a candidate contract bundle read from the staging/draft schema blob container
-/// (supporting both paired .schema.json + .rules.json and direct .odcs.yaml contracts).
+/// (supporting paired .schema.json + .rules.json, direct .odcs.yaml contracts, and optional .meta.json).
 /// </summary>
 public sealed record DraftSchemaArtifact(
     string TriggerBlobPath,
@@ -14,4 +16,5 @@ public sealed record DraftSchemaArtifact(
     IReadOnlyList<string> SampleValidFixtures,
     IReadOnlyList<string> SampleInvalidFixtures,
     IReadOnlyList<string> ConsumedDraftBlobPaths,
-    bool IsIgnoredCompanionBlob = false);
+    bool IsIgnoredCompanionBlob = false,
+    SchemaIdentifierConfig? IdentifierConfig = null);

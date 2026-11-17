@@ -1,4 +1,8 @@
+using AwesomeAssertions;
+using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
 using EstateDataCollection.Tests.Integration.Extensions;
@@ -85,6 +89,88 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
             1,
             CancellationToken.None);
         rescheduleRes.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task When_Scheduling_With_Invalid_IdentifierPointer_Should_Return_422_InvalidIdentifierConfig()
+    {
+        var schemaName = await SubmitValidV1Async("sched_bad_ptr");
+
+        var res = await _harness.ScheduleSchema.HandleAsync(
+            HttpRequestBuilder.FromJson(new ScheduleSchemaBodyDto(
+                EffectiveFromUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
+                LifecycleAction: "Activate",
+                IdentifierConfig: new SchemaIdentifierConfig
+                {
+                    Type = "URN",
+                    JsonPointer = "/missing/urn"
+                })),
+            schemaName,
+            1,
+            CancellationToken.None);
+
+        res.ShouldBeApiFailure<ScheduleSchemaResult>(
+            StatusCodes.Status422UnprocessableEntity,
+            "Schema.InvalidIdentifierConfig");
+    }
+
+    [Fact]
+    public async Task When_Scheduling_With_Optional_Schema_Property_Should_Derive_Required_False_Even_If_Request_Sets_True()
+    {
+        const string optionalIdSchemaJson = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["school_name"],
+          "properties": {
+            "school_name": { "type": "string" },
+            "establishment_id": { "type": "string" }
+          }
+        }
+        """;
+
+        var schemaName = IntegrationEndpointHarness.UniqueName("sched_opt_id");
+        (await _harness.SubmitSchema.HandleAsync(
+                HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(
+                    SchemaJson: optionalIdSchemaJson,
+                    IdentifierConfig: new SchemaIdentifierConfig
+                    {
+                        Type = "LAEstab",
+                        JsonPointer = "/establishment_id"
+                    })),
+                schemaName,
+                1,
+                CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status201Created);
+
+        var schedRes = await _harness.ScheduleSchema.HandleAsync(
+            HttpRequestBuilder.FromJson(new ScheduleSchemaBodyDto(
+                EffectiveFromUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
+                LifecycleAction: "Activate",
+                IdentifierConfig: new SchemaIdentifierConfig
+                {
+                    Type = "LAEstab",
+                    JsonPointer = "/establishment_id",
+                    Required = true
+                })),
+            schemaName,
+            1,
+            CancellationToken.None);
+
+        var scheduled = schedRes.ShouldBeApiSuccess<ScheduleSchemaResult>(StatusCodes.Status200OK);
+        scheduled.IdentifierConfig.Should().NotBeNull();
+        scheduled.IdentifierConfig!.Type.Should().Be("LAEstab");
+        scheduled.IdentifierConfig.JsonPointer.Should().Be("/establishment_id");
+        scheduled.IdentifierConfig.Required.Should().BeFalse();
+
+        var detail = (await _harness.GetAdminSchemaVersionDetail.HandleAsync(
+                HttpRequestBuilder.Empty(),
+                schemaName,
+                1,
+                CancellationToken.None))
+            .ShouldBeApiSuccess<SchemaVersionDetail>(StatusCodes.Status200OK);
+        detail.IdentifierConfig.Should().NotBeNull();
+        detail.IdentifierConfig!.Required.Should().BeFalse();
     }
 
     private async Task<string> SubmitValidV1Async(string prefix)

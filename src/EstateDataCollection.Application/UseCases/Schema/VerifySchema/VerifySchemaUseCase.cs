@@ -20,6 +20,15 @@ public class VerifySchemaUseCase(
             request.SampleValidFixtures?.Count ?? 0,
             request.SampleInvalidFixtures?.Count ?? 0);
 
+        if (request.IdentifierConfig is not null)
+        {
+            var idDefValidation = request.IdentifierConfig.ValidateDefinition();
+            if (idDefValidation.IsFailure)
+            {
+                return idDefValidation.Error;
+            }
+        }
+
         var resolvedInputs = odcsParser.ResolveInputs(
             request.SchemaJson,
             request.RulesJson,
@@ -32,19 +41,25 @@ public class VerifySchemaUseCase(
         }
 
         var (schemaInput, rulesInput, _, _, _) = resolvedInputs.Value;
+        var effectiveRulesInput = string.IsNullOrWhiteSpace(rulesInput) && !string.IsNullOrWhiteSpace(schemaInput)
+            ? null
+            : rulesInput;
+        var validFixtures = request.SampleValidFixtures ?? [];
+        var invalidFixtures = request.SampleInvalidFixtures ?? [];
 
-        var verification = string.IsNullOrWhiteSpace(rulesInput) && !string.IsNullOrWhiteSpace(schemaInput)
+        var verification = request.IdentifierConfig is not null
             ? await schemaRegistry.VerifyCanditateSchemaAsync(
                 schemaInput,
-                null,
-                request.SampleValidFixtures ?? [],
-                request.SampleInvalidFixtures ?? [],
+                effectiveRulesInput,
+                validFixtures,
+                invalidFixtures,
+                request.IdentifierConfig,
                 cancellationToken)
             : await schemaRegistry.VerifyCanditateSchemaAsync(
                 schemaInput,
-                rulesInput,
-                request.SampleValidFixtures ?? [],
-                request.SampleInvalidFixtures ?? [],
+                effectiveRulesInput,
+                validFixtures,
+                invalidFixtures,
                 cancellationToken);
 
         if (verification.IsFailure)
@@ -67,6 +82,10 @@ public class VerifySchemaUseCase(
         }
 
         _instrumentation.SchemaVerificationSucceeded();
-        return new VerifySchemaResult("Schema verified successfully");
+        return new VerifySchemaResult(
+            "Schema verified successfully",
+            verification.Value.ResolvedIdentifierConfig,
+            verification.Value.InvalidFixtureOutcomes,
+            verification.Value.WarningMessages);
     }
 }

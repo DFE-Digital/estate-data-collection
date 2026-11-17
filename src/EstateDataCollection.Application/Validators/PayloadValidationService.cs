@@ -50,6 +50,29 @@ public sealed class PayloadValidationService(
             }
         }
 
+        // Step 3: School / Establishment Identifier Extraction Check
+        var shouldCheckIdentifier = !isDraftUpdate || _options.ValidateIdentifierOnDraftUpdate;
+        if (shouldCheckIdentifier)
+        {
+            var identifierEval = PayloadIdentifierExtractor.Evaluate(rawPayloadJson, schema, _options);
+            if (!identifierEval.IsValid && identifierEval.ValidationError is not null)
+            {
+                var normalizedIdentifierPath = NormalizePointerForDedupe(identifierEval.ValidationError.PropertyPath);
+                var alreadyReportedOnSamePath = errors.Any(e =>
+                    string.Equals(NormalizePointerForDedupe(e.PropertyPath), normalizedIdentifierPath, StringComparison.OrdinalIgnoreCase));
+
+                if (!alreadyReportedOnSamePath)
+                {
+                    errors.Add(identifierEval.ValidationError);
+                }
+            }
+        }
+
         return errors;
     }
+
+    private static string NormalizePointerForDedupe(string? path) =>
+        string.IsNullOrWhiteSpace(path)
+            ? string.Empty
+            : path.Trim().TrimStart('#').TrimEnd('/');
 }

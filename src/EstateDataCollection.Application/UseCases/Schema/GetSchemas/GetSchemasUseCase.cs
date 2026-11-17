@@ -58,7 +58,11 @@ public sealed class GetSchemasUseCase(
                         CanAcceptTraffic: m.CanAcceptTrafficAt(now),
                         Sha256Hash: m.Sha256Hash,
                         CreatedAtUtc: m.CreatedAtUtc,
-                        IdentifierConfig: m.IdentifierConfig))
+                        IdentifierConfig: m.IdentifierConfig,
+                        LastTestRunAtUtc: m.LastTestRunAtUtc,
+                        LastTestRunAppVersion: m.LastTestRunAppVersion,
+                        LastTestRunPassed: m.LastTestRunPassed,
+                        LastTestRunWarnings: m.LastTestRunWarnings))
                     .ToList();
 
                 var activeFields = request.IncludeActiveVersionFields && activeMeta is not null

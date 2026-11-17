@@ -28,14 +28,16 @@ public sealed class ScheduleSchemaEndpoint(
         HttpRequest http,
         string schemaName,
         int version,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        return ExecuteAsync(
             EndpointName,
             scheduleUseCase,
             () => BindAsync(http, schemaName, version, cancellationToken),
             StatusCodes.Status200OK,
             context: $"{schemaName} v{version}",
             cancellationToken: cancellationToken);
+    }
 
     private static async Task<Result<ScheduleSchemaRequest>> BindAsync(
         HttpRequest http,
