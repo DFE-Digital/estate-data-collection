@@ -7,18 +7,13 @@ namespace EstateDataCollection.Tests.Integration.Fixtures;
 /// <summary>
 /// Provides an isolated, live Azurite Blob Storage client for integration tests.
 /// Connects to an already-running Azurite instance via <c>AZURE_STORAGE_CONNECTION_STRING</c>,
-/// <c>ConnectionStrings__BlobStorage</c>, or the default local/CI endpoint (<c>127.0.0.1:10000</c>).
+/// <c>ConnectionStrings__BlobStorage</c>, or <c>UseDevelopmentStorage=true</c> (<c>127.0.0.1:10000</c>).
 /// Every run operates inside unique <c>test-{runId}-*</c> containers and deletes them on <see cref="DisposeAsync"/>
 /// so local development containers (<c>schemas</c>, <c>draft-schemas</c>, <c>payloads</c>, <c>processed</c>) stay clean.
 /// </summary>
 public sealed partial class AzuriteFixture : IAsyncLifetime
 {
-    private const string AccountName = "devstoreaccount1";
-    private const string AccountKey =
-        "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";
-
-    public const string DefaultConnectionString =
-        $"DefaultEndpointsProtocol=http;AccountName={AccountName};AccountKey={AccountKey};BlobEndpoint=http://127.0.0.1:10000/{AccountName};";
+    public const string DefaultConnectionString = "UseDevelopmentStorage=true";
 
     private readonly string _runId = Guid.NewGuid().ToString("N")[..12];
 
