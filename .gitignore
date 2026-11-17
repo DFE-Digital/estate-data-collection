@@ -80,3 +80,6 @@ Icon?
 # AI Assistants & Local Tooling
 .agents/
 .gemini/
+
+# Local External Contract Payloads / Working Copies
+cde-data-contracts/
