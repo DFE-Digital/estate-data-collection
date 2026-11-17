@@ -4,42 +4,54 @@ This document is the authoritative guide for building, packaging, deploying, and
 
 ## Architectural Overview
 
-The EDC platform operates on **Azure Functions (Isolated Worker Model)** targeting **.NET 10** hosted on **Azure Functions Flex Consumption (Linux)**.
+The EDC platform operates on **Azure Functions v4 (Isolated Worker Model)** targeting **.NET 10** hosted on **Azure Functions Flex Consumption (Linux)** across segregated host applications:
+
+| Deployable Host Project | Responsibility | Artifact Name |
+| :--- | :--- | :--- |
+| `src/EstateDataCollection.AzureFunctions.Public` | Public M2M survey ingestion & active schema discovery API (`/api/schemas*`, `/api/submissions*`, `/api/about`) | `edc-functions-public-linux-x64.zip` |
+| `src/EstateDataCollection.AzureFunctions.Admin` | Admin contract governance API (`/api/schemas*`, `/api/logic/verify`, `/api/schemas/tests/run`) & Event Grid draft ingestion | `edc-functions-admin-linux-x64.zip` |
+| `src/EstateDataCollection.AzureFunctions.AdminUi` | SSR GOV.UK / DfE Admin Portal (`/manage/*`, `/assets/*`) connecting via `HttpProxy` or `Direct` mode | `edc-functions-adminui-linux-x64.zip` *(optional host or consolidated)* |
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │ GitHub Actions / Azure CLI                                             │
 │   │                                                                    │
+│   ├──> Run 227 automated tests (Unit + isolated Azurite Integration)   │
 │   ├──> dotnet publish -c Release -r linux-x64 --self-contained true     │
 │   ├──> Exclude local.settings.json, *.http, *.pdb                      │
-│   └──> Package into edc-functions-linux-x64.zip                        │
+│   └──> Package Public & Admin (+ optional AdminUi) Linux x64 zips      │
 │                                                                        │
 │ Azure Cloud (Flex Consumption / Linux)                                 │
 │   │                                                                    │
 │   ├──> Azure App Service Zip Deploy (az functionapp deployment source) │
-│   ├──> Entra ID OIDC Authentication (No stored credentials)           │
-│   └──> Managed Identity connecting to Azure Blob Storage & Key Vault   │
+│   ├──> Entra ID OIDC CI/CD + Easy Auth for Admin Portal (/manage/*)    │
+│   └──> Managed Identity accessing schemas, draft-schemas, payloads,     │
+│        and processed Blob Storage containers                           │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Principles
 
 - **Self-Contained Linux x64 Deployment ([ADR 0006](decisions/0006-flex-consumption-self-contained-deployment.md))**:
-  Because Azure Functions Flex Consumption hosts run on Linux containers without guaranteed pre-installed .NET 10 runtimes, all deployment bundles are published with `-r linux-x64 --self-contained true`. The .NET runtime is bundled directly with the application, guaranteeing consistency across environments.
+  Because Azure Functions Flex Consumption hosts run on Linux containers without guaranteed pre-installed .NET 10 runtimes, all deployment bundles are published with `-r linux-x64 --self-contained true`.
 - **Build Once, Deploy Many ([ADR 0014](decisions/0014-segregated-multi-workflow-ci-cd-with-composite-actions.md))**:
-  Binaries are compiled and tested once in CI, generating an immutable zip artifact that is promoted across Dev $\to$ Test $\to$ Prod.
+  Binaries are compiled and verified once in CI, generating immutable zip artifacts (`edc-functions-public-linux-x64.zip` and `edc-functions-admin-linux-x64.zip`) promoted sequentially across Dev $\to$ Test $\to$ Prod.
 - **Sanitised Packages**:
   Local dev settings (`local.settings.json`), REST client files (`*.http`), and symbol files (`*.pdb`) are strictly excluded from all deployable packages.
+- **Admin UI Hosting Topology ([ADR 0017](decisions/0017-ssr-admin-portal-and-proxy-boundary.md))**:
+  `AzureFunctions.AdminUi` runs either as its own Function App forwarding calls over `x-functions-key` (`AdminUi__ExecutionMode=HttpProxy`), or can be consolidated into `AzureFunctions.Admin` (`Direct` mode + unified `"routePrefix": ""`) to eliminate an extra Function App plan.
 
 ## Environment Topology
 
-The platform is partitioned into three distinct Azure environments:
+The platform is partitioned into three distinct Azure environments (plus optional `uat` in SHA dispatches):
 
-| Environment | Purpose | Azure Subscription / Resource Group | Function App Name | Deployment Gate |
+| Environment | Purpose | Azure Resource Group | Function App Variables | Deployment Gate |
 | :--- | :--- | :--- | :--- | :--- |
-| **Development** | Integration testing & active development | `rg-edc-dev-uksouth` | `func-edc-dev-uksouth` | Automated on merge to `main` |
-| **Test** | QA, automated integration, stakeholder sign-off | `rg-edc-test-uksouth` | `func-edc-test-uksouth` | Automated promotion after Dev verification |
-| **Production** | Live operational workload | `rg-edc-prod-uksouth` | `func-edc-prod-uksouth` | **Manual Review Required** (GitHub Environment Gate) |
+| **Development** | Integration testing & active development | `rg-edc-dev-uksouth` | `AZURE_PUBLIC_FUNCTION_APP_NAME`<br/>`AZURE_ADMIN_FUNCTION_APP_NAME` | Automated on merge to `main` |
+| **Test** | QA, automated integration, stakeholder sign-off | `rg-edc-test-uksouth` | `AZURE_PUBLIC_FUNCTION_APP_NAME`<br/>`AZURE_ADMIN_FUNCTION_APP_NAME` | Automated promotion after Dev verification |
+| **Production** | Live operational workload | `rg-edc-prod-uksouth` | `AZURE_PUBLIC_FUNCTION_APP_NAME`<br/>`AZURE_ADMIN_FUNCTION_APP_NAME` | **Manual Review Required** (GitHub Environment Gate) |
+
+*(Note: `cd-main.yml` and `deploy-by-sha.yml` fall back to `AZURE_FUNCTION_APP_NAME` if `AZURE_PUBLIC_FUNCTION_APP_NAME` is not set.)*
 
 ---
 
@@ -47,120 +59,98 @@ The platform is partitioned into three distinct Azure environments:
 
 ### Option A: Automated Multi-Environment CI/CD (Recommended)
 
-Continuous Delivery is driven by [`.github/workflows/cd-main.yml`](file:///.github/workflows/cd-main.yml).
+Continuous Delivery is driven by [`.github/workflows/cd-main.yml`](file:///.github/workflows/cd-main.yml) using [`.github/actions/setup-and-test/action.yml`](file:///.github/actions/setup-and-test/action.yml) and [`.github/actions/deploy-function/action.yml`](file:///.github/actions/deploy-function/action.yml).
 
 ```mermaid
 flowchart LR
-    Merge["Merge PR to main"] --> Build["Build & Package\n(CalVer: YYYY.MM.<run>)"]
-    Build --> Dev["Deploy to Development"]
+    Merge["Merge PR to main"] --> Build["Test (227 Tests + Azurite) &amp; Package\n(CalVer: YYYY.MM.&lt;run&gt;)"]
+    Build --> Dev["Deploy Public &amp; Admin to Dev"]
     Dev --> SmokeDev{"Smoke Test\n/api/about"}
-    SmokeDev -- OK --> Test["Deploy to Test"]
+    SmokeDev -- OK --> Test["Deploy Public &amp; Admin to Test"]
     Test --> SmokeTest{"Smoke Test\n/api/about"}
     SmokeTest -- OK --> Gate{"Environment Gate\n(Approval Required)"}
-    Gate -- Approved --> Prod["Deploy to Production"]
-    Prod --> SmokeProd["Live Smoke Test\n/api/about"]
+    Gate -- Approved --> Prod["Deploy Public &amp; Admin to Prod"]
+    Prod --> SmokeProd["Live Verification"]
 ```
 
-1. **Trigger**: Automatically runs whenever a pull request is merged into the `main` branch.
+1. **Trigger**: Automatically runs whenever a pull request is merged into `main`.
 2. **Process**:
-   - Computes official CalVer version (`YYYY.MM.<run_number>`, e.g., `2026.10.42`).
-   - Executes all unit tests and builds the self-contained Linux x64 release package.
-   - Deploys to **Development** via OIDC and verifies health via `/api/about`.
-   - Automatically promotes the identical artifact to **Test** and verifies health.
-   - Pauses at the **Production** gate for required reviewer approval in GitHub before deploying to live.
+   - Computes CalVer (`YYYY.MM.<run_number>`, e.g., `2026.11.42`).
+   - Runs all **227** unit and integration tests against an Azurite service container (each run executes inside isolated `test-{runId}-*` containers per [ADR 0021](decisions/0021-isolated-ephemeral-azurite-test-containers.md)).
+   - Builds and zips `edc-functions-public-linux-x64.zip` and `edc-functions-admin-linux-x64.zip`.
+   - Deploys to **Development** via Entra ID OIDC and checks `/api/about`.
+   - Promotes the exact artifacts to **Test**, then waits at the **Production** approval gate.
 
 ### Option B: On-Demand / Historical SHA Deployment
 
-For emergency hotfixes, rolling back, or testing specific Git revisions, use [`.github/workflows/deploy-by-sha.yml`](file:///.github/workflows/deploy-by-sha.yml).
+For emergency hotfixes, rollbacks, or deploying a specific commit to `development`, `test`, `uat`, or `production`, use [`.github/workflows/deploy-by-sha.yml`](file:///.github/workflows/deploy-by-sha.yml):
 
-1. Navigate to **GitHub** $\to$ **Actions** $\to$ **Deploy Commit to Environment**.
-2. Click **Run workflow**.
-3. Supply the inputs:
-   - **Commit SHA**: Full 40-character SHA or short 7-character commit hash (e.g., `a1b2c3d`).
-   - **Target Environment**: Select `development`, `test`, or `production`.
-4. Click **Run workflow**. The workflow checks out the exact SHA, packages it, and pushes directly to the requested environment (respecting production approval gates if production is selected).
+1. Navigate to **GitHub** $\to$ **Actions** $\to$ **CD: Deploy by Commit SHA**.
+2. Click **Run workflow**, supply `commit_sha` (7–40 characters) and `target_environment`.
 
 ### Option C: Manual CLI Zip Deploy (`az CLI`)
 
-To deploy directly from a developer workstation or build machine without triggering GitHub Actions:
+To package and deploy any of the Function App hosts manually (example shows `Public`, `Admin`, and `AdminUi`):
 
-#### 1. Prerequisites
-- [.NET 10 SDK](https://dotnet.microsoft.com/)
-- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/) (`az`)
-- `zip` utility (standard on macOS and Linux)
-
-#### 2. Build and Package Self-Contained Linux x64
 ```bash
-# Navigate to the repository root
+# 1. Navigate to the repository root
 cd /path/to/estate-data-collection
 
-# 1. Clean previous build artifacts
-rm -rf ./publish-out ./edc-functions.zip
+# 2. Publish and zip Public, Admin, and AdminUi for Linux x64
+for APP in Public Admin AdminUi; do
+  rm -rf "./publish-$APP" "./edc-functions-$APP.zip"
+  dotnet publish "src/EstateDataCollection.AzureFunctions.$APP/EstateDataCollection.AzureFunctions.$APP.csproj" \
+    -c Release \
+    -r linux-x64 \
+    --self-contained true \
+    -o "./publish-$APP"
 
-# 2. Publish self-contained for Linux x64 in Release mode
-dotnet publish src/EstateDataCollection.AzureFunctions \
-  -c Release \
-  -r linux-x64 \
-  --self-contained true \
-  -o ./publish-out
+  (cd "./publish-$APP" && zip -r "../edc-functions-$APP.zip" . -x "local.settings.json" "*.http" "*.pdb")
+done
 
-# 3. Create deployment zip (excluding secrets and debug files)
-cd ./publish-out
-zip -r ../edc-functions.zip . -x "local.settings.json" "*.http" "*.pdb"
-cd ..
-```
-
-#### 3. Log In to Azure and Deploy
-```bash
-# Log in to Azure (or use service principal / az login --identity)
+# 3. Deploy via Azure CLI
 az login
-
-# Set the active subscription
 az account set --subscription "<AZURE_SUBSCRIPTION_ID>"
 
-# Deploy via Zip Deploy
 az functionapp deployment source config-zip \
   --resource-group "<RESOURCE_GROUP_NAME>" \
-  --name "<FUNCTION_APP_NAME>" \
-  --src "./edc-functions.zip"
+  --name "<PUBLIC_FUNCTION_APP_NAME>" \
+  --src "./edc-functions-Public.zip"
 
-# Clean up local package
-rm -rf ./publish-out ./edc-functions.zip
+az functionapp deployment source config-zip \
+  --resource-group "<RESOURCE_GROUP_NAME>" \
+  --name "<ADMIN_FUNCTION_APP_NAME>" \
+  --src "./edc-functions-Admin.zip"
+
+az functionapp deployment source config-zip \
+  --resource-group "<RESOURCE_GROUP_NAME>" \
+  --name "<ADMINUI_FUNCTION_APP_NAME>" \
+  --src "./edc-functions-AdminUi.zip"
+
+# 4. Clean up local build artifacts
+rm -rf ./publish-Public ./publish-Admin ./publish-AdminUi ./edc-functions-*.zip
 ```
 
 ### Option D: Azure Functions Core Tools (`func`)
 
 > [!CAUTION]
-> Azure Functions Core Tools (`func azure functionapp publish`) compiles against the local host architecture by default. If publishing to Linux Flex Consumption from a macOS (ARM64) or Windows machine, prefer **Option A**, **B**, or **C** to prevent architecture mismatch errors.
+> `func azure functionapp publish` builds against the workstation's native OS/architecture unless overridden. On macOS ARM64 or Windows, prefer **Option A**, **B**, or **C** when targeting Linux Flex Consumption.
 
-For local sandbox or dev environments:
-```bash
-cd src/EstateDataCollection.AzureFunctions
-az login
-func azure functionapp publish <FUNCTION_APP_NAME>
-```
+---
 
-## Zero-Trust Security & Authentication (Entra ID OIDC)
+## Zero-Trust Security & Authentication
 
-Deployments authenticate using **OpenID Connect (OIDC)** via GitHub Actions federated credentials. No long-lived passwords, client secrets, or publish profile XML files are stored in GitHub.
+### 1. CI/CD Deployment Auth (Entra ID OIDC)
 
-### OIDC Configuration in Entra ID
+Deployments authenticate via **OpenID Connect (OIDC)** federated credentials—no stored client secrets or publish profiles:
 
-For each environment's Service Principal in Azure Entra ID:
-1. Navigate to **Microsoft Entra ID** $\to$ **App Registrations** $\to$ Select the deployment app.
-2. Go to **Certificates & secrets** $\to$ **Federated credentials** $\to$ **Add credential**.
-3. Select **GitHub Actions deploying Azure resources**.
-4. Configure the Subject Identifier format:
-
-| Environment | Subject Identifier Format |
+| Environment | GitHub Federated Credential Subject Format |
 | :--- | :--- |
 | **Development** | `repo:<org>/<repo>:environment:development` |
 | **Test** | `repo:<org>/<repo>:environment:test` |
 | **Production** | `repo:<org>/<repo>:environment:production` |
 
-### Required GitHub Repository Configuration
-
-Configure the following per environment under **GitHub Settings** $\to$ **Environments**:
+### 2. Required GitHub Environment Variables & Secrets
 
 | Type | Name | Example Value | Description |
 | :--- | :--- | :--- | :--- |
@@ -168,104 +158,105 @@ Configure the following per environment under **GitHub Settings** $\to$ **Enviro
 | **Secret** | `AZURE_TENANT_ID` | `00000000-0000-0000-0000-000000000000` | Entra ID Tenant ID |
 | **Secret** | `AZURE_SUBSCRIPTION_ID` | `00000000-0000-0000-0000-000000000000` | Target Azure Subscription ID |
 | **Variable** | `AZURE_RESOURCE_GROUP` | `rg-edc-prod-uksouth` | Azure Resource Group name |
-| **Variable** | `AZURE_FUNCTION_APP_NAME` | `func-edc-prod-uksouth` | Target Azure Function App name |
+| **Variable** | `AZURE_PUBLIC_FUNCTION_APP_NAME` | `func-edc-public-prod-uksouth` | Public Function App name |
+| **Variable** | `AZURE_ADMIN_FUNCTION_APP_NAME` | `func-edc-admin-prod-uksouth` | Admin Function App name |
+
+### 3. Admin Portal Authentication (Microsoft Entra ID / Easy Auth)
+
+`FunctionPageBase.ResolveSignedInUser` already parses `X-MS-CLIENT-PRINCIPAL-NAME` and `X-MS-CLIENT-PRINCIPAL` claims emitted by Azure App Service Authentication (Easy Auth):
+- **Separate `AdminUi` host:** Enable single-tenant Entra ID Easy Auth (`/.auth/login/aad/callback`) restricting access via an assigned Entra Security Group / App Role; `AdminUi` forwards `x-functions-key` from Key Vault/App Settings to the internal `Admin` Function App.
+- **Merged `Admin` + `AdminUi` host:** Configure Easy Auth with `AllowAnonymous` token validation plus worker route middleware so `/manage*` enforces Entra login & role claims while `/api/*` continues accepting `x-functions-key` (or Entra Bearer tokens) and `/assets/*` stays accessible for CSS/fonts.
 
 ---
 
 ## Required Environment Variables & Configuration
 
-The following application settings must be configured in Azure Function App Configuration:
+Configure these settings on Azure Function Apps (double underscore `__` represents `:` hierarchy on Linux):
 
-| Setting Name | Purpose | Example / Value |
-| :--- | :--- | :--- |
-| `FUNCTIONS_WORKER_RUNTIME` | Runtime worker type | `dotnet-isolated` |
-| `BlobStorageOptions__ServiceUri` | Storage account URI using Managed Identity | `https://stedc<env>uksouth.blob.core.windows.net` |
-| `BlobStorageOptions__ContainerName` | Default landing container | `edc-landing` |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Azure Application Insights telemetry target | `InstrumentationKey=...` |
-| `ASPNETCORE_ENVIRONMENT` | Active environment name | `Development` / `Test` / `Production` |
+| Setting Name | Scope | Purpose | Example / Default |
+| :--- | :--- | :--- | :--- |
+| `ASPNETCORE_ENVIRONMENT` | All | Environment profile | `Development` / `Test` / `Production` |
+| `ConnectionStrings__BlobStorage` or `BlobStorageOptions__ServiceUri` | Public, Admin, Direct UI | Storage account connection string or Managed Identity blob endpoint | `https://stedc<env>uksouth.blob.core.windows.net` |
+| `AZURE_APPCONFIGURATION_ENDPOINT` | Public, Admin | Optional Azure App Configuration endpoint | `https://appcs-edc-<env>.azconfig.io` |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | All | Azure Application Insights telemetry | `InstrumentationKey=...` |
+| `Blob__Schema__ContainerName` | Public, Admin, Direct UI | Registered contracts, rules, fixtures & metadata container | `schemas` |
+| `Blob__Schema__DraftContainerName` | Admin, Direct UI | Event Grid-watched draft dropzone container | `draft-schemas` |
+| `Blob__Submission__PayloadContainerName` | Public | In-flight survey sessions & drafts container | `payloads` |
+| `Blob__Submission__ProcessedContainerName` | Public | Finalised CDE-ready partitioned lake container | `processed` |
+| `AdminUi__ExecutionMode` | AdminUi | `HttpProxy` (calls Admin API over HTTP) or `Direct` (in-process) | `HttpProxy` *(in cloud)* / `Direct` *(single-host)* |
+| `AdminUi__AdminApiBaseUrl` | AdminUi (`HttpProxy`) | Base URL of Admin Function App API | `https://<admin-app>.azurewebsites.net/api` |
+| `AdminUi__AdminApiFunctionKey` | AdminUi (`HttpProxy`) | Function key (prefer Key Vault reference `@Microsoft.KeyVault(...)`) | *(Key Vault secret)* |
+
+> [!IMPORTANT]
+> On Azure Functions **Flex Consumption**, do **not** manually set `FUNCTIONS_WORKER_RUNTIME` in Application Settings—the runtime is configured at the platform `functionAppConfig` level ([ADR 0006](decisions/0006-flex-consumption-self-contained-deployment.md)).
 
 ---
 
 ## Release Versioning & Observability (CalVer)
 
-Deployments use **Calendar Versioning (CalVer)** ([ADR 0015](decisions/0015-calendar-versioning-calver-and-log-enrichment.md)) formatted as:
+Deployments use **Calendar Versioning (CalVer)** ([ADR 0015](decisions/0015-calendar-versioning-calver-and-log-enrichment.md)):
 
-$$\text{YYYY.MM.<run\_number>} \quad \text{(e.g., } 2026.10.42\text{)}$$
+$$\text{YYYY.MM.<run\_number>} \quad \text{(e.g., } 2026.11.42\text{)}$$
 
-### Where CalVer Appears:
-1. **Assembly Metadata**: Injected at build time via `/p:InformationalVersion=...` into the compiled DLLs.
-2. **About Endpoint**: Returned in HTTP responses at `GET /api/about`.
-3. **OpenTelemetry Telemetry**: Stamped as `service.version` on every distributed trace and metric emitted to Application Insights.
-4. **Structured Logs**: Added to the `ILogger` ambient scope for every incoming HTTP request by `VersionLoggingMiddleware`.
+1. **Assembly Metadata:** Stamped via `/p:InformationalVersion=...` at publish time.
+2. **About Endpoint:** Exposed at `GET /api/about`.
+3. **OpenTelemetry & Structured Logs:** Stamped as `service.version` on traces/metrics and logged per request via `VersionLoggingMiddleware`.
+4. **Regression Test Telemetry:** Recorded on `SchemaMetadata.LastTestRunAppVersion` whenever `RunSchemaTestsUseCase` executes after deployment.
 
 ---
 
-## Verification & Smoke Testing
+## Verification, Smoke Testing & Post-Deploy Regression Gate
 
-Every deployment automatically performs a smoke test against the live function endpoint. You can run this test manually:
+After deployment, verify health and optionally run all stored schema regression tests against the live registry:
 
 ```bash
-# Query the /api/about endpoint
-curl -i https://<FUNCTION_APP_NAME>.azurewebsites.net/api/about
+# 1. Health & CalVer check
+curl -i https://<PUBLIC_FUNCTION_APP_NAME>.azurewebsites.net/api/about
+
+# 2. Post-deploy live schema regression suite (runs all non-retired schema contracts + rules + fixtures)
+curl -i -X POST https://<ADMIN_FUNCTION_APP_NAME>.azurewebsites.net/api/schemas/tests/run \
+  -H "x-functions-key: <ADMIN_FUNCTION_KEY>"
 ```
 
-### Expected Response (`200 OK`)
+Expected `/api/about` response (`200 OK`):
 ```json
 {
   "application": "EstateDataCollection",
-  "version": "2026.10.42+a1b2c3d",
+  "version": "2026.11.42+a1b2c3d",
   "commitSha": "a1b2c3d4e5f6789012345678901234567890abcd",
   "environment": "Production",
-  "timestampUtc": "2026-10-22T15:15:00.0000000Z"
+  "timestampUtc": "2026-11-17T15:15:00.0000000Z"
 }
 ```
-
-If the endpoint returns anything other than HTTP `200 OK`, check the Function App logs or Application Insights Live Metrics.
 
 ---
 
 ## Rollback Strategy
 
-If an incident or regression occurs in any environment:
-
-### Method 1: Instant SHA Rollback via GitHub Actions (Recommended)
-1. Go to **Actions** $\to$ **Deploy Commit to Environment** ([`.github/workflows/deploy-by-sha.yml`](file:///.github/workflows/deploy-by-sha.yml)).
-2. Enter the **last known good Git commit SHA**.
-3. Select the target environment (e.g., `production`).
-4. Execute the workflow. GitHub will package that exact commit and deploy it, restoring known stable code.
-
-### Method 2: Deployment Slot Swap (If Slots are Configured)
-If staging deployment slots are enabled for the Function App:
-```bash
-az functionapp deployment slot swap \
-  --resource-group "<RESOURCE_GROUP_NAME>" \
-  --name "<FUNCTION_APP_NAME>" \
-  --slot staging \
-  --target-slot production
-```
+1. **SHA Rollback via GitHub Actions (Recommended):** Run [`.github/workflows/deploy-by-sha.yml`](file:///.github/workflows/deploy-by-sha.yml) with the last known good commit SHA and target environment.
+2. **Deployment Slot Swap (If Slots Configured):**
+   ```bash
+   az functionapp deployment slot swap \
+     --resource-group "<RESOURCE_GROUP_NAME>" \
+     --name "<FUNCTION_APP_NAME>" \
+     --slot staging \
+     --target-slot production
+   ```
 
 ---
 
 ## Troubleshooting & Common Pitfalls
 
-### 1. `System.IO.FileNotFoundException: Could not load file or assembly`
-- **Cause**: The application was published framework-dependent without .NET 10 installed on the host container.
-- **Fix**: Ensure `--self-contained true` and `-r linux-x64` are specified when running `dotnet publish` (per [ADR 0006](decisions/0006-flex-consumption-self-contained-deployment.md)).
-
-### 2. `403 Forbidden` / `DefaultAzureCredential failed`
-- **Cause**: Function App Managed Identity lacks the required RBAC role on the Azure Storage account.
-- **Fix**: Assign the **Storage Blob Data Contributor** role to the Function App's System-Assigned Managed Identity on the target storage account.
-
-### 3. `Blob storage container does not exist`
-- **Cause**: Azure Storage account exists, but the landing container (`edc-landing`) has not been initialized.
-- **Fix**: Deploy with self-healing container initialization enabled (per [ADR 0016](decisions/0016-self-healing-storage-container-initialisation.md)) or create the container manually:
-  ```bash
-  az storage container create --account-name "<STORAGE_ACCOUNT>" --name "edc-landing" --auth-mode login
-  ```
-
-### 4. GitHub Actions Deployment Error: `Federated token validation failed`
-- **Cause**: The GitHub repository, branch, or environment name does not match the Subject Identifier configured in Entra ID.
-- **Fix**: Verify that the federated credential subject matches `repo:<org>/<repo>:environment:<environment_name>`.
+1. **`System.IO.FileNotFoundException: Could not load file or assembly`**
+   - Ensure `--self-contained true -r linux-x64` is used when publishing for Flex Consumption ([ADR 0006](decisions/0006-flex-consumption-self-contained-deployment.md)).
+2. **`403 Forbidden` / `DefaultAzureCredential failed`**
+   - Assign **Storage Blob Data Contributor** to the Function App's Managed Identity on the target storage account.
+3. **`Blob storage container does not exist`**
+   - Ensure `schemas`, `draft-schemas`, `payloads`, and `processed` exist (or enable self-healing container initialisation per [ADR 0016](decisions/0016-self-healing-storage-container-initialisation.md)).
+4. **AdminUi `401 Unauthorized` calling Admin API**
+   - Verify `AdminUi__ExecutionMode=HttpProxy`, `AdminUi__AdminApiBaseUrl` ends with `/api`, and `AdminUi__AdminApiFunctionKey` matches a valid host/function key on `AzureFunctions.Admin`.
+5. **GitHub Actions `Federated token validation failed`**
+   - Confirm the Entra ID federated credential subject matches `repo:<org>/<repo>:environment:<environment_name>`.
 
 ---
 
@@ -276,5 +267,10 @@ az functionapp deployment slot swap \
 - [ADR 0014: Segregated Multi-Workflow CI/CD with Composite Actions](decisions/0014-segregated-multi-workflow-ci-cd-with-composite-actions.md)
 - [ADR 0015: Calendar Versioning (CalVer) and Log Enrichment](decisions/0015-calendar-versioning-calver-and-log-enrichment.md)
 - [ADR 0016: Self-Healing Storage Container Initialisation](decisions/0016-self-healing-storage-container-initialisation.md)
+- [ADR 0017: Server-Side Rendered Admin Portal & Proxy-Only API Boundary](decisions/0017-ssr-admin-portal-and-proxy-boundary.md)
+- [ADR 0019: Configurable Schema-Verified Identifier Extraction & Blob Partitioning](decisions/0019-configurable-schema-verified-identifier-partitioning.md)
+- [ADR 0020: Stored Schema Regression Test Suites & Soft Warnings](decisions/0020-schema-regression-test-suites-and-soft-warnings.md)
+- [ADR 0021: Isolated Ephemeral Azurite Containers & Automatic Test Storage Cleanup](decisions/0021-isolated-ephemeral-azurite-test-containers.md)
+- [ADR 0022: Authoring Schema Regression Test Fixtures & Expected Errors](decisions/0022-authoring-schema-test-fixtures-and-expected-errors.md)
 - [GitHub Actions Multi-Environment Guide](deployment/github-actions-multi-environment.md)
 - [GitHub Deployments Dashboard Guide](deployment/github-deployments.md)

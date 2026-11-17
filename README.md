@@ -1,11 +1,30 @@
 # Estate Data Collection (EDC) Service
 
-Machine-to-machine data ingestion platform for the Department for Education (DfE) Education Estates Directorate (EED). 
-The service evaluates incoming condition surveys against dynamic JSON Schema contracts, manages draft upload sessions, maintains an append-only document cache, and orchestrates contracts and payloads across dedicated Blob Storage containers (`schemas`, `payloads`, `processed`), preparing for downstream Common Data Environment (CDE) injection.
+Data ingestion, dynamic contract governance, and regression testing platform for the **Department for Education (DfE) Education Estates Directorate (EED)**.
+
+The service evaluates incoming survey and estate payloads against versioned **JSON Schema (Draft 2020-12 / Draft-07)** and **ODCS v3.2.0 YAML** contracts with attached **JsonLogic** and **CEL** business quality rules, performs configurable **schema-verified establishment identifier extraction** (`URN`, `LAEstab`, `UKPRN`, custom pointer, or omitted), orchestrates draft and finalised submissions across dedicated Azure Blob Storage containers (`schemas`, `draft-schemas`, `payloads`, `processed`), and provides a **DfE / GOV.UK Design System SSR Admin Portal** for contract verification, lifecycle scheduling, and automated regression test execution.
 
 For full architectural deep-dives and design decisions, see:
 - [System Architecture Guide](ARCHITECTURE.md)
-- [Architecture Decision Records (ADRs)](docs/decisions/DECISIONS.md)
+- [Architecture Decision Records (ADRs)](docs/DECISIONS.md) (including [ADR 0022: Authoring Schema Test Fixtures & Expected Errors](docs/decisions/0022-authoring-schema-test-fixtures-and-expected-errors.md))
+- [Deployment & Operations Guide](docs/DEPLOYMENT.md)
+
+---
+
+## Solution Topology
+
+The solution splits responsibilities cleanly across Clean Architecture layers and three isolated **.NET 10 Azure Functions** hosts plus an SSR UI Razor Class Library:
+
+| Project | Role | Default Local Port |
+| :--- | :--- | :--- |
+| `src/EstateDataCollection.Domain` | Core entities (`SchemaMetadata`, `SubmissionSession`, `SubmissionIdentifier`, `SchemaIdentifierConfig`, `InvalidFixtureParser`) and invariants | — |
+| `src/EstateDataCollection.Application` | `IUseCase<TResult, TRequest>` handlers (`GetSchemas`, `GetSchemaDetail`, `VerifySchema`, `SubmitSchema`, `ScheduleSchema`, `IngestDraftSchema`, `UpdateSchemaTests`, `RunSchemaTests`, `CreateSubmission`, `UpdateSubmission`, `FinaliseSubmission`) | — |
+| `src/EstateDataCollection.Infrastructure` | `JsonSchema.Net`, `OdcsContractParser`, `JsonLogic` & `CEL` engines, `IdentifierSchemaValidator`, and Azure Blob Storage repositories | — |
+| `src/EstateDataCollection.Common` & `Common.Web` | `Result<T>`, `Error`, CalVer `AppVersionProvider`, Scrutor registration, `FunctionEndpointBase`, and worker middleware | — |
+| `src/EstateDataCollection.Admin.UI` | Server-Side Rendered GOV.UK / DfE Razor pages, components, **Zero-Logic Presentation ViewModels**, and embedded static assets | — |
+| `src/EstateDataCollection.AzureFunctions.Public` | Public M2M ingestion and schema discovery API (`/api/schemas*`, `/api/submissions*`, `/api/about`) | `http://localhost:7071` |
+| `src/EstateDataCollection.AzureFunctions.Admin` | Admin API (`/api/schemas*`, `/api/logic/verify`, `/api/schemas/tests/run`) & Event Grid draft ingestion (`IngestDraftSchemaEvent`) | `http://localhost:7072` |
+| `src/EstateDataCollection.AzureFunctions.AdminUi` | SSR Admin Portal (`/manage`, `/manage/workbench`, `/manage/schemas/{name}/{v}/tests`, `/assets/*`) operating in `Direct` or `HttpProxy` mode | `http://localhost:7073` |
 
 ---
 
@@ -15,41 +34,41 @@ For full architectural deep-dives and design decisions, see:
 sequenceDiagram
     autonumber
     participant Client as Surveyor / M2M Client
-    participant Func as SubmissionFunctions (Azure Functions)
+    participant Func as Public Functions Host (:7071)
     participant UC as Application Use Cases
     participant Payloads as "payloads" Container (Drafts)
     participant Processed as "processed" Container (CDE Ready)
 
-    Note over Client,Processed: Step 1: Initialize Session (Pins Schema Version)
+    Note over Client,Processed: Step 1: Initialize Session (Pins Schema Version & Identifier Config)
     Client->>Func: POST /api/submissions/{schemaName}?version=x
     Func->>UC: CreateSubmissionSession(schemaName, version?)
-    UC->>Payloads: Create session metadata (Pins SchemaName, Version, Status: Draft)
+    UC->>Payloads: Create session metadata (Pins SchemaName, Version, IdentifierConfig, Status: Draft)
     Payloads-->>UC: SubmissionId (UUIDv7)
     UC-->>Func: Created(SubmissionId, PinnedSchemaVersion)
     Func-->>Client: 201 Created { submissionId: "0192e...", pinnedVersion: 2 }
 
-    Note over Client,Processed: Step 2: Upload Partial / Draft Payloads (Iterative)
+    Note over Client,Processed: Step 2: Upload Partial / Draft Payloads (Schema + Business Rules + Identifier)
     loop Multiple Partial Saves
         Client->>Func: PUT /api/submissions/{submissionId} (Raw JSON)
         Func->>UC: SaveDraftPayload(submissionId, rawJson)
-        UC->>Payloads: Load pinned schema version for this submissionId
-        UC->>UC: Validate current JSON against pinned schema
+        UC->>Payloads: Load pinned schema, quality rules, and identifier config
+        UC->>UC: Validate JSON Schema + JsonLogic/CEL + Identifier extraction
         UC->>Payloads: Save payload draft to "payloads/"
         UC-->>Func: Result { isValid, validationErrors }
-        Func-->>Client: 200 OK { status: "DraftSaved", isValid: false, pendingErrors: ["school_address is required"] }
+        Func-->>Client: 200 OK { status: "DraftSaved", isValid: false, pendingErrors: [...] }
     end
 
-    Note over Client,Processed: Step 3: Finalize & Promote for CDE
+    Note over Client,Processed: Step 3: Finalise & Promote for CDE
     Client->>Func: POST /api/submissions/{submissionId}/finalise
-    Func->>UC: FinalizeSubmission(submissionId)
-    UC->>Payloads: Load draft & pinned schema
-    UC->>UC: Strict validation check
+    Func->>UC: FinaliseSubmission(submissionId)
+    UC->>Payloads: Load draft & pinned contract
+    UC->>UC: Strict 3-stage validation (Schema + Rules + Required Identifier)
     alt Still Invalid
-        UC-->>Func: 422 Unprocessable Entity (Cannot finalize incomplete survey)
+        UC-->>Func: 422 Unprocessable Entity (Cannot finalise incomplete survey)
         Func-->>Client: 422 Unprocessable Entity { errors }
     else Valid & Complete
-        UC->>Processed: Copy payload to "processed/" with CDE readiness tags
-        UC->>Payloads: Delete or archive draft from "payloads/"
+        UC->>Processed: Promote payload to "{idType}={idValue}/schema={name}/v={v}/{id}.json" (or "unidentified/...")
+        UC->>Payloads: Delete draft from "payloads/"
         UC-->>Func: Result { status: "ReadyForCde", finalizedAt }
         Func-->>Client: 200 OK { submissionId, status: "ReadyForCde" }
     end
@@ -57,18 +76,30 @@ sequenceDiagram
 
 ---
 
+## Admin Portal & Schema Regression Testing
+
+Navigate to **`http://localhost:7073/manage`** when running `EstateDataCollection.AzureFunctions.AdminUi`:
+
+- **Schema Catalogue Dashboard (`/manage`)**: Displays schema families, version lifecycle tags (`Draft`, `Validated`, `Scheduled`, `Active`, `Deprecated`, `Retired`), **last regression test run state** (`Passed`, `Passed (warnings)`, `Failed`, `Not run` + UTC timestamp) on every version card, and a one-click **Run All Schema Tests** button.
+- **Contract Workbench (`/manage/workbench`)**: Dry-run verify or ingest **ODCS v3.2.0 YAML** or **JSON Schema + JsonLogic/CEL rules**, auto-discover scalar identifier properties from the contract AST (`URN`, `LAEstab`, `UKPRN`, custom pointer, or `None`), and test candidate valid/invalid fixtures before saving.
+- **Schema Detail (`/manage/schemas/{name}/{version}/details`) & Lifecycle Scheduling (`.../schedule`)**: Inspect extracted field trees, rule definitions, raw schema JSON, identifier settings, and manage Effective From / Effective To windows.
+- **Stored Regression Test Suite Editor (`.../tests`)**: View stored `v{version}.valid.json` and `v{version}.invalid.json` fixtures, see triggered rule/schema/identifier diagnostics, configure strict `"expectedErrors"` assertions (with non-blocking `"Failed — unknown if expected"` soft warnings for legacy bare payloads), edit/save fixtures without mutating the immutable schema, and execute per-version test runs.
+- **Zero-Logic Razor Architecture ([ADR 0018](docs/decisions/0018-zero-logic-razor-views-and-presentation-viewmodels.md))**: All `.razor` pages and GOV.UK components are purely declarative; formatting, CSS class resolution, error binding, and visibility flags live in `Models/ViewModels/*.cs`.
+
+---
+
 ## Observability, Logging & Instrumentation
 
-The solution implements a zero-allocation, high-performance structured logging architecture using compile-time source-generated loggers and OpenTelemetry:
+The solution implements zero-allocation structured logging using compile-time `[LoggerMessage]` source generators and OpenTelemetry:
 
 ```mermaid
 flowchart TD
     App[Application Use Cases] -->|Typed Calls| IInst[IInstrumentation Classes]
     Infra[Infrastructure Adapters] -->|Typed Calls| IInst
-    Routes[Function HTTP Routes] -->|Typed Calls| IInst
+    Routes[Function HTTP & Event Routes] -->|Typed Calls| IInst
 
     IInst -->|[LoggerMessage] Source Generator| MSLog[Microsoft.Extensions.Logging]
-    
+
     MSLog --> Console[Console / Terminal Stream]
     MSLog --> OTEL[OpenTelemetry SDK]
     MSLog --> AppInsights[Application Insights Worker Service]
@@ -78,47 +109,12 @@ flowchart TD
 ```
 
 ### 1. `IInstrumentation` Pattern
-- **Marker Interface**: All instrumentation classes implement `IInstrumentation` (`EstateDataCollection.Common.Markers.IInstrumentation`).
-- **Automatic Registration**: Scrutor scans and registers all `IInstrumentation` implementations as transient dependencies (`services.AddClasses(c => c.AssignableTo<IInstrumentation>()).AsSelf().WithTransientLifetime()`).
-- **Zero-Allocation Logging**: Methods use C# compile-time `[LoggerMessage]` source generators:
-  - `VerifySchemaUseCaseInstrumentation`
-  - `SubmitSchemaUseCaseInstrumentation`
-  - `CreateSubmissionUseCaseInstrumentation`
-  - `UpdateSubmissionUseCaseInstrumentation`
-  - `FinaliseSubmissionUseCaseInstrumentation`
-  - `BlobSchemaRegistryInstrumentation`
-  - `BlobSubmissionInfrastructureInstrumentation`
-  - `JsonSchemaNetValidatorInstrumentation`
-  - `SchemaFunctionsInstrumentation`
-  - `SubmissionFunctionsInstrumentation`
+- **Marker Interface**: All instrumentation classes implement `IInstrumentation` (`EstateDataCollection.Common.Markers.IInstrumentation`) and are registered automatically via Scrutor.
+- **Zero-Allocation Logging**: Includes instrumentation for use cases (`VerifySchema`, `SubmitSchema`, `ScheduleSchema`, `IngestDraftSchema`, `UpdateSchemaTests`, `RunSchemaTests`, `CreateSubmission`, `UpdateSubmission`, `FinaliseSubmission`), infrastructure (`BlobSchemaRegistry`, `BlobSubmissionInfrastructure`, `JsonSchemaNetValidator`, `OdcsContractParser`, `JsonLogicValidator`), and shared HTTP endpoints (`FunctionEndpointInstrumentation`).
 
-### 2. Logging & Host Configuration
-- **`host.json`**: Configures log levels for the Azure Functions Host runtime to prevent suppression of custom namespaces:
-  ```json
-  {
-    "version": "2.0",
-    "logging": {
-      "applicationInsights": {
-        "samplingSettings": {
-          "isEnabled": true,
-          "excludedTypes": "Request"
-        }
-      },
-      "logLevel": {
-        "default": "Information",
-        "Function": "Information",
-        "Host.Results": "Information",
-        "Host.Aggregator": "Information",
-        "EstateDataCollection": "Information"
-      }
-    }
-  }
-  ```
-- **`DependencyInjection.AddLogging`**: Centralised in `EstateDataCollection.AzureFunctions`:
-  - Registers `logging.AddConsole()` and sets the minimum log level to `LogLevel.Information`.
-  - Removes the default Application Insights filter that suppresses `< Warning` logs for custom categories.
-  - Automatically configures `ConfigureFunctionsApplicationInsights()` if `APPLICATIONINSIGHTS_CONNECTION_STRING` is present.
-  - Registers OpenTelemetry Tracing (`EstateDataCollection.*`, `Microsoft.Azure.Functions.Worker`) and Metrics.
+### 2. Shared Web Host Setup (`EstateDataCollection.Common.Web`)
+- [`DependencyInjection.AddLogging`](src/EstateDataCollection.Common.Web/DependencyInjection.cs#L48-L85) configures console logging (`Information`), removes the default Application Insights `< Warning` filter suppression, optionally binds Azure App Configuration, and wires `ConfigureFunctionsApplicationInsights()`.
+- `UseFunctionsMiddleware()` registers `RequestSizeLimitMiddleware`, `GlobalExceptionMiddleware`, and `VersionLoggingMiddleware` (stamping CalVer `service.version` onto request log scopes and traces).
 
 ---
 
@@ -127,14 +123,12 @@ flowchart TD
 ### 1. Prerequisites
 - **.NET 10 SDK**
 - **Azure Functions Core Tools v4** (`brew install azure-functions-core-tools@4` on macOS)
-- **Docker** (for Azurite local storage emulator)
+- **Docker** (for Azurite local storage emulator; also auto-managed by integration tests)
 - **Azure CLI** (optional, for cloud deployments)
-
----
 
 ### 2. Running Azurite with Docker
 
-Launch Azurite in Docker exposing the default ports:
+Launch Azurite exposing the default ports:
 
 ```bash
 docker run -d -p 10000:10000 -p 10001:10001 -p 10002:10002 \
@@ -142,122 +136,68 @@ docker run -d -p 10000:10000 -p 10001:10001 -p 10002:10002 \
   mcr.microsoft.com/azure-storage/azurite
 ```
 
-#### Create Required Blob Containers
-The application relies on three containers: `schemas`, `payloads`, and `processed`:
+Create the four local containers (`schemas`, `draft-schemas`, `payloads`, `processed`):
 
 ```bash
-# Connection string for Azurite default emulator
 AZURITE_CONN="DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
 
-# Create the three required containers
 az storage container create --name schemas --connection-string "$AZURITE_CONN"
+az storage container create --name draft-schemas --connection-string "$AZURITE_CONN"
 az storage container create --name payloads --connection-string "$AZURITE_CONN"
 az storage container create --name processed --connection-string "$AZURITE_CONN"
 ```
 
----
-
 ### 3. Local Configuration (`local.settings.json`)
 
-The file `src/EstateDataCollection.AzureFunctions/local.settings.json` is pre-configured for local testing:
+Copy each host's `local.settings.example.json` to `local.settings.json` (git-ignored):
 
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
-    "AZURE_APPCONFIGURATION_ENDPOINT": "",
-    "ConnectionStrings:BlobStorage": "UseDevelopmentStorage=true",
-    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:57382"
-  },
-  "Blob:Schema": {
-    "ContainerName": "schemas",
-    "CacheKey": "schema:{schemaName}:v{version}",
-    "SchemaBlobDirectory": "{schemaName}/v{version}.schema.json",
-    "MetaBlobDirectory": "{schemaName}/v{version}.meta.json"
-  },
-  "Blob:Submission": {
-    "PayloadsContainerName": "payloads",
-    "ProcessedContainerName": "processed",
-    "DraftSessionBlobFormat": "{submissionId}/session.json",
-    "DraftPayloadBlobFormat": "{submissionId}/draft.json",
-    "ProcessedBlobFormat": "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
-  }
-}
+```bash
+cp src/EstateDataCollection.AzureFunctions.Public/local.settings.example.json src/EstateDataCollection.AzureFunctions.Public/local.settings.json
+cp src/EstateDataCollection.AzureFunctions.Admin/local.settings.example.json src/EstateDataCollection.AzureFunctions.Admin/local.settings.json
+cp src/EstateDataCollection.AzureFunctions.AdminUi/local.settings.example.json src/EstateDataCollection.AzureFunctions.AdminUi/local.settings.json
 ```
 
----
+Key `AdminUi` settings in `EstateDataCollection.AzureFunctions.AdminUi/local.settings.json`:
+- `AdminUi:ExecutionMode`: `"Direct"` (executes use cases in-process against Azurite) or `"HttpProxy"` (forwards calls via HTTP to `AdminUi:AdminApiBaseUrl`, e.g. `http://localhost:7072/api`, using `AdminUi:AdminApiFunctionKey`).
 
 ### 4. Running Locally
 
+Run any or all of the three hosts in separate terminals:
+
 ```bash
-cd src/EstateDataCollection.AzureFunctions
-func start
+# Public Ingestion & Schema Discovery API (http://localhost:7071/api)
+func start --script-root src/EstateDataCollection.AzureFunctions.Public --port 7071
+
+# Admin Contract Management & Test API (http://localhost:7072/api)
+func start --script-root src/EstateDataCollection.AzureFunctions.Admin --port 7072
+
+# SSR Admin Portal UI (http://localhost:7073/manage)
+func start --script-root src/EstateDataCollection.AzureFunctions.AdminUi --port 7073
 ```
-
-The host will start on `http://localhost:7071/api`.
-
----
 
 ### 5. Running Automated Tests
 
-Run the full automated test suite (60 unit and integration tests):
+Run the full automated solution suite (**227 tests**: 169 unit tests + 58 integration tests):
 
 ```bash
-dotnet test
+dotnet test EstateDataCollection.slnx
 ```
 
-All test methods follow the human-readable behavioural naming pattern:
-`When_Condition_It_Should_ExpectedBehavior`
+> **Storage Isolation ([ADR 0021](docs/decisions/0021-isolated-ephemeral-azurite-test-containers.md)):** `AzuriteFixture` executes integration tests inside unique `test-{runId}-*` containers and deletes them on teardown. If local Azurite on port `10000` is not running, the fixture automatically starts and tears down an ephemeral Azurite Docker container on a free port—leaving local development containers untouched.
 
----
+### 6. Testing with the `.http` Files
 
-### 6. Testing with the `.http` File
-
-Use [EstateDataCollection.http](src/EstateDataCollection.AzureFunctions/EstateDataCollection.http) directly inside JetBrains Rider or VS Code (REST Client):
-
-1. **Verify Candidate Schema**: Execute `1.1 Verify Schema Candidate` (tests Draft 2020-12 syntax and fixtures).
-2. **Publish Schema v1**: Execute `1.2 Submit & Schedule Schema v1` to upload the contract into Azurite's `schemas` container.
-3. **Start a Survey Session**: Execute `2.2 Create Submission Session` (creates session, pins v1, returns `submissionId`).
-4. **Iterative Draft Uploads**: Execute `2.3` through `2.5` to test partial uploads with real-time JSON Schema validation feedback.
-5. **Finalize**: Execute `2.7 Finalise Submission` to seal the survey and move it to `processed/` with `ReadyForCde`.
+Use [EstateDataCollection.Admin.http](src/EstateDataCollection.AzureFunctions.Admin/EstateDataCollection.Admin.http) or [EstateDataCollection.http](src/EstateDataCollection.AzureFunctions/EstateDataCollection.http) directly inside JetBrains Rider or VS Code (REST Client) to walk through:
+1. ODCS YAML / JSON Schema verification & JsonLogic/CEL quality rules verification.
+2. Schema submission, lifecycle scheduling (`Schedule` / `Activate` / `Deprecate` / `Retire`), and identifier config (`URN`, `LAEstab`, `None`).
+3. Two-step survey submission sessions, draft saves, and promotion to `processed/`.
 
 ---
 
 ## Azure Deployment (Flex Consumption)
 
-### Key Configuration Considerations
-1. **`FUNCTIONS_WORKER_RUNTIME`**: On Azure Flex Consumption, do **not** define `FUNCTIONS_WORKER_RUNTIME` in Application Settings; it is managed at the platform site-config level.
-2. **Storage Resolution**: Infrastructure supports connection strings (`AzureWebJobsStorage`, `DEPLOYMENT_STORAGE_CONNECTION_STRING`) or Managed Identity (`AzureWebJobsStorage__accountName`, `EDC_STORAGE_BLOB_ENDPOINT`).
-3. **`.funcignore`**: Pre-configured to prevent local debug symbols, temporary files, and test outputs from inflating the deployment zip.
+See the complete guide in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [ADR 0006](docs/decisions/0006-flex-consumption-self-contained-deployment.md).
 
-### Publishing to Azure
-
-#### Method A: Self-Contained Linux Publish (Recommended for .NET 10 on Linux Flex Consumption)
-Bundles the .NET 10 runtime directly into the deployment package to guarantee compatibility with Linux host images:
-
-```bash
-# 1. Publish self-contained for Linux x64
-dotnet publish src/EstateDataCollection.AzureFunctions \
-  -c Release \
-  -r linux-x64 \
-  --self-contained true \
-  -o ./publish-out
-
-# 2. Package and zip deploy via Azure CLI
-cd ./publish-out && zip -r ../deploy.zip . && cd ..
-az functionapp deployment source config-zip \
-  -g s251d01rg-uks-EstateDataCollection \
-  -n s251d01-edc-func \
-  --src ./deploy.zip
-
-# 3. Clean up build artifacts
-rm -rf ./publish-out ./deploy.zip
-```
-
-#### Method B: Via Azure Functions Core Tools
-```bash
-cd src/EstateDataCollection.AzureFunctions
-func azure functionapp publish s251d01-edc-func
-```
+- **Self-contained `linux-x64` packages:** Published via `.github/actions/setup-and-test/action.yml` for `EstateDataCollection.AzureFunctions.Public` (`edc-functions-public-linux-x64.zip`) and `EstateDataCollection.AzureFunctions.Admin` (`edc-functions-admin-linux-x64.zip`), and optionally `EstateDataCollection.AzureFunctions.AdminUi`.
+- **`FUNCTIONS_WORKER_RUNTIME`:** Do **not** set in Flex Consumption App Settings (managed at the platform `functionAppConfig` runtime level).
+- **Storage auth:** Supports Managed Identity (`AzureWebJobsStorage__accountName`, `BlobStorageOptions__ServiceUri`) or connection strings (`ConnectionStrings__BlobStorage`).
