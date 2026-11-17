@@ -1,17 +1,20 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using Azure.Storage.Blobs;
 using Xunit;
 
 namespace EstateDataCollection.Tests.Integration.Fixtures;
 
 /// <summary>
-/// Provides a live Azurite Blob Storage client for integration tests.
-/// Uses an already-running Azurite instance on 127.0.0.1:10000 if available (e.g. GitHub Actions service container),
+/// Provides an isolated, live Azurite Blob Storage client for integration tests.
+/// Uses an already-running Azurite instance on 127.0.0.1:10000 if available (e.g. local dev or CI service container),
 /// and otherwise launches an ephemeral Azurite Docker container automatically on a free host port.
+/// Every run operates inside unique <c>test-{runId}-*</c> containers and deletes them on <see cref="DisposeAsync"/>
+/// so local development containers (<c>schemas</c>, <c>draft-schemas</c>, <c>payloads</c>, <c>processed</c>) stay clean.
 /// </summary>
-public sealed class AzuriteFixture : IAsyncLifetime
+public sealed partial class AzuriteFixture : IAsyncLifetime
 {
     private const string AccountName = "devstoreaccount1";
     private const string AccountKey =
@@ -20,8 +23,22 @@ public sealed class AzuriteFixture : IAsyncLifetime
     public const string DefaultConnectionString =
         $"DefaultEndpointsProtocol=http;AccountName={AccountName};AccountKey={AccountKey};BlobEndpoint=http://127.0.0.1:10000/{AccountName};";
 
+    private readonly string _runId = Guid.NewGuid().ToString("N")[..12];
     private string? _ownedContainerId;
     private string? _dockerExecutable;
+
+    public string SchemasContainerName => $"test-{_runId}-schemas";
+    public string DraftSchemasContainerName => $"test-{_runId}-draft-schemas";
+    public string PayloadsContainerName => $"test-{_runId}-payloads";
+    public string ProcessedContainerName => $"test-{_runId}-processed";
+
+    public IReadOnlyList<string> ContainerNames =>
+    [
+        SchemasContainerName,
+        DraftSchemasContainerName,
+        PayloadsContainerName,
+        ProcessedContainerName
+    ];
 
     public string ConnectionString { get; private set; } = DefaultConnectionString;
     public BlobServiceClient Client { get; private set; } = null!;
@@ -43,10 +60,26 @@ public sealed class AzuriteFixture : IAsyncLifetime
 
         Client = new BlobServiceClient(ConnectionString);
         await EnsureContainersAsync();
+        await CleanupStaleTestContainersAsync(TimeSpan.FromHours(1));
     }
 
     public async Task DisposeAsync()
     {
+        if (Client is not null)
+        {
+            foreach (var name in ContainerNames)
+            {
+                try
+                {
+                    await Client.GetBlobContainerClient(name).DeleteIfExistsAsync();
+                }
+                catch
+                {
+                    // Best-effort cleanup of test-run containers
+                }
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(_ownedContainerId) && !string.IsNullOrWhiteSpace(_dockerExecutable))
         {
             try
@@ -60,14 +93,21 @@ public sealed class AzuriteFixture : IAsyncLifetime
         }
     }
 
+    public static bool IsTestContainerName(string name)
+    {
+        return TestContainerPattern().IsMatch(name);
+    }
+
+    [GeneratedRegex(@"^test-[0-9a-f]{12}-(schemas|draft-schemas|payloads|processed)$", RegexOptions.CultureInvariant)]
+    private static partial Regex TestContainerPattern();
+
     private async Task EnsureContainersAsync()
     {
-        var containers = new[] { "schemas", "draft-schemas", "payloads", "processed" };
         for (var attempt = 0; attempt < 10; attempt++)
         {
             try
             {
-                foreach (var name in containers)
+                foreach (var name in ContainerNames)
                 {
                     await Client.GetBlobContainerClient(name).CreateIfNotExistsAsync();
                 }
@@ -78,6 +118,31 @@ public sealed class AzuriteFixture : IAsyncLifetime
             {
                 await Task.Delay(300);
             }
+        }
+    }
+
+    private async Task CleanupStaleTestContainersAsync(TimeSpan maxAge)
+    {
+        try
+        {
+            var cutoff = DateTimeOffset.UtcNow - maxAge;
+            await foreach (var container in Client.GetBlobContainersAsync(prefix: "test-"))
+            {
+                if (!IsTestContainerName(container.Name) ||
+                    ContainerNames.Contains(container.Name, StringComparer.Ordinal))
+                {
+                    continue;
+                }
+
+                if (container.Properties.LastModified <= cutoff)
+                {
+                    await Client.GetBlobContainerClient(container.Name).DeleteIfExistsAsync();
+                }
+            }
+        }
+        catch
+        {
+            // Best-effort sweep of orphaned containers from aborted runs
         }
     }
 
