@@ -326,3 +326,4 @@ Here is a list of items which are pretty good for further reading:
 
 1. [API Versioning in ASP.NET Core | What is API Versioning?](https://www.milanjovanovic.tech/blog/api-versioning-in-aspnetcore)
 2. [GitHub - dotnet/aspnet-api-versioning](https://github.com/dotnet/aspnet-api-versioning): Provides a set of libraries which add service API versioning to ASP.NET Core Minimal APIs, Controllers, gRPC, OData, and Web API (Classic).
+3. [Versioning within Azure Functions (Isolated Worker)](./versioning-within-azure-functions.md): Adapting CalVer + namespace conventions for `[HttpTrigger]` Azure Functions.
