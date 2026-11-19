@@ -9,7 +9,7 @@ using Microsoft.Azure.Functions.Worker;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class WorkbenchPageEndpoint(
+public sealed class GetWorkbenchPage(
     RazorComponentRenderer renderer,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionPageBase(renderer, instrumentation)

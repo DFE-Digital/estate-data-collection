@@ -13,7 +13,7 @@ namespace EstateDataCollection.AzureFunctions.Public.Routes;
 /// Updates an in-progress draft submission payload and returns any pending schema/quality validation errors.
 /// Route: PUT /submissions/{submissionId:guid}
 /// </summary>
-public sealed class UpdateSubmissionEndpoint(
+public sealed class PutUpdateSubmissionEndpoint(
     IUseCase<UpdateSubmissionResult, UpdateSubmissionRequest> updateUseCase,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionEndpointBase(instrumentation)

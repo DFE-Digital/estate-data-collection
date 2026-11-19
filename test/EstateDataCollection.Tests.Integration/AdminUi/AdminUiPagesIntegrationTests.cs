@@ -27,18 +27,18 @@ namespace EstateDataCollection.Tests.Integration.AdminUi;
 public sealed class AdminUiPagesIntegrationTests
 {
     private readonly IntegrationEndpointHarness _harness;
-    private readonly StaticAssetEndpoint _staticAssetEndpoint;
-    private readonly DashboardPageEndpoint _dashboardPageEndpoint;
-    private readonly SchemaDetailPageEndpoint _schemaDetailPageEndpoint;
-    private readonly SchemaTestsPageEndpoint _schemaTestsPageEndpoint;
-    private readonly UpdateSchemaVersionTestsEndpoint _updateSchemaVersionTestsEndpoint;
-    private readonly RunSchemaVersionTestsEndpoint _runSchemaVersionTestsEndpoint;
-    private readonly RunAllSchemaTestsEndpoint _runAllSchemaTestsEndpoint;
-    private readonly ScheduleSchemaPageEndpoint _scheduleSchemaPageEndpoint;
-    private readonly ScheduleSchemaSubmitEndpoint _scheduleSchemaSubmitEndpoint;
-    private readonly WorkbenchPageEndpoint _workbenchPageEndpoint;
-    private readonly WorkbenchVerifyEndpoint _workbenchVerifyEndpoint;
-    private readonly WorkbenchSubmitEndpoint _workbenchSubmitEndpoint;
+    private readonly GetStaticAssetEndpoint _staticAssetEndpoint;
+    private readonly GetDashboardPage _dashboardPageEndpoint;
+    private readonly GetSchemaDetailPage _schemaDetailPageEndpoint;
+    private readonly GetSchemaTestsPage _schemaTestsPageEndpoint;
+    private readonly PostUpdateSchemaVersionTestsEndpoint _updateSchemaVersionTestsEndpoint;
+    private readonly PostRunSchemaVersionTestsEndpoint _runSchemaVersionTestsEndpoint;
+    private readonly PostRunAllSchemaTestsEndpoint _runAllSchemaTestsEndpoint;
+    private readonly GetScheduleSchemaPage _scheduleSchemaPageEndpoint;
+    private readonly PostScheduleSchemaSubmitEndpoint _scheduleSchemaSubmitEndpoint;
+    private readonly GetWorkbenchPage _workbenchPageEndpoint;
+    private readonly PostWorkbenchVerifyEndpoint _workbenchVerifyEndpoint;
+    private readonly PostWorkbenchSubmitEndpoint _workbenchSubmitEndpoint;
 
     public AdminUiPagesIntegrationTests(AzuriteFixture fixture)
     {
@@ -55,18 +55,18 @@ public sealed class AdminUiPagesIntegrationTests
         var runTestsUseCase = new RunSchemaTestsUseCase(_harness.SchemaRegistry);
         var updateTestsUseCase = new UpdateSchemaTestsUseCase(_harness.SchemaRegistry);
 
-        _staticAssetEndpoint = new StaticAssetEndpoint();
-        _dashboardPageEndpoint = new DashboardPageEndpoint(getSchemasUseCase, renderer);
-        _schemaDetailPageEndpoint = new SchemaDetailPageEndpoint(getSchemaDetailUseCase, renderer);
-        _schemaTestsPageEndpoint = new SchemaTestsPageEndpoint(getSchemaDetailUseCase, renderer);
-        _updateSchemaVersionTestsEndpoint = new UpdateSchemaVersionTestsEndpoint(updateTestsUseCase, getSchemaDetailUseCase, renderer);
-        _runSchemaVersionTestsEndpoint = new RunSchemaVersionTestsEndpoint(runTestsUseCase, getSchemaDetailUseCase, renderer);
-        _runAllSchemaTestsEndpoint = new RunAllSchemaTestsEndpoint(runTestsUseCase, getSchemasUseCase, renderer);
-        _scheduleSchemaPageEndpoint = new ScheduleSchemaPageEndpoint(getSchemaDetailUseCase, renderer);
-        _scheduleSchemaSubmitEndpoint = new ScheduleSchemaSubmitEndpoint(scheduleUseCase, getSchemaDetailUseCase, renderer);
-        _workbenchPageEndpoint = new WorkbenchPageEndpoint(renderer);
-        _workbenchVerifyEndpoint = new WorkbenchVerifyEndpoint(verifyUseCase, renderer);
-        _workbenchSubmitEndpoint = new WorkbenchSubmitEndpoint(submitUseCase, renderer);
+        _staticAssetEndpoint = new GetStaticAssetEndpoint();
+        _dashboardPageEndpoint = new GetDashboardPage(getSchemasUseCase, renderer);
+        _schemaDetailPageEndpoint = new GetSchemaDetailPage(getSchemaDetailUseCase, renderer);
+        _schemaTestsPageEndpoint = new GetSchemaTestsPage(getSchemaDetailUseCase, renderer);
+        _updateSchemaVersionTestsEndpoint = new PostUpdateSchemaVersionTestsEndpoint(updateTestsUseCase, getSchemaDetailUseCase, renderer);
+        _runSchemaVersionTestsEndpoint = new PostRunSchemaVersionTestsEndpoint(runTestsUseCase, getSchemaDetailUseCase, renderer);
+        _runAllSchemaTestsEndpoint = new PostRunAllSchemaTestsEndpoint(runTestsUseCase, getSchemasUseCase, renderer);
+        _scheduleSchemaPageEndpoint = new GetScheduleSchemaPage(getSchemaDetailUseCase, renderer);
+        _scheduleSchemaSubmitEndpoint = new PostScheduleSchemaSubmitEndpoint(scheduleUseCase, getSchemaDetailUseCase, renderer);
+        _workbenchPageEndpoint = new GetWorkbenchPage(renderer);
+        _workbenchVerifyEndpoint = new PostWorkbenchVerifyEndpoint(verifyUseCase, renderer);
+        _workbenchSubmitEndpoint = new PostWorkbenchSubmitEndpoint(submitUseCase, renderer);
     }
 
     private static async Task<HttpRequest> CreateFormRequestAsync(

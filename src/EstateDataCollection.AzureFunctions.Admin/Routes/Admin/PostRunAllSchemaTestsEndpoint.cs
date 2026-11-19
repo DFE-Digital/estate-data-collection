@@ -13,7 +13,7 @@ using Microsoft.Azure.Functions.Worker;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class RunAllSchemaTestsEndpoint(
+public sealed class PostRunAllSchemaTestsEndpoint(
     IUseCase<RunSchemaTestsResult, RunSchemaTestsRequest> runSchemaTestsUseCase,
     IUseCase<GetSchemasResult, GetSchemasRequest> getSchemasUseCase,
     RazorComponentRenderer renderer,

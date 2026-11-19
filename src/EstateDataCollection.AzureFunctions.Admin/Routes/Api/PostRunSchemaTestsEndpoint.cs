@@ -14,7 +14,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// and stored valid/invalid payload fixtures) across a single version or all active/non-retired schemas.
 /// Route: POST /api/schemas/tests/run
 /// </summary>
-public sealed class RunSchemaTestsEndpoint(
+public sealed class PostRunSchemaTestsEndpoint(
     IUseCase<RunSchemaTestsResult, RunSchemaTestsRequest> runTestsUseCase,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionEndpointBase(instrumentation)

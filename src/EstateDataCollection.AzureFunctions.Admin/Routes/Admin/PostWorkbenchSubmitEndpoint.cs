@@ -12,7 +12,7 @@ using Microsoft.Azure.Functions.Worker;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class WorkbenchSubmitEndpoint(
+public sealed class PostWorkbenchSubmitEndpoint(
     IUseCase<SubmitSchemaResult, SubmitSchemaRequest> submitUseCase,
     RazorComponentRenderer renderer,
     FunctionEndpointInstrumentation? instrumentation = null

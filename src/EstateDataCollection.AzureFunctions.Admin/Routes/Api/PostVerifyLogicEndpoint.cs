@@ -15,7 +15,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// Dry-run verification endpoint specifically for quality / business logic rules and fixtures.
 /// Route: POST /api/logic/verify
 /// </summary>
-public sealed class VerifyLogicEndpoint(
+public sealed class PostVerifyLogicEndpoint(
     IUseCase<VerifySchemaResult, VerifySchemaRequest> verifyUseCase,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionEndpointBase(instrumentation)

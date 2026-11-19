@@ -22,15 +22,15 @@ public class SubmissionFunctionsTests
     private readonly IUseCase<FinaliseSubmissionResult, FinaliseSubmissionRequest> _finaliseUseCase =
         Substitute.For<IUseCase<FinaliseSubmissionResult, FinaliseSubmissionRequest>>();
 
-    private readonly CreateSubmissionEndpoint _createEndpoint;
-    private readonly UpdateSubmissionEndpoint _updateEndpoint;
-    private readonly FinaliseSubmissionEndpoint _finaliseEndpoint;
+    private readonly PostCreateSubmissionEndpoint _createEndpoint;
+    private readonly PutUpdateSubmissionEndpoint _updateEndpoint;
+    private readonly PostFinaliseSubmissionEndpoint _finaliseEndpoint;
 
     public SubmissionFunctionsTests()
     {
-        _createEndpoint = new CreateSubmissionEndpoint(_createUseCase);
-        _updateEndpoint = new UpdateSubmissionEndpoint(_updateUseCase);
-        _finaliseEndpoint = new FinaliseSubmissionEndpoint(_finaliseUseCase);
+        _createEndpoint = new PostCreateSubmissionEndpoint(_createUseCase);
+        _updateEndpoint = new PutUpdateSubmissionEndpoint(_updateUseCase);
+        _finaliseEndpoint = new PostFinaliseSubmissionEndpoint(_finaliseUseCase);
     }
 
     [Fact]

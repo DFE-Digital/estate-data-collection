@@ -15,7 +15,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// Persists a verified schema version (JSON Schema + Quality Rules or ODCS YAML) as Validated (unscheduled).
 /// Route: POST /api/schemas/{schemaName}/versions/{version:int}
 /// </summary>
-public sealed class SubmitSchemaEndpoint(
+public sealed class PostSubmitSchemaEndpoint(
     IUseCase<SubmitSchemaResult, SubmitSchemaRequest> submitUseCase,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionEndpointBase(instrumentation)

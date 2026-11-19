@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class StaticAssetEndpoint(
+public sealed class GetStaticAssetEndpoint(
     FunctionEndpointInstrumentation? instrumentation = null
 ) : IFunctionEndpoint
 {

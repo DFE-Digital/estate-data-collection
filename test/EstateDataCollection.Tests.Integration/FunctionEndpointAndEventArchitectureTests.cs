@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Reflection;
 using AwesomeAssertions;
 using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application;
+using EstateDataCollection.AzureFunctions.Admin.PageBase;
 using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.AzureFunctions.Public.Routes;
 using EstateDataCollection.Common.Web;
@@ -30,7 +32,7 @@ public class FunctionEndpointAndEventArchitectureTests
 
     public static IEnumerable<object[]> FunctionHostAssemblies()
     {
-        yield return [typeof(VerifySchemaEndpoint).Assembly];
+        yield return [typeof(PostVerifySchemaEndpoint).Assembly];
         yield return [typeof(GetSchemasEndpoint).Assembly];
     }
 
@@ -63,6 +65,52 @@ public class FunctionEndpointAndEventArchitectureTests
 
             functionMethods.Should().ContainSingle(
                 $"{type.Name} must contain exactly one [Function] entry point (single-operation pattern).");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(FunctionHostAssemblies))]
+    public void Every_Function_Class_Should_Follow_HttpMethod_And_Role_Naming_Conventions(Assembly hostAssembly)
+    {
+        var functionTypes = hostAssembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } &&
+                        t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                            .Any(m => m.GetCustomAttribute<FunctionAttribute>() is not null))
+            .ToList();
+
+        functionTypes.Should().NotBeEmpty();
+
+        foreach (var type in functionTypes)
+        {
+            if (typeof(IFunctionEvent).IsAssignableFrom(type))
+            {
+                type.Name.Should().EndWith("Event",
+                    $"{type.Name} implements IFunctionEvent and should be named *Event.");
+                continue;
+            }
+
+            var trigger = type
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .SelectMany(m => m.GetParameters())
+                .Select(p => p.GetCustomAttribute<HttpTriggerAttribute>())
+                .FirstOrDefault(a => a is not null);
+
+            trigger.Should().NotBeNull($"{type.Name} implements IFunctionEndpoint and must declare an [HttpTrigger].");
+            trigger!.Methods.Should().ContainSingle(
+                $"{type.Name} should declare a single HTTP method for unambiguous naming.");
+
+            var expectedPrefix = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(
+                trigger.Methods!.Single().ToLowerInvariant());
+
+            type.Name.Should().StartWith(expectedPrefix,
+                $"{type.Name} handles HTTP {expectedPrefix} and should start with '{expectedPrefix}'.");
+
+            var isGetPage = typeof(FunctionPageBase).IsAssignableFrom(type) &&
+                            string.Equals(expectedPrefix, "Get", StringComparison.Ordinal);
+            var expectedSuffix = isGetPage ? "Page" : "Endpoint";
+
+            type.Name.Should().EndWith(expectedSuffix,
+                $"{type.Name} should end with '{expectedSuffix}'.");
         }
     }
 

@@ -13,7 +13,7 @@ namespace EstateDataCollection.AzureFunctions.Public.Routes;
 /// Creates a new draft submission session against an active schema version.
 /// Route: POST /submissions/{schemeName}
 /// </summary>
-public sealed class CreateSubmissionEndpoint(
+public sealed class PostCreateSubmissionEndpoint(
     IUseCase<CreateSubmissionResult, CreateSubmissionRequest> createUseCase,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionEndpointBase(instrumentation)

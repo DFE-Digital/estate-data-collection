@@ -47,22 +47,22 @@ public sealed class IntegrationEndpointHarness
     public BlobSchemaRegistry SchemaRegistry { get; }
     public BlobSubmissionInfrastructure SubmissionInfrastructure { get; }
 
-    public VerifySchemaEndpoint VerifySchema { get; }
-    public VerifyLogicEndpoint VerifyLogic { get; }
-    public SubmitSchemaEndpoint SubmitSchema { get; }
-    public ScheduleSchemaEndpoint ScheduleSchema { get; }
+    public PostVerifySchemaEndpoint VerifySchema { get; }
+    public PostVerifyLogicEndpoint VerifyLogic { get; }
+    public PostSubmitSchemaEndpoint SubmitSchema { get; }
+    public PatchScheduleSchemaEndpoint ScheduleSchema { get; }
     public GetAdminSchemasEndpoint GetAdminSchemas { get; }
     public GetAdminSchemaVersionDetailEndpoint GetAdminSchemaVersionDetail { get; }
-    public RunSchemaTestsEndpoint RunSchemaTests { get; }
-    public UpdateSchemaTestsEndpoint UpdateSchemaTests { get; }
+    public PostRunSchemaTestsEndpoint RunSchemaTests { get; }
+    public PutUpdateSchemaTestsEndpoint UpdateSchemaTests { get; }
     public IngestDraftSchemaEvent IngestDraftSchema { get; }
 
     public GetSchemasEndpoint PublicGetSchemas { get; }
     public GetSchemaByNameEndpoint PublicGetSchemaByName { get; }
     public GetSchemaVersionDetailEndpoint PublicGetSchemaVersionDetail { get; }
-    public CreateSubmissionEndpoint CreateSubmission { get; }
-    public UpdateSubmissionEndpoint UpdateSubmission { get; }
-    public FinaliseSubmissionEndpoint FinaliseSubmission { get; }
+    public PostCreateSubmissionEndpoint CreateSubmission { get; }
+    public PutUpdateSubmissionEndpoint UpdateSubmission { get; }
+    public PostFinaliseSubmissionEndpoint FinaliseSubmission { get; }
 
     public IntegrationEndpointHarness(AzuriteFixture fixture, Action<ValidationOptions>? configureValidation = null)
     {
@@ -127,22 +127,22 @@ public sealed class IntegrationEndpointHarness
         var updateUseCase = new UpdateSubmissionUseCase(SubmissionInfrastructure, SchemaRegistry, validator, validationService: payloadValidationService);
         var finaliseUseCase = new FinaliseSubmissionUseCase(SubmissionInfrastructure, SchemaRegistry, validator, validationService: payloadValidationService, validationOptions: validationOptions);
 
-        VerifySchema = new VerifySchemaEndpoint(verifyUseCase);
-        VerifyLogic = new VerifyLogicEndpoint(verifyUseCase);
-        SubmitSchema = new SubmitSchemaEndpoint(submitUseCase);
-        ScheduleSchema = new ScheduleSchemaEndpoint(scheduleUseCase);
+        VerifySchema = new PostVerifySchemaEndpoint(verifyUseCase);
+        VerifyLogic = new PostVerifyLogicEndpoint(verifyUseCase);
+        SubmitSchema = new PostSubmitSchemaEndpoint(submitUseCase);
+        ScheduleSchema = new PatchScheduleSchemaEndpoint(scheduleUseCase);
         GetAdminSchemas = new GetAdminSchemasEndpoint(getSchemasUseCase);
         GetAdminSchemaVersionDetail = new GetAdminSchemaVersionDetailEndpoint(getSchemaDetailUseCase);
         IngestDraftSchema = new IngestDraftSchemaEvent(ingestDraftUseCase);
-        RunSchemaTests = new RunSchemaTestsEndpoint(runSchemaTestsUseCase);
-        UpdateSchemaTests = new UpdateSchemaTestsEndpoint(updateSchemaTestsUseCase);
+        RunSchemaTests = new PostRunSchemaTestsEndpoint(runSchemaTestsUseCase);
+        UpdateSchemaTests = new PutUpdateSchemaTestsEndpoint(updateSchemaTestsUseCase);
 
         PublicGetSchemas = new GetSchemasEndpoint(getSchemasUseCase);
         PublicGetSchemaByName = new GetSchemaByNameEndpoint(getSchemasUseCase);
         PublicGetSchemaVersionDetail = new GetSchemaVersionDetailEndpoint(getSchemaDetailUseCase);
-        CreateSubmission = new CreateSubmissionEndpoint(createUseCase);
-        UpdateSubmission = new UpdateSubmissionEndpoint(updateUseCase);
-        FinaliseSubmission = new FinaliseSubmissionEndpoint(finaliseUseCase);
+        CreateSubmission = new PostCreateSubmissionEndpoint(createUseCase);
+        UpdateSubmission = new PutUpdateSubmissionEndpoint(updateUseCase);
+        FinaliseSubmission = new PostFinaliseSubmissionEndpoint(finaliseUseCase);
     }
 
     public static string UniqueName(string prefix)

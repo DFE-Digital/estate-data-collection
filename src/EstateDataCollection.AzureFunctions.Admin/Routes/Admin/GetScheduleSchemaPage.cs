@@ -14,7 +14,7 @@ using Microsoft.Azure.Functions.Worker;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class ScheduleSchemaPageEndpoint(
+public sealed class GetScheduleSchemaPage(
     IUseCase<SchemaVersionDetail, GetSchemaDetailRequest> getSchemaDetailUseCase,
     RazorComponentRenderer renderer,
     FunctionEndpointInstrumentation? instrumentation = null

@@ -18,7 +18,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// validates identifier extraction alignment, supports direct ODCS YAML contracts, and runs in-flight golden fixture checks without persisting to Blob.
 /// Route: POST /api/schemas/verify
 /// </summary>
-public sealed class VerifySchemaEndpoint(
+public sealed class PostVerifySchemaEndpoint(
     IUseCase<VerifySchemaResult, VerifySchemaRequest> verifyUseCase,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionEndpointBase(instrumentation)

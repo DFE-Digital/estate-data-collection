@@ -17,7 +17,7 @@ using Microsoft.Azure.Functions.Worker;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class ScheduleSchemaSubmitEndpoint(
+public sealed class PostScheduleSchemaSubmitEndpoint(
     IUseCase<ScheduleSchemaResult, ScheduleSchemaRequest> scheduleUseCase,
     IUseCase<SchemaVersionDetail, GetSchemaDetailRequest> getSchemaDetailUseCase,
     RazorComponentRenderer renderer,

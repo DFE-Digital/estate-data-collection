@@ -12,18 +12,18 @@ using Microsoft.Azure.Functions.Worker;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class SchemaTestsPageEndpoint(
+public sealed class GetSchemaDetailPage(
     IUseCase<SchemaVersionDetail, GetSchemaDetailRequest> getSchemaDetailUseCase,
     RazorComponentRenderer renderer,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionPageBase(renderer, instrumentation)
 {
-    public const string EndpointName = "AdminUiSchemaTestsPage";
+    public const string EndpointName = "AdminUiSchemaDetailPage";
 
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get),
-            Route = "manage/schemas/{schemaName}/{version:int}/tests")]
+            Route = "manage/schemas/{schemaName}/{version:int}/details")]
         HttpRequest http,
         string schemaName,
         int version,
@@ -36,21 +36,15 @@ public sealed class SchemaTestsPageEndpoint(
                 SchemaName: schemaName,
                 Version: version,
                 IncludeUnscheduled: true,
-                IncludeRawJsonSchema: false),
+                IncludeRawJsonSchema: true),
             cancellationToken);
 
-        var meta = CreatePageMeta(http, $"Tests - {schemaName} v{version}", activeNav: "schemas");
+        var meta = CreatePageMeta(http, $"{schemaName} v{version}", activeNav: "schemas");
 
         if (result.IsFailure)
         {
-            var errModel = new SchemaTestsViewModel(
-                Page: meta,
-                SchemaName: schemaName,
-                Version: version,
-                Detail: null,
-                PageError: result.Error);
-
-            return await RenderPageAsync<SchemaTestsPage, SchemaTestsViewModel>(
+            var errModel = new SchemaDetailViewModel(meta, Detail: null, PageError: result.Error);
+            return await RenderPageAsync<SchemaDetailPage, SchemaDetailViewModel>(
                 EndpointName,
                 errModel,
                 MapErrorToStatusCode(result.Error));
@@ -60,17 +54,12 @@ public sealed class SchemaTestsPageEndpoint(
         var notice = http.Query["notice"].ToString();
         string? successBanner = notice switch
         {
-            "updated" => $"Stored regression test payloads verified and saved for '{detail.SchemaName}' v{detail.Version}.",
+            "submitted" => $"Schema '{detail.SchemaName}' v{detail.Version} passed verification and was saved as Validated (unscheduled).",
+            "scheduled" => $"Lifecycle & schedule updated for '{detail.SchemaName}' v{detail.Version} (current state: {detail.State.Name}).",
             _ => null
         };
 
-        var model = new SchemaTestsViewModel(
-            Page: meta,
-            SchemaName: detail.SchemaName,
-            Version: detail.Version,
-            Detail: detail,
-            SuccessBanner: successBanner);
-
-        return await RenderPageAsync<SchemaTestsPage, SchemaTestsViewModel>(EndpointName, model);
+        var model = new SchemaDetailViewModel(meta, detail, SuccessBanner: successBanner);
+        return await RenderPageAsync<SchemaDetailPage, SchemaDetailViewModel>(EndpointName, model);
     }
 }

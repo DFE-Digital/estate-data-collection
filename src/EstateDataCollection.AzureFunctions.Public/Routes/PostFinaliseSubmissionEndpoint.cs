@@ -12,7 +12,7 @@ namespace EstateDataCollection.AzureFunctions.Public.Routes;
 /// Validates and finalises a draft submission, promoting it to the processed container.
 /// Route: POST /submissions/{submissionId:guid}/finalise
 /// </summary>
-public sealed class FinaliseSubmissionEndpoint(
+public sealed class PostFinaliseSubmissionEndpoint(
     IUseCase<FinaliseSubmissionResult, FinaliseSubmissionRequest> finaliseUseCase,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionEndpointBase(instrumentation)

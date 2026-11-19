@@ -15,7 +15,7 @@ using Microsoft.Azure.Functions.Worker;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class UpdateSchemaVersionTestsEndpoint(
+public sealed class PostUpdateSchemaVersionTestsEndpoint(
     IUseCase<UpdateSchemaTestsResult, UpdateSchemaTestsRequest> updateSchemaTestsUseCase,
     IUseCase<SchemaVersionDetail, GetSchemaDetailRequest> getSchemaDetailUseCase,
     RazorComponentRenderer renderer,

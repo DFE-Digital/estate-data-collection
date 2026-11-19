@@ -13,7 +13,7 @@ using Microsoft.Azure.Functions.Worker;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class WorkbenchVerifyEndpoint(
+public sealed class PostWorkbenchVerifyEndpoint(
     IUseCase<VerifySchemaResult, VerifySchemaRequest> verifyUseCase,
     RazorComponentRenderer renderer,
     FunctionEndpointInstrumentation? instrumentation = null

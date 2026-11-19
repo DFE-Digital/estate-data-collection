@@ -1,4 +1,3 @@
-using EstateDataCollection.Admin.UI.Models;
 using EstateDataCollection.Admin.UI.Models.ViewModels;
 using EstateDataCollection.Admin.UI.Pages;
 using EstateDataCollection.Admin.UI.Rendering;
@@ -12,36 +11,42 @@ using Microsoft.Azure.Functions.Worker;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
-public sealed class DashboardPageEndpoint(
+public sealed class GetSchemaVersionsPage(
     IUseCase<GetSchemasResult, GetSchemasRequest> getSchemasUseCase,
     RazorComponentRenderer renderer,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionPageBase(renderer, instrumentation)
 {
-    public const string EndpointName = "AdminUiDashboardPage";
+    public const string EndpointName = "AdminUiSchemaVersionsPage";
 
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get), Route = "manage")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get),
+            Route = "manage/schemas/{schemaName}/")]
         HttpRequest http,
+        string schemaName,
         CancellationToken cancellationToken)
     {
-        InstrumentInvoked(EndpointName, "dashboard");
+        InstrumentInvoked(EndpointName, schemaName);
 
         var result = await getSchemasUseCase.ExecuteAsync(
             new GetSchemasRequest(
-                SchemaName: null,
-                IncludeUnscheduled: true,
-                IncludeActiveVersionFields: false),
+                SchemaName: schemaName,
+                IncludeUnscheduled: true),
             cancellationToken);
 
-        var meta = CreatePageMeta(http, "Schema Contracts & Lifecycle", activeNav: "schemas");
+        var meta = CreatePageMeta(http, schemaName, activeNav: "schemas");
 
-        var model = result.IsSuccess
-            ? new DashboardViewModel(meta, result.Value.Schemas)
-            : new DashboardViewModel(meta, [], PageError: result.Error);
+        if (result.IsFailure)
+        {
+            var errModel = new SchemaVersionsViewModel(meta, Schema: null, PageError: result.Error);
+            return await RenderPageAsync<SchemaVersionsPage, SchemaVersionsViewModel>(
+                EndpointName,
+                errModel,
+                MapErrorToStatusCode(result.Error));
+        }
 
-        var statusCode = result.IsSuccess ? StatusCodes.Status200OK : MapErrorToStatusCode(result.Error);
-        return await RenderPageAsync<DashboardPage, DashboardViewModel>(EndpointName, model, statusCode);
+        var model = new SchemaVersionsViewModel(meta, result.Value.Schemas.First());
+        return await RenderPageAsync<SchemaVersionsPage, SchemaVersionsViewModel>(EndpointName, model);
     }
 }

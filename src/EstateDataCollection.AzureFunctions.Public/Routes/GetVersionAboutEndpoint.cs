@@ -11,7 +11,7 @@ namespace EstateDataCollection.AzureFunctions.Public.Routes;
 /// Health and build metadata endpoint.
 /// Route: GET /about
 /// </summary>
-public sealed class VersionAboutEndpoint(
+public sealed class GetVersionAboutEndpoint(
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionEndpointBase(instrumentation)
 {
