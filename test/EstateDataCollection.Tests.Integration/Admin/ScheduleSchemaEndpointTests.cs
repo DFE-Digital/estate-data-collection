@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
@@ -22,7 +23,7 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
     [InlineData("{malformed-json")]
     public async Task When_Body_Is_Empty_Or_Malformed_Should_Return_400_BadRequest(string rawBody)
     {
-        var result = await _harness.ScheduleSchema.HandleAsync(
+        var result = await _harness.Get<PatchScheduleSchemaEndpoint>().HandleAsync(
             HttpRequestBuilder.FromRaw(rawBody),
             "any_schema",
             1,
@@ -36,7 +37,7 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
     {
         var schemaName = await SubmitValidV1Async("sched_empty");
 
-        var res = await _harness.ScheduleSchema.HandleAsync(
+        var res = await _harness.Get<PatchScheduleSchemaEndpoint>().HandleAsync(
             HttpRequestBuilder.FromRaw("{}"),
             schemaName,
             1,
@@ -49,8 +50,9 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
     public async Task When_Unsupported_LifecycleAction_Or_Inverted_Dates_Should_Return_422_UnprocessableEntity()
     {
         var schemaName = await SubmitValidV1Async("sched_invalid");
+        var scheduleSchema = _harness.Get<PatchScheduleSchemaEndpoint>();
 
-        var badActionRes = await _harness.ScheduleSchema.HandleAsync(
+        var badActionRes = await scheduleSchema.HandleAsync(
             HttpRequestBuilder.FromJson(new ScheduleSchemaBodyDto(LifecycleAction: "InvalidAction")),
             schemaName,
             1,
@@ -58,7 +60,7 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
         badActionRes.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
 
         var now = DateTimeOffset.UtcNow;
-        var invertedRes = await _harness.ScheduleSchema.HandleAsync(
+        var invertedRes = await scheduleSchema.HandleAsync(
             HttpRequestBuilder.FromJson(new ScheduleSchemaBodyDto(
                 EffectiveFromUtc: now.AddDays(10),
                 EffectiveToUtc: now.AddDays(5),
@@ -73,15 +75,16 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
     public async Task When_Schema_Is_Retired_Attempting_To_Reschedule_Should_Return_422_UnprocessableEntity()
     {
         var schemaName = await SubmitValidV1Async("sched_retire");
+        var scheduleSchema = _harness.Get<PatchScheduleSchemaEndpoint>();
 
-        var retireRes = await _harness.ScheduleSchema.HandleAsync(
+        var retireRes = await scheduleSchema.HandleAsync(
             HttpRequestBuilder.FromJson(new ScheduleSchemaBodyDto(LifecycleAction: "Retire")),
             schemaName,
             1,
             CancellationToken.None);
         retireRes.ShouldHaveStatusCode(StatusCodes.Status200OK);
 
-        var rescheduleRes = await _harness.ScheduleSchema.HandleAsync(
+        var rescheduleRes = await scheduleSchema.HandleAsync(
             HttpRequestBuilder.FromJson(new ScheduleSchemaBodyDto(
                 EffectiveFromUtc: DateTimeOffset.UtcNow,
                 LifecycleAction: "Activate")),
@@ -96,7 +99,7 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
     {
         var schemaName = await SubmitValidV1Async("sched_bad_ptr");
 
-        var res = await _harness.ScheduleSchema.HandleAsync(
+        var res = await _harness.Get<PatchScheduleSchemaEndpoint>().HandleAsync(
             HttpRequestBuilder.FromJson(new ScheduleSchemaBodyDto(
                 EffectiveFromUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
                 LifecycleAction: "Activate",
@@ -130,7 +133,7 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
         """;
 
         var schemaName = IntegrationEndpointHarness.UniqueName("sched_opt_id");
-        (await _harness.SubmitSchema.HandleAsync(
+        (await _harness.Get<PostSubmitSchemaEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(
                     SchemaJson: optionalIdSchemaJson,
                     IdentifierConfig: new SchemaIdentifierConfig
@@ -143,7 +146,7 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
                 CancellationToken.None))
             .ShouldHaveStatusCode(StatusCodes.Status201Created);
 
-        var schedRes = await _harness.ScheduleSchema.HandleAsync(
+        var schedRes = await _harness.Get<PatchScheduleSchemaEndpoint>().HandleAsync(
             HttpRequestBuilder.FromJson(new ScheduleSchemaBodyDto(
                 EffectiveFromUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
                 LifecycleAction: "Activate",
@@ -163,7 +166,7 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
         scheduled.IdentifierConfig.JsonPointer.Should().Be("/establishment_id");
         scheduled.IdentifierConfig.Required.Should().BeFalse();
 
-        var detail = (await _harness.GetAdminSchemaVersionDetail.HandleAsync(
+        var detail = (await _harness.Get<GetAdminSchemaVersionDetailEndpoint>().HandleAsync(
                 HttpRequestBuilder.Empty(),
                 schemaName,
                 1,
@@ -176,7 +179,7 @@ public sealed class ScheduleSchemaEndpointTests(AzuriteFixture fixture)
     private async Task<string> SubmitValidV1Async(string prefix)
     {
         var schemaName = IntegrationEndpointHarness.UniqueName(prefix);
-        var res = await _harness.SubmitSchema.HandleAsync(
+        var res = await _harness.Get<PostSubmitSchemaEndpoint>().HandleAsync(
             HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(SchemaJson: JsonSchemaFixtures.ValidV1Schema)),
             schemaName,
             1,

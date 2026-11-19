@@ -1,3 +1,4 @@
+using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Integration.Builders;
 using EstateDataCollection.Tests.Integration.Extensions;
@@ -10,12 +11,12 @@ namespace EstateDataCollection.Tests.Integration.Admin;
 [Collection("AzuriteCollection")]
 public sealed class VerifyLogicEndpointTests(AzuriteFixture fixture)
 {
-    private readonly IntegrationEndpointHarness _harness = new(fixture);
+    private readonly IntegrationEndpointHarness<PostVerifyLogicEndpoint> _harness = new(fixture);
 
     [Fact]
     public async Task When_Body_Is_Empty_Should_Return_400_BadRequest()
     {
-        var result = await _harness.VerifyLogic.HandleAsync(
+        var result = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromRaw("  "),
             CancellationToken.None);
 
@@ -30,7 +31,7 @@ public sealed class VerifyLogicEndpointTests(AzuriteFixture fixture)
             .AddCelRule("RULE-CEL-1", "school.capacity", "School capacity must be positive", "school.capacity > 0")
             .BuildJson();
 
-        var result = await _harness.VerifyLogic.HandleAsync(
+        var result = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromRaw(rawRulesArray),
             CancellationToken.None);
 
@@ -44,7 +45,7 @@ public sealed class VerifyLogicEndpointTests(AzuriteFixture fixture)
             .AddCustomRule("RULE-SQL-1", "dbt-sql", "school", "Unsupported SQL rule", "SELECT 1")
             .BuildJson();
 
-        var result = await _harness.VerifyLogic.HandleAsync(
+        var result = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromRaw(unsupportedRules),
             CancellationToken.None);
 

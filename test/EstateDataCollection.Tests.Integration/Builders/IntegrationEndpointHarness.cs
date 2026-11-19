@@ -1,149 +1,97 @@
 using Azure.Storage.Blobs;
+using EstateDataCollection.Admin.UI.Rendering;
+using EstateDataCollection.Application;
 using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Models.Options;
-using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
-using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
-using EstateDataCollection.Application.UseCases.Schema.IngestDraftSchema;
-using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
-using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
-using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Application.UseCases.Submissions.CreateSubmission;
-using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
-using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
-using EstateDataCollection.Application.Validators;
-using EstateDataCollection.AzureFunctions.Admin.Events;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.AzureFunctions.Public.Routes;
+using EstateDataCollection.Common.Web;
+using EstateDataCollection.Domain;
 using EstateDataCollection.Domain.Schema;
+using EstateDataCollection.Infrastructure;
 using EstateDataCollection.Infrastructure.Persistence;
 using EstateDataCollection.Infrastructure.Registry;
-using EstateDataCollection.Infrastructure.Validation;
-using EstateDataCollection.Infrastructure.Validation.Engines;
 using EstateDataCollection.Tests.Integration.Extensions;
 using EstateDataCollection.Tests.Integration.Fixtures;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace EstateDataCollection.Tests.Integration.Builders;
 
 /// <summary>
-/// Fluent builder / test harness that wires Azurite-backed infrastructure, use cases,
-/// and all single-responsibility Admin and Public endpoints/events for integration tests.
+/// DI-backed test harness that mirrors host composition against Azurite-backed containers
+/// and lazily resolves any Admin/Public endpoint, event, use case, or infrastructure service via <see cref="Get{T}"/>.
 /// </summary>
-public sealed class IntegrationEndpointHarness
+public class IntegrationEndpointHarness : IDisposable, IAsyncDisposable
 {
+    private readonly ServiceProvider _rootProvider;
+    private readonly IServiceScope _scope;
+
     public AzuriteFixture Fixture { get; }
-    public BlobServiceClient BlobClient { get; }
+    public BlobServiceClient BlobClient => Fixture.Client;
     public string SchemasContainerName => Fixture.SchemasContainerName;
     public string DraftSchemasContainerName => Fixture.DraftSchemasContainerName;
     public string PayloadsContainerName => Fixture.PayloadsContainerName;
     public string ProcessedContainerName => Fixture.ProcessedContainerName;
 
-    public BlobSchemaRegistry SchemaRegistry { get; }
-    public BlobSubmissionInfrastructure SubmissionInfrastructure { get; }
-
-    public PostVerifySchemaEndpoint VerifySchema { get; }
-    public PostVerifyLogicEndpoint VerifyLogic { get; }
-    public PostSubmitSchemaEndpoint SubmitSchema { get; }
-    public PatchScheduleSchemaEndpoint ScheduleSchema { get; }
-    public GetAdminSchemasEndpoint GetAdminSchemas { get; }
-    public GetAdminSchemaVersionDetailEndpoint GetAdminSchemaVersionDetail { get; }
-    public PostRunSchemaTestsEndpoint RunSchemaTests { get; }
-    public PutUpdateSchemaTestsEndpoint UpdateSchemaTests { get; }
-    public IngestDraftSchemaEvent IngestDraftSchema { get; }
-
-    public GetSchemasEndpoint PublicGetSchemas { get; }
-    public GetSchemaByNameEndpoint PublicGetSchemaByName { get; }
-    public GetSchemaVersionDetailEndpoint PublicGetSchemaVersionDetail { get; }
-    public PostCreateSubmissionEndpoint CreateSubmission { get; }
-    public PutUpdateSubmissionEndpoint UpdateSubmission { get; }
-    public PostFinaliseSubmissionEndpoint FinaliseSubmission { get; }
-
-    public IntegrationEndpointHarness(AzuriteFixture fixture, Action<ValidationOptions>? configureValidation = null)
+    public IntegrationEndpointHarness(
+        AzuriteFixture fixture,
+        Action<IServiceCollection>? configureServices = null,
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
     {
         Fixture = fixture;
-        BlobClient = fixture.Client;
-        var memoryCache = new MemoryCache(new MemoryCacheOptions());
 
-        var schemaOptions = Options.Create(new BlobSchemaRegistryOptions
+        var configValues = new Dictionary<string, string?>
         {
-            ContainerName = fixture.SchemasContainerName,
-            DraftContainerName = fixture.DraftSchemasContainerName,
-            CacheKey = "schema:{schemaName}:v{version}",
-            SchemaBlobDirectory = "{schemaName}/v{version}.schema.json",
-            RulesBlobDirectory = "{schemaName}/v{version}.rules.json",
-            OdcsBlobDirectory = "{schemaName}/v{version}.odcs.yaml",
-            MetaBlobDirectory = "{schemaName}/v{version}.meta.json"
-        });
-
-        var submissionOptions = Options.Create(new BlobSubmissionRepositoryOptions
-        {
-            PayloadContainerName = fixture.PayloadsContainerName,
-            ProcessedContainerName = fixture.ProcessedContainerName,
-            SessionBlobNameFormat = "{submissionId}/session.json",
-            PayloadBlobNameFormat = "{submissionId}/draft.json",
-            ProcessedBlobNameFormat = "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
-        });
-
-        var validationSettings = new ValidationOptions
-        {
-            UnknownEngineBehavior = UnknownEngineBehavior.Fail,
-            RequireUrnOnFinalise = true
+            [$"{BlobSchemaRegistryOptions.SectionName}:ContainerName"] = fixture.SchemasContainerName,
+            [$"{BlobSchemaRegistryOptions.SectionName}:DraftContainerName"] = fixture.DraftSchemasContainerName,
+            [$"{BlobSubmissionRepositoryOptions.SectionName}:PayloadContainerName"] = fixture.PayloadsContainerName,
+            [$"{BlobSubmissionRepositoryOptions.SectionName}:ProcessedContainerName"] = fixture.ProcessedContainerName,
+            [$"{ValidationOptions.SectionName}:UnknownEngineBehavior"] = nameof(UnknownEngineBehavior.Fail),
+            [$"{ValidationOptions.SectionName}:RequireUrnOnFinalise"] = bool.TrueString
         };
-        configureValidation?.Invoke(validationSettings);
-        var validationOptions = Options.Create(validationSettings);
 
-        var logicValidator = new JsonLogicValidator(
-            [new JsonLogicQualityEngine(), new CelQualityEngine()],
-            validationOptions,
-            new JsonLogicValidatorInstrumentation(NullLogger<JsonLogicValidator>.Instance));
-        var odcsParser = new OdcsContractParser();
-        var validator = new JsonSchemaNetValidator(options: validationOptions);
-        var payloadValidationService = new PayloadValidationService(validator, logicValidator);
+        if (configurationOverrides is not null)
+        {
+            foreach (var (key, value) in configurationOverrides)
+            {
+                configValues[key] = value;
+            }
+        }
 
-        SchemaRegistry = new BlobSchemaRegistry(
-            fixture.Client,
-            schemaOptions,
-            memoryCache,
-            logicValidator: logicValidator,
-            odcsParser: odcsParser,
-            validationOptions: validationOptions);
-        SubmissionInfrastructure = new BlobSubmissionInfrastructure(fixture.Client, submissionOptions);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configValues)
+            .Build();
 
-        var verifyUseCase = new VerifySchemaUseCase(SchemaRegistry, odcsParser: odcsParser);
-        var submitUseCase = new SubmitSchemaUseCase(SchemaRegistry, odcsParser: odcsParser);
-        var scheduleUseCase = new ScheduleSchemaUseCase(SchemaRegistry);
-        var getSchemasUseCase = new GetSchemasUseCase(SchemaRegistry);
-        var getSchemaDetailUseCase = new GetSchemaDetailUseCase(SchemaRegistry);
-        var ingestDraftUseCase = new IngestDraftSchemaUseCase(SchemaRegistry, odcsParser: odcsParser);
-        var runSchemaTestsUseCase = new RunSchemaTestsUseCase(SchemaRegistry);
-        var updateSchemaTestsUseCase = new UpdateSchemaTestsUseCase(SchemaRegistry);
-        var createUseCase = new CreateSubmissionUseCase(SchemaRegistry, SubmissionInfrastructure);
-        var updateUseCase = new UpdateSubmissionUseCase(SubmissionInfrastructure, SchemaRegistry, validator, validationService: payloadValidationService);
-        var finaliseUseCase = new FinaliseSubmissionUseCase(SubmissionInfrastructure, SchemaRegistry, validator, validationService: payloadValidationService, validationOptions: validationOptions);
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddLogging();
+        services.AddDomain();
+        services.AddApplication();
+        services.AddInfrastructure(configuration);
+        services.RemoveAll<BlobServiceClient>();
+        services.AddSingleton(fixture.Client);
+        services.AddScoped<RazorComponentRenderer>();
+        services.AddFunctions(typeof(PostVerifySchemaEndpoint).Assembly);
+        services.AddFunctions(typeof(PostCreateSubmissionEndpoint).Assembly);
 
-        VerifySchema = new PostVerifySchemaEndpoint(verifyUseCase);
-        VerifyLogic = new PostVerifyLogicEndpoint(verifyUseCase);
-        SubmitSchema = new PostSubmitSchemaEndpoint(submitUseCase);
-        ScheduleSchema = new PatchScheduleSchemaEndpoint(scheduleUseCase);
-        GetAdminSchemas = new GetAdminSchemasEndpoint(getSchemasUseCase);
-        GetAdminSchemaVersionDetail = new GetAdminSchemaVersionDetailEndpoint(getSchemaDetailUseCase);
-        IngestDraftSchema = new IngestDraftSchemaEvent(ingestDraftUseCase);
-        RunSchemaTests = new PostRunSchemaTestsEndpoint(runSchemaTestsUseCase);
-        UpdateSchemaTests = new PutUpdateSchemaTestsEndpoint(updateSchemaTestsUseCase);
+        configureServices?.Invoke(services);
 
-        PublicGetSchemas = new GetSchemasEndpoint(getSchemasUseCase);
-        PublicGetSchemaByName = new GetSchemaByNameEndpoint(getSchemasUseCase);
-        PublicGetSchemaVersionDetail = new GetSchemaVersionDetailEndpoint(getSchemaDetailUseCase);
-        CreateSubmission = new PostCreateSubmissionEndpoint(createUseCase);
-        UpdateSubmission = new PutUpdateSubmissionEndpoint(updateUseCase);
-        FinaliseSubmission = new PostFinaliseSubmissionEndpoint(finaliseUseCase);
+        _rootProvider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateScopes = true,
+            ValidateOnBuild = true
+        });
+        _scope = _rootProvider.CreateScope();
     }
+
+    public T Get<T>() where T : notnull => _scope.ServiceProvider.GetRequiredService<T>();
 
     public static string UniqueName(string prefix)
     {
@@ -156,14 +104,14 @@ public sealed class IntegrationEndpointHarness
         string schemaJson,
         SchemaIdentifierConfig? identifierConfig = null)
     {
-        var submitRes = await SubmitSchema.HandleAsync(
+        var submitRes = await Get<PostSubmitSchemaEndpoint>().HandleAsync(
             HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(SchemaJson: schemaJson, IdentifierConfig: identifierConfig)),
             schemaName,
             version,
             CancellationToken.None);
         var submitted = submitRes.ShouldBeApiSuccess<SubmitSchemaResult>(StatusCodes.Status201Created);
 
-        var schedRes = await ScheduleSchema.HandleAsync(
+        var schedRes = await Get<PatchScheduleSchemaEndpoint>().HandleAsync(
             HttpRequestBuilder.FromJson(new ScheduleSchemaBodyDto(
                 EffectiveFromUtc: DateTimeOffset.UtcNow.AddMinutes(-5),
                 EffectiveToUtc: DateTimeOffset.UtcNow.AddDays(30),
@@ -185,7 +133,42 @@ public sealed class IntegrationEndpointHarness
             builder.WithQuery("version", version.Value.ToString());
         }
 
-        var res = await CreateSubmission.HandleAsync(builder.Build(), schemaName, CancellationToken.None);
+        var res = await Get<PostCreateSubmissionEndpoint>().HandleAsync(builder.Build(), schemaName, CancellationToken.None);
         return res.ShouldBeApiSuccess<CreateSubmissionResult>(StatusCodes.Status201Created).SubmissionId;
     }
+
+    public void Dispose()
+    {
+        _scope.Dispose();
+        _rootProvider.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_scope is IAsyncDisposable asyncScope)
+        {
+            await asyncScope.DisposeAsync();
+        }
+        else
+        {
+            _scope.Dispose();
+        }
+
+        await _rootProvider.DisposeAsync();
+        GC.SuppressFinalize(this);
+    }
+}
+
+/// <summary>
+/// Typed convenience wrapper for integration tests focused on a single endpoint, page, or event.
+/// </summary>
+public sealed class IntegrationEndpointHarness<TEndpoint>(
+    AzuriteFixture fixture,
+    Action<IServiceCollection>? configureServices = null,
+    IReadOnlyDictionary<string, string?>? configurationOverrides = null)
+    : IntegrationEndpointHarness(fixture, configureServices, configurationOverrides)
+    where TEndpoint : class
+{
+    public TEndpoint Endpoint => Get<TEndpoint>();
 }

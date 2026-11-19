@@ -1,7 +1,11 @@
 using System.Text;
 using AwesomeAssertions;
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.AzureFunctions.Admin.Events;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
+using EstateDataCollection.AzureFunctions.Public.Routes;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
@@ -30,11 +34,11 @@ public sealed class DraftBlobIngestionLifecycleIntegrationTests(AzuriteFixture f
 
         // 1. Trigger Admin Blob Event Function
         using var dummyStream = new MemoryStream(Encoding.UTF8.GetBytes(JsonSchemaFixtures.ValidV1Schema));
-        var ingest = (await _harness.IngestDraftSchema.HandleAsync(dummyStream, blobPath, CancellationToken.None)).ShouldSucceed();
+        var ingest = (await _harness.Get<IngestDraftSchemaEvent>().HandleAsync(dummyStream, blobPath, CancellationToken.None)).ShouldSucceed();
         ingest.Status.Should().Be("Promoted");
 
         // 2. Admin GET sees it as Validated with null effective dates and null IdentifierConfig
-        var adminDetail = (await _harness.GetAdminSchemaVersionDetail.HandleAsync(
+        var adminDetail = (await _harness.Get<GetAdminSchemaVersionDetailEndpoint>().HandleAsync(
                 HttpRequestBuilder.Empty(), draftSchemaName, 1, CancellationToken.None))
             .ShouldBeApiSuccess<SchemaVersionDetail>(StatusCodes.Status200OK);
         adminDetail.State.Name.Should().Be("Validated");
@@ -43,19 +47,20 @@ public sealed class DraftBlobIngestionLifecycleIntegrationTests(AzuriteFixture f
         adminDetail.IdentifierConfig.Should().BeNull();
 
         // 3. Public GET does NOT expose it yet
-        (await _harness.PublicGetSchemaByName.HandleAsync(HttpRequestBuilder.Empty(), draftSchemaName, CancellationToken.None))
+        var publicGetSchemaByName = _harness.Get<GetSchemaByNameEndpoint>();
+        (await publicGetSchemaByName.HandleAsync(HttpRequestBuilder.Empty(), draftSchemaName, CancellationToken.None))
             .ShouldHaveStatusCode(StatusCodes.Status404NotFound);
 
         // 4. Admin schedules it
         var scheduleDto = new ScheduleSchemaBodyDto(
             EffectiveFromUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
             EffectiveToUtc: DateTimeOffset.UtcNow.AddDays(30));
-        (await _harness.ScheduleSchema.HandleAsync(
+        (await _harness.Get<PatchScheduleSchemaEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromJson(scheduleDto), draftSchemaName, 1, CancellationToken.None))
             .ShouldHaveStatusCode(StatusCodes.Status200OK);
 
         // 5. Public GET now exposes the active version
-        var catalogueEntry = (await _harness.PublicGetSchemaByName.HandleAsync(
+        var catalogueEntry = (await publicGetSchemaByName.HandleAsync(
                 HttpRequestBuilder.Empty(), draftSchemaName, CancellationToken.None))
             .ShouldBeApiSuccess<SchemaCatalogueEntry>(StatusCodes.Status200OK);
         catalogueEntry.ActiveVersion.Should().Be(1);
@@ -105,12 +110,12 @@ public sealed class DraftBlobIngestionLifecycleIntegrationTests(AzuriteFixture f
             .UploadAsync(BinaryData.FromString(companionMetaJson), overwrite: true);
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(customSchemaJson));
-        var ingest = (await _harness.IngestDraftSchema.HandleAsync(stream, schemaPath, CancellationToken.None)).ShouldSucceed();
+        var ingest = (await _harness.Get<IngestDraftSchemaEvent>().HandleAsync(stream, schemaPath, CancellationToken.None)).ShouldSucceed();
         ingest.Promoted.Should().BeTrue();
         ingest.Status.Should().Be("Promoted");
 
         // Admin detail shows derived Required = true and LAEstab config
-        var adminDetail = (await _harness.GetAdminSchemaVersionDetail.HandleAsync(
+        var adminDetail = (await _harness.Get<GetAdminSchemaVersionDetailEndpoint>().HandleAsync(
                 HttpRequestBuilder.Empty(), draftSchemaName, 1, CancellationToken.None))
             .ShouldBeApiSuccess<SchemaVersionDetail>(StatusCodes.Status200OK);
         adminDetail.IdentifierConfig.Should().NotBeNull();
@@ -146,7 +151,7 @@ public sealed class DraftBlobIngestionLifecycleIntegrationTests(AzuriteFixture f
             .UploadAsync(BinaryData.FromString(customPathOnlySchema), overwrite: true);
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(customPathOnlySchema));
-        var result = await _harness.IngestDraftSchema.HandleAsync(stream, schemaPath, CancellationToken.None);
+        var result = await _harness.Get<IngestDraftSchemaEvent>().HandleAsync(stream, schemaPath, CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Schema.VerificationFailed");
@@ -154,6 +159,6 @@ public sealed class DraftBlobIngestionLifecycleIntegrationTests(AzuriteFixture f
         // Error diagnostic blob written in draft-schemas and schema NOT promoted
         var errorBlob = draftContainer.GetBlobClient($"{schemaPath}.error.json");
         (await errorBlob.ExistsAsync()).Value.Should().BeTrue();
-        (await _harness.SchemaRegistry.ExistsAsync(draftSchemaName, 1)).ShouldSucceed().Should().BeFalse();
+        (await _harness.Get<ISchemaRegistry>().ExistsAsync(draftSchemaName, 1)).ShouldSucceed().Should().BeFalse();
     }
 }

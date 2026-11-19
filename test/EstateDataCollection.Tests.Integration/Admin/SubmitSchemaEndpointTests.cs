@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
@@ -14,7 +15,7 @@ namespace EstateDataCollection.Tests.Integration.Admin;
 [Collection("AzuriteCollection")]
 public sealed class SubmitSchemaEndpointTests(AzuriteFixture fixture)
 {
-    private readonly IntegrationEndpointHarness _harness = new(fixture);
+    private readonly IntegrationEndpointHarness<PostSubmitSchemaEndpoint> _harness = new(fixture);
 
     [Theory]
     [InlineData("")]
@@ -22,7 +23,7 @@ public sealed class SubmitSchemaEndpointTests(AzuriteFixture fixture)
     [InlineData("""{"schemaJson": null, "odcsYaml": null}""")]
     public async Task When_Body_Is_Empty_Malformed_Or_Missing_Schema_Should_Return_400_BadRequest(string rawBody)
     {
-        var result = await _harness.SubmitSchema.HandleAsync(
+        var result = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromRaw(rawBody),
             "bad_submit_schema",
             1,
@@ -37,14 +38,14 @@ public sealed class SubmitSchemaEndpointTests(AzuriteFixture fixture)
         var schemaName = IntegrationEndpointHarness.UniqueName("dup_schema");
         var dto = new SubmitSchemaBodyDto(SchemaJson: JsonSchemaFixtures.ValidV1Schema);
 
-        var first = await _harness.SubmitSchema.HandleAsync(
+        var first = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromJson(dto),
             schemaName,
             1,
             CancellationToken.None);
         first.ShouldHaveStatusCode(StatusCodes.Status201Created);
 
-        var duplicate = await _harness.SubmitSchema.HandleAsync(
+        var duplicate = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromJson(dto),
             schemaName,
             1,
@@ -68,7 +69,7 @@ public sealed class SubmitSchemaEndpointTests(AzuriteFixture fixture)
             .WithUrnHeaders("/school/urn", required: true)
             .Build();
 
-        var result = await _harness.SubmitSchema.HandleAsync(http, schemaName, 1, CancellationToken.None);
+        var result = await _harness.Endpoint.HandleAsync(http, schemaName, 1, CancellationToken.None);
 
         var data = result.ShouldBeApiSuccess<SubmitSchemaResult>(StatusCodes.Status201Created);
         data.State.Name.Should().Be("Validated");

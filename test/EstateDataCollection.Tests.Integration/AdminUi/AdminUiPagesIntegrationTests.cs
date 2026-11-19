@@ -1,15 +1,8 @@
 using System.Net;
 using AwesomeAssertions;
-using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application.Models.Contracts;
-using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
-using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
-using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
-using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
-using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
-using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
-using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
+using EstateDataCollection.AzureFunctions.Public.Routes;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
@@ -17,57 +10,14 @@ using EstateDataCollection.Tests.Integration.Extensions;
 using EstateDataCollection.Tests.Integration.Fixtures;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace EstateDataCollection.Tests.Integration.AdminUi;
 
 [Collection("AzuriteCollection")]
-public sealed class AdminUiPagesIntegrationTests
+public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
 {
-    private readonly IntegrationEndpointHarness _harness;
-    private readonly GetStaticAssetEndpoint _staticAssetEndpoint;
-    private readonly GetDashboardPage _dashboardPageEndpoint;
-    private readonly GetSchemaDetailPage _schemaDetailPageEndpoint;
-    private readonly GetSchemaTestsPage _schemaTestsPageEndpoint;
-    private readonly PostUpdateSchemaVersionTestsEndpoint _updateSchemaVersionTestsEndpoint;
-    private readonly PostRunSchemaVersionTestsEndpoint _runSchemaVersionTestsEndpoint;
-    private readonly PostRunAllSchemaTestsEndpoint _runAllSchemaTestsEndpoint;
-    private readonly GetScheduleSchemaPage _scheduleSchemaPageEndpoint;
-    private readonly PostScheduleSchemaSubmitEndpoint _scheduleSchemaSubmitEndpoint;
-    private readonly GetWorkbenchPage _workbenchPageEndpoint;
-    private readonly PostWorkbenchVerifyEndpoint _workbenchVerifyEndpoint;
-    private readonly PostWorkbenchSubmitEndpoint _workbenchSubmitEndpoint;
-
-    public AdminUiPagesIntegrationTests(AzuriteFixture fixture)
-    {
-        _harness = new IntegrationEndpointHarness(fixture);
-
-        var renderer = new RazorComponentRenderer(
-            new ServiceCollection().BuildServiceProvider(),
-            NullLoggerFactory.Instance);
-        var getSchemasUseCase = new GetSchemasUseCase(_harness.SchemaRegistry);
-        var getSchemaDetailUseCase = new GetSchemaDetailUseCase(_harness.SchemaRegistry);
-        var verifyUseCase = new VerifySchemaUseCase(_harness.SchemaRegistry, odcsParser: new Infrastructure.Registry.OdcsContractParser());
-        var submitUseCase = new SubmitSchemaUseCase(_harness.SchemaRegistry, odcsParser: new Infrastructure.Registry.OdcsContractParser());
-        var scheduleUseCase = new ScheduleSchemaUseCase(_harness.SchemaRegistry);
-        var runTestsUseCase = new RunSchemaTestsUseCase(_harness.SchemaRegistry);
-        var updateTestsUseCase = new UpdateSchemaTestsUseCase(_harness.SchemaRegistry);
-
-        _staticAssetEndpoint = new GetStaticAssetEndpoint();
-        _dashboardPageEndpoint = new GetDashboardPage(getSchemasUseCase, renderer);
-        _schemaDetailPageEndpoint = new GetSchemaDetailPage(getSchemaDetailUseCase, renderer);
-        _schemaTestsPageEndpoint = new GetSchemaTestsPage(getSchemaDetailUseCase, renderer);
-        _updateSchemaVersionTestsEndpoint = new PostUpdateSchemaVersionTestsEndpoint(updateTestsUseCase, getSchemaDetailUseCase, renderer);
-        _runSchemaVersionTestsEndpoint = new PostRunSchemaVersionTestsEndpoint(runTestsUseCase, getSchemaDetailUseCase, renderer);
-        _runAllSchemaTestsEndpoint = new PostRunAllSchemaTestsEndpoint(runTestsUseCase, getSchemasUseCase, renderer);
-        _scheduleSchemaPageEndpoint = new GetScheduleSchemaPage(getSchemaDetailUseCase, renderer);
-        _scheduleSchemaSubmitEndpoint = new PostScheduleSchemaSubmitEndpoint(scheduleUseCase, getSchemaDetailUseCase, renderer);
-        _workbenchPageEndpoint = new GetWorkbenchPage(renderer);
-        _workbenchVerifyEndpoint = new PostWorkbenchVerifyEndpoint(verifyUseCase, renderer);
-        _workbenchSubmitEndpoint = new PostWorkbenchSubmitEndpoint(submitUseCase, renderer);
-    }
+    private readonly IntegrationEndpointHarness _harness = new(fixture);
 
     private static async Task<HttpRequest> CreateFormRequestAsync(
         Dictionary<string, string?> fields,
@@ -94,22 +44,25 @@ public sealed class AdminUiPagesIntegrationTests
     [Fact]
     public void StaticAssetEndpoint_Should_Serve_Embedded_Assets_And_Return_404_For_Missing()
     {
-        var cssResult = _staticAssetEndpoint.Handle(HttpRequestBuilder.Empty(), "css/dfe-branding.css");
+        var staticAssetEndpoint = _harness.Get<GetStaticAssetEndpoint>();
+
+        var cssResult = staticAssetEndpoint.Handle(HttpRequestBuilder.Empty(), "css/dfe-branding.css");
         var cssFile = cssResult.Should().BeOfType<FileContentResult>().Subject;
         cssFile.ContentType.Should().Be("text/css; charset=utf-8");
         cssFile.FileContents.Length.Should().BeGreaterThan(0);
 
-        var imgResult = _staticAssetEndpoint.Handle(HttpRequestBuilder.Empty(), "images/govuk-crest.svg");
+        var imgResult = staticAssetEndpoint.Handle(HttpRequestBuilder.Empty(), "images/govuk-crest.svg");
         var imgFile = imgResult.Should().BeOfType<FileContentResult>().Subject;
         imgFile.ContentType.Should().Be("image/svg+xml");
 
-        var missing = _staticAssetEndpoint.Handle(HttpRequestBuilder.Empty(), "css/does-not-exist.css");
+        var missing = staticAssetEndpoint.Handle(HttpRequestBuilder.Empty(), "css/does-not-exist.css");
         missing.Should().BeOfType<NotFoundResult>();
     }
 
     [Fact]
     public async Task WorkbenchVerifyEndpoint_Should_Verify_Odcs_Yaml_For_Both_Fetch_Partial_And_Full_Page()
     {
+        var workbenchVerify = _harness.Get<PostWorkbenchVerifyEndpoint>();
         var odcsYaml = new OdcsContractYamlBuilder()
             .WithId("edc-ui-verify")
             .WithName("UiVerifyTest")
@@ -131,7 +84,7 @@ public sealed class AdminUiPagesIntegrationTests
                 ["X-Requested-With"] = "fetch"
             });
 
-        var partialResult = await _workbenchVerifyEndpoint.HandleAsync(fetchReq, CancellationToken.None);
+        var partialResult = await workbenchVerify.HandleAsync(fetchReq, CancellationToken.None);
         var partialHtml = partialResult.Should().BeOfType<ContentResult>().Subject;
         partialHtml.StatusCode.Should().Be(StatusCodes.Status200OK);
         partialHtml.ContentType.Should().Be("text/html; charset=utf-8");
@@ -139,7 +92,7 @@ public sealed class AdminUiPagesIntegrationTests
         partialHtml.Content.Should().NotContain("<!DOCTYPE html>");
 
         var fullPageReq = await CreateFormRequestAsync(fields);
-        var fullPageResult = await _workbenchVerifyEndpoint.HandleAsync(fullPageReq, CancellationToken.None);
+        var fullPageResult = await workbenchVerify.HandleAsync(fullPageReq, CancellationToken.None);
         var fullPageHtml = fullPageResult.Should().BeOfType<ContentResult>().Subject;
         fullPageHtml.StatusCode.Should().Be(StatusCodes.Status200OK);
         fullPageHtml.Content.Should().Contain("<!DOCTYPE html>");
@@ -156,7 +109,7 @@ public sealed class AdminUiPagesIntegrationTests
                 ["X-Requested-With"] = "fetch"
             });
 
-        var errorPartial = await _workbenchVerifyEndpoint.HandleAsync(badFetchReq, CancellationToken.None);
+        var errorPartial = await workbenchVerify.HandleAsync(badFetchReq, CancellationToken.None);
         var errorContent = errorPartial.Should().BeOfType<ContentResult>().Subject;
         errorContent.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
         errorContent.Content.Should().Contain("govuk-error-summary");
@@ -165,6 +118,7 @@ public sealed class AdminUiPagesIntegrationTests
     [Fact]
     public async Task WorkbenchVerifyEndpoint_Should_AutoDerive_LAEstab_From_Selected_Property_And_Reject_Missing_Or_Empty_Custom_Pointer()
     {
+        var workbenchVerify = _harness.Get<PostWorkbenchVerifyEndpoint>();
         const string laestabSchema = """
         {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -194,7 +148,7 @@ public sealed class AdminUiPagesIntegrationTests
             },
             headers: new Dictionary<string, string> { ["X-Requested-With"] = "fetch" });
 
-        var okRes = await _workbenchVerifyEndpoint.HandleAsync(okReq, CancellationToken.None);
+        var okRes = await workbenchVerify.HandleAsync(okReq, CancellationToken.None);
         var okHtml = okRes.Should().BeOfType<ContentResult>().Subject;
         okHtml.StatusCode.Should().Be(StatusCodes.Status200OK);
         okHtml.Content.Should().Contain("Verification passed");
@@ -212,7 +166,7 @@ public sealed class AdminUiPagesIntegrationTests
             },
             headers: new Dictionary<string, string> { ["X-Requested-With"] = "fetch" });
 
-        var emptyRes = await _workbenchVerifyEndpoint.HandleAsync(emptyPointerReq, CancellationToken.None);
+        var emptyRes = await workbenchVerify.HandleAsync(emptyPointerReq, CancellationToken.None);
         var emptyHtml = emptyRes.Should().BeOfType<ContentResult>().Subject;
         emptyHtml.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
         emptyHtml.Content.Should().Contain("govuk-error-summary");
@@ -229,7 +183,7 @@ public sealed class AdminUiPagesIntegrationTests
             },
             headers: new Dictionary<string, string> { ["X-Requested-With"] = "fetch" });
 
-        var badRes = await _workbenchVerifyEndpoint.HandleAsync(badPointerReq, CancellationToken.None);
+        var badRes = await workbenchVerify.HandleAsync(badPointerReq, CancellationToken.None);
         var badHtml = badRes.Should().BeOfType<ContentResult>().Subject;
         badHtml.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
         badHtml.Content.Should().Contain("govuk-error-summary");
@@ -240,7 +194,7 @@ public sealed class AdminUiPagesIntegrationTests
     {
         var schemaName = IntegrationEndpointHarness.UniqueName("ui_journey");
 
-        var getWorkbench = await _workbenchPageEndpoint.HandleAsync(HttpRequestBuilder.Empty());
+        var getWorkbench = await _harness.Get<GetWorkbenchPage>().HandleAsync(HttpRequestBuilder.Empty());
         var workbenchContent = getWorkbench.Should().BeOfType<ContentResult>().Subject;
         workbenchContent.StatusCode.Should().Be(StatusCodes.Status200OK);
         workbenchContent.Content.Should().Contain("Contract Workbench");
@@ -258,14 +212,14 @@ public sealed class AdminUiPagesIntegrationTests
             ["identifierProperty"] = "/urn"
         });
 
-        var submitRes = await _workbenchSubmitEndpoint.HandleAsync(submitReq, CancellationToken.None);
+        var submitRes = await _harness.Get<PostWorkbenchSubmitEndpoint>().HandleAsync(submitReq, CancellationToken.None);
         var submitRedirect = submitRes.Should().BeOfType<RedirectResult>().Subject;
         submitRedirect.Url.Should().Be($"/manage/schemas/{schemaName}/1/details?notice=submitted");
 
         var dashboardHttp = new HttpRequestBuilder()
             .WithHeader("X-MS-CLIENT-PRINCIPAL-NAME", "admin.tester@education.gov.uk")
             .Build();
-        var dashboardRes = await _dashboardPageEndpoint.HandleAsync(dashboardHttp, CancellationToken.None);
+        var dashboardRes = await _harness.Get<GetDashboardPage>().HandleAsync(dashboardHttp, CancellationToken.None);
         var dashboardHtml = dashboardRes.Should().BeOfType<ContentResult>().Subject;
         dashboardHtml.StatusCode.Should().Be(StatusCodes.Status200OK);
         dashboardHtml.Content.Should().Contain(schemaName);
@@ -273,13 +227,13 @@ public sealed class AdminUiPagesIntegrationTests
         dashboardHtml.Content.Should().Contain("New version(s) ready to schedule");
 
         var detailHttp = new HttpRequestBuilder().WithQuery("notice", "submitted").Build();
-        var detailRes = await _schemaDetailPageEndpoint.HandleAsync(detailHttp, schemaName, 1, CancellationToken.None);
+        var detailRes = await _harness.Get<GetSchemaDetailPage>().HandleAsync(detailHttp, schemaName, 1, CancellationToken.None);
         var detailHtml = detailRes.Should().BeOfType<ContentResult>().Subject;
         detailHtml.StatusCode.Should().Be(StatusCodes.Status200OK);
         detailHtml.Content.Should().Contain("passed verification and was saved as Validated");
         detailHtml.Content.Should().Contain(schemaName);
 
-        var schedulePageRes = await _scheduleSchemaPageEndpoint.HandleAsync(
+        var schedulePageRes = await _harness.Get<GetScheduleSchemaPage>().HandleAsync(
             HttpRequestBuilder.Empty(),
             schemaName,
             1,
@@ -300,7 +254,7 @@ public sealed class AdminUiPagesIntegrationTests
             ["identifierProperty"] = "/urn"
         });
 
-        var scheduleSubmitRes = await _scheduleSchemaSubmitEndpoint.HandleAsync(
+        var scheduleSubmitRes = await _harness.Get<PostScheduleSchemaSubmitEndpoint>().HandleAsync(
             activateReq,
             schemaName,
             1,
@@ -309,7 +263,7 @@ public sealed class AdminUiPagesIntegrationTests
         scheduleRedirect.Url.Should().Be($"/manage/schemas/{schemaName}/1/details?notice=scheduled");
 
         // Verify the Public boundary now exposes the schema cleanly
-        var publicSchema = await _harness.PublicGetSchemaByName.HandleAsync(
+        var publicSchema = await _harness.Get<GetSchemaByNameEndpoint>().HandleAsync(
             HttpRequestBuilder.Empty(),
             schemaName,
             CancellationToken.None);
@@ -362,10 +316,10 @@ public sealed class AdminUiPagesIntegrationTests
             ["identifierProperty"] = "/urn"
         });
 
-        var submitRes = await _workbenchSubmitEndpoint.HandleAsync(submitReq, CancellationToken.None);
+        var submitRes = await _harness.Get<PostWorkbenchSubmitEndpoint>().HandleAsync(submitReq, CancellationToken.None);
         submitRes.Should().BeOfType<RedirectResult>();
 
-        var detailRes = await _schemaDetailPageEndpoint.HandleAsync(
+        var detailRes = await _harness.Get<GetSchemaDetailPage>().HandleAsync(
             HttpRequestBuilder.Empty(),
             schemaName,
             1,
@@ -374,7 +328,8 @@ public sealed class AdminUiPagesIntegrationTests
         detailHtml.Content.Should().Contain("View Stored Tests (2)");
         detailHtml.Content.Should().Contain($"/manage/schemas/{schemaName}/1/tests/run");
 
-        var testsPageRes = await _schemaTestsPageEndpoint.HandleAsync(
+        var schemaTestsPage = _harness.Get<GetSchemaTestsPage>();
+        var testsPageRes = await schemaTestsPage.HandleAsync(
             HttpRequestBuilder.Empty(),
             schemaName,
             1,
@@ -386,7 +341,8 @@ public sealed class AdminUiPagesIntegrationTests
         testsPageHtml.Content.Should().Contain("positive-capacity");
         testsPageHtml.Content.Should().Contain("Not executed yet");
 
-        var runSingleRes = await _runSchemaVersionTestsEndpoint.HandleAsync(
+        var runVersionTests = _harness.Get<PostRunSchemaVersionTestsEndpoint>();
+        var runSingleRes = await runVersionTests.HandleAsync(
             HttpRequestBuilder.Empty(),
             schemaName,
             1,
@@ -400,7 +356,7 @@ public sealed class AdminUiPagesIntegrationTests
         decodedSingle.Should().Contain("Failed — unknown if expected");
         decodedSingle.Should().Contain("[Rule:positive-capacity]");
 
-        var runAllRes = await _runAllSchemaTestsEndpoint.HandleAsync(
+        var runAllRes = await _harness.Get<PostRunAllSchemaTestsEndpoint>().HandleAsync(
             HttpRequestBuilder.Empty(),
             CancellationToken.None);
         var runAllHtml = runAllRes.Should().BeOfType<ContentResult>().Subject;
@@ -409,13 +365,15 @@ public sealed class AdminUiPagesIntegrationTests
         runAllHtml.Content.Should().Contain($"{schemaName} v1");
         runAllHtml.Content.Should().Contain("Passed (warnings)");
 
+        var updateSchemaVersionTests = _harness.Get<PostUpdateSchemaVersionTestsEndpoint>();
+
         // Attempt invalid update (valid fixture fails business rule capacity >= 10) -> 422 preserving user input and not overwriting stored fixtures
         var badUpdateReq = await CreateFormRequestAsync(new Dictionary<string, string?>
         {
             ["validFixtureJson"] = """{"urn":123456,"capacity":4}""",
             ["invalidFixtureJson"] = """{"urn":123456,"capacity":5}"""
         });
-        var badUpdateRes = await _updateSchemaVersionTestsEndpoint.HandleAsync(badUpdateReq, schemaName, 1, CancellationToken.None);
+        var badUpdateRes = await updateSchemaVersionTests.HandleAsync(badUpdateReq, schemaName, 1, CancellationToken.None);
         var badUpdateHtml = badUpdateRes.Should().BeOfType<ContentResult>().Subject;
         badUpdateHtml.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
         badUpdateHtml.Content.Should().Contain("There is a problem");
@@ -427,7 +385,7 @@ public sealed class AdminUiPagesIntegrationTests
             ["validFixtureJson"] = """[{"urn":123456,"capacity":50}]""",
             ["invalidFixtureJson"] = """[{"description":"Expect wrong rule","payload":{"urn":123456,"capacity":5},"expectedErrors":["NON-EXISTENT-RULE"]}]"""
         });
-        var wrongExpectationRes = await _updateSchemaVersionTestsEndpoint.HandleAsync(wrongExpectationReq, schemaName, 1, CancellationToken.None);
+        var wrongExpectationRes = await updateSchemaVersionTests.HandleAsync(wrongExpectationReq, schemaName, 1, CancellationToken.None);
         var wrongExpectationHtml = wrongExpectationRes.Should().BeOfType<ContentResult>().Subject;
         wrongExpectationHtml.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
         wrongExpectationHtml.Content.Should().Contain("NON-EXISTENT-RULE");
@@ -439,12 +397,12 @@ public sealed class AdminUiPagesIntegrationTests
             ["validFixtureJson"] = """[{"urn":123456,"capacity":50},{"urn":654321,"capacity":75}]""",
             ["invalidFixtureJson"] = """[{"description":"Fails business rule","payload":{"urn":123456,"capacity":5},"expectedErrors":["positive-capacity"]},{"urn":123456,"capacity":8}]"""
         });
-        var goodUpdateRes = await _updateSchemaVersionTestsEndpoint.HandleAsync(goodUpdateReq, schemaName, 1, CancellationToken.None);
+        var goodUpdateRes = await updateSchemaVersionTests.HandleAsync(goodUpdateReq, schemaName, 1, CancellationToken.None);
         var redirect = goodUpdateRes.Should().BeOfType<RedirectResult>().Subject;
         redirect.Url.Should().Be($"/manage/schemas/{Uri.EscapeDataString(schemaName)}/1/tests?notice=updated");
 
         // Load SchemaTestsPage with ?notice=updated and confirm banner, matched assertion, soft warning on raw #2, & all 4 updated fixtures render
-        var afterUpdatePageRes = await _schemaTestsPageEndpoint.HandleAsync(
+        var afterUpdatePageRes = await schemaTestsPage.HandleAsync(
             new HttpRequestBuilder().WithQuery("notice", "updated").Build(),
             schemaName,
             1,
@@ -463,7 +421,7 @@ public sealed class AdminUiPagesIntegrationTests
         decodedAfterUpdate.Should().Contain("\"capacity\": 8");
 
         // Re-run stored tests after update -> evaluates all 2 valid + 2 invalid + 1 business rule
-        var rerunRes = await _runSchemaVersionTestsEndpoint.HandleAsync(HttpRequestBuilder.Empty(), schemaName, 1, CancellationToken.None);
+        var rerunRes = await runVersionTests.HandleAsync(HttpRequestBuilder.Empty(), schemaName, 1, CancellationToken.None);
         var rerunHtml = rerunRes.Should().BeOfType<ContentResult>().Subject;
         rerunHtml.Content.Should().Contain("Evaluated 2 valid fixture(s), 2 invalid fixture(s), and 1 business rule(s)");
         rerunHtml.Content.Should().Contain("Triggered errors (1)");

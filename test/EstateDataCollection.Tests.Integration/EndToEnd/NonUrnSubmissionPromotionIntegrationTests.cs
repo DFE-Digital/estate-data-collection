@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
+using EstateDataCollection.AzureFunctions.Public.Routes;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Integration.Builders;
 using EstateDataCollection.Tests.Integration.Extensions;
@@ -44,11 +45,11 @@ public sealed class NonUrnSubmissionPromotionIntegrationTests(AzuriteFixture fix
         var subId = await _harness.CreateDraftSubmissionAsync(nonUrnSchemaName);
 
         const string validElementsPayload = """{"survey":{"id":"SURV-999"},"elements":[]}""";
-        (await _harness.UpdateSubmission.HandleAsync(
+        (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromRaw(validElementsPayload), subId, CancellationToken.None))
             .ShouldHaveStatusCode(StatusCodes.Status200OK);
 
-        var finaliseData = (await _harness.FinaliseSubmission.HandleAsync(
+        var finaliseData = (await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
                 HttpRequestBuilder.Empty(), subId, CancellationToken.None))
             .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
 
@@ -84,28 +85,30 @@ public sealed class NonUrnSubmissionPromotionIntegrationTests(AzuriteFixture fix
             new SchemaIdentifierConfig { Type = "LAEstab", JsonPointer = "/establishment/laestab" });
 
         var subId = await _harness.CreateDraftSubmissionAsync(laestabSchemaName);
+        var updateSubmission = _harness.Get<PutUpdateSubmissionEndpoint>();
+        var finaliseSubmission = _harness.Get<PostFinaliseSubmissionEndpoint>();
 
         // 1. PUT draft missing identifier -> 200 OK with PendingErrors; Finalise -> 422
         const string missingIdPayload = """{"establishment":{},"answers":[]}""";
-        var badDraft = (await _harness.UpdateSubmission.HandleAsync(
+        var badDraft = (await updateSubmission.HandleAsync(
                 HttpRequestBuilder.FromRaw(missingIdPayload), subId, CancellationToken.None))
             .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
         badDraft.IsSuccessful.Should().BeFalse();
         badDraft.PendingErrors.Should().NotBeEmpty();
 
-        (await _harness.FinaliseSubmission.HandleAsync(
+        (await finaliseSubmission.HandleAsync(
                 HttpRequestBuilder.Empty(), subId, CancellationToken.None))
             .ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
 
         // 2. PUT valid draft with string LAEstab -> Finalise -> promoted under laestab=201-3614/...
         const string validPayload = """{"establishment":{"laestab":"201-3614"},"answers":[]}""";
-        var validDraft = (await _harness.UpdateSubmission.HandleAsync(
+        var validDraft = (await updateSubmission.HandleAsync(
                 HttpRequestBuilder.FromRaw(validPayload), subId, CancellationToken.None))
             .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
         validDraft.IsSuccessful.Should().BeTrue();
         validDraft.PendingErrors.Should().BeEmpty();
 
-        var finaliseData = (await _harness.FinaliseSubmission.HandleAsync(
+        var finaliseData = (await finaliseSubmission.HandleAsync(
                 HttpRequestBuilder.Empty(), subId, CancellationToken.None))
             .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
 

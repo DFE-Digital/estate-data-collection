@@ -1,7 +1,9 @@
 using AwesomeAssertions;
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Integration.Builders;
 using EstateDataCollection.Tests.Integration.Extensions;
@@ -45,7 +47,7 @@ public sealed class UpdateSchemaTestsEndpointTests(AzuriteFixture fixture)
         ]
         """;
 
-        var submitRes = await _harness.SubmitSchema.HandleAsync(
+        var submitRes = await _harness.Get<PostSubmitSchemaEndpoint>().HandleAsync(
             HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(
                 SchemaJson: schemaJson,
                 RulesJson: rulesJson,
@@ -56,8 +58,10 @@ public sealed class UpdateSchemaTestsEndpointTests(AzuriteFixture fixture)
             CancellationToken.None);
         submitRes.ShouldHaveStatusCode(StatusCodes.Status201Created);
 
+        var updateSchemaTests = _harness.Get<PutUpdateSchemaTestsEndpoint>();
+
         // Failing update (valid fixture breaks business rule capacity >= 20)
-        var invalidUpdateRes = await _harness.UpdateSchemaTests.HandleAsync(
+        var invalidUpdateRes = await updateSchemaTests.HandleAsync(
             HttpRequestBuilder.FromJson(new
             {
                 validFixtures = new[] { """{"urn":123456,"capacity":5}""" },
@@ -69,12 +73,12 @@ public sealed class UpdateSchemaTestsEndpointTests(AzuriteFixture fixture)
         invalidUpdateRes.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
 
         // Verify original fixture in Azurite was not overwritten
-        var unchanged = (await _harness.SchemaRegistry.GetExplicitSchemaAsync(schemaName, 1)).ShouldSucceed();
+        var unchanged = (await _harness.Get<ISchemaRegistry>().GetExplicitSchemaAsync(schemaName, 1)).ShouldSucceed();
         unchanged.ValidFixtures.Should().ContainSingle(f => f.Contains("\"capacity\":25") || f.Contains("\"capacity\": 25"));
         unchanged.InvalidFixtures.Should().BeEmpty();
 
         // Successful update adding valid + negative (business rule violation) fixtures
-        var validUpdateRes = await _harness.UpdateSchemaTests.HandleAsync(
+        var validUpdateRes = await updateSchemaTests.HandleAsync(
             HttpRequestBuilder.FromJson(new
             {
                 validFixtures = new[] { """{"urn":123456,"capacity":30}""", """{"urn":654321,"capacity":40}""" },
@@ -89,7 +93,7 @@ public sealed class UpdateSchemaTestsEndpointTests(AzuriteFixture fixture)
         updated.BusinessRuleCount.Should().Be(1);
 
         // RunSchemaTests confirms new fixtures execute cleanly
-        var runRes = await _harness.RunSchemaTests.HandleAsync(
+        var runRes = await _harness.Get<PostRunSchemaTestsEndpoint>().HandleAsync(
             HttpRequestBuilder.FromJson(new { schemaName, version = 1, includeRetired = true }),
             CancellationToken.None);
         var runResult = runRes.ShouldBeApiSuccess<RunSchemaTestsResult>(StatusCodes.Status200OK);

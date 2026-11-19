@@ -1,3 +1,4 @@
+using EstateDataCollection.AzureFunctions.Public.Routes;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
 using EstateDataCollection.Tests.Integration.Extensions;
@@ -19,26 +20,28 @@ public sealed class SubmissionGuardIntegrationTests(AzuriteFixture fixture)
         await _harness.SubmitAndActivateSchemaAsync(schemaName, 1, JsonSchemaFixtures.ValidV1Schema);
 
         var subId = await _harness.CreateDraftSubmissionAsync(schemaName);
+        var updateSubmission = _harness.Get<PutUpdateSubmissionEndpoint>();
+        var finaliseSubmission = _harness.Get<PostFinaliseSubmissionEndpoint>();
 
-        var updateRes = await _harness.UpdateSubmission.HandleAsync(
+        var updateRes = await updateSubmission.HandleAsync(
             HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.ValidPayloadJson),
             subId,
             CancellationToken.None);
         updateRes.ShouldHaveStatusCode(StatusCodes.Status200OK);
 
-        var firstFinalise = await _harness.FinaliseSubmission.HandleAsync(
+        var firstFinalise = await finaliseSubmission.HandleAsync(
             HttpRequestBuilder.Empty(),
             subId,
             CancellationToken.None);
         firstFinalise.ShouldHaveStatusCode(StatusCodes.Status200OK);
 
-        var secondFinalise = await _harness.FinaliseSubmission.HandleAsync(
+        var secondFinalise = await finaliseSubmission.HandleAsync(
             HttpRequestBuilder.Empty(),
             subId,
             CancellationToken.None);
         secondFinalise.ShouldHaveStatusCode(StatusCodes.Status403Forbidden);
 
-        var updateAfterFinalise = await _harness.UpdateSubmission.HandleAsync(
+        var updateAfterFinalise = await updateSubmission.HandleAsync(
             HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.ValidPayloadJson),
             subId,
             CancellationToken.None);

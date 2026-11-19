@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
@@ -15,7 +16,7 @@ namespace EstateDataCollection.Tests.Integration.Admin;
 [Collection("AzuriteCollection")]
 public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
 {
-    private readonly IntegrationEndpointHarness _harness = new(fixture);
+    private readonly IntegrationEndpointHarness<PostVerifySchemaEndpoint> _harness = new(fixture);
 
     [Theory]
     [InlineData("")]
@@ -24,7 +25,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
     [InlineData("""{"schemaJson": "", "rulesJson": null, "odcsYaml": "  "}""")]
     public async Task When_Body_Is_Empty_Or_Has_No_Inputs_Should_Return_400_BadRequest(string rawBody)
     {
-        var result = await _harness.VerifySchema.HandleAsync(
+        var result = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromRaw(rawBody),
             CancellationToken.None);
 
@@ -43,7 +44,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
             .WithRawBody(rawOdcsYaml, "application/json")
             .Build();
 
-        var result = await _harness.VerifySchema.HandleAsync(http, CancellationToken.None);
+        var result = await _harness.Endpoint.HandleAsync(http, CancellationToken.None);
 
         result.ShouldHaveStatusCode(StatusCodes.Status200OK);
     }
@@ -56,7 +57,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
             SampleValidFixtures: [new SurveyPayloadBuilder().WithoutUrn().BuildJson()],
             SampleInvalidFixtures: []);
 
-        var result = await _harness.VerifySchema.HandleAsync(
+        var result = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromJson(dto),
             CancellationToken.None);
 
@@ -94,7 +95,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
                 Required = false
             });
 
-        var result = await _harness.VerifySchema.HandleAsync(
+        var result = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromJson(dto),
             CancellationToken.None);
 
@@ -116,7 +117,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
                 JsonPointer = "/nonexistent/laestab"
             });
 
-        var result = await _harness.VerifySchema.HandleAsync(
+        var result = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromJson(dto),
             CancellationToken.None);
 
@@ -151,7 +152,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
                 JsonPointer = pointer
             });
 
-        var result = await _harness.VerifySchema.HandleAsync(
+        var result = await _harness.Endpoint.HandleAsync(
             HttpRequestBuilder.FromJson(dto),
             CancellationToken.None);
 
