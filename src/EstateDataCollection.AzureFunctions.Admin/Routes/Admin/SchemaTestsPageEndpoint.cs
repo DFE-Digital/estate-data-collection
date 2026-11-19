@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 
-namespace EstateDataCollection.AzureFunctions.Admin.Routes;
+namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
 public sealed class SchemaTestsPageEndpoint(
     IUseCase<SchemaVersionDetail, GetSchemaDetailRequest> getSchemaDetailUseCase,

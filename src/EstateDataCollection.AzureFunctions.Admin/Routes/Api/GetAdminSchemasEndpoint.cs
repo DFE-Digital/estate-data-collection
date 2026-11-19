@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 
-namespace EstateDataCollection.AzureFunctions.Admin.Routes;
+namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 
 /// <summary>
 /// Admin view of all schemas in the registry, including unscheduled (Validated / Draft) and Retired versions by default.

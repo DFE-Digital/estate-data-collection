@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 
-namespace EstateDataCollection.AzureFunctions.Admin.Routes;
+namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 
 /// <summary>
 /// Executes stored schema regression tests (JSON Schema, business logic rules, identifier alignment,

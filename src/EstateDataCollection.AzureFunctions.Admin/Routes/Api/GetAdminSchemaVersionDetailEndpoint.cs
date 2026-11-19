@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 
-namespace EstateDataCollection.AzureFunctions.Admin.Routes;
+namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 
 /// <summary>
 /// Admin view of a specific schema version's metadata, fields, rules, and raw JSON schema.

@@ -9,7 +9,7 @@ using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
-using EstateDataCollection.AzureFunctions.Admin.Routes;
+using EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;

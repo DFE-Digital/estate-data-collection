@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 
-namespace EstateDataCollection.AzureFunctions.Admin.Routes;
+namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 
 /// <summary>
 /// Persists a verified schema version (JSON Schema + Quality Rules or ODCS YAML) as Validated (unscheduled).

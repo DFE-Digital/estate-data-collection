@@ -1,6 +1,5 @@
 using EstateDataCollection.Application.UseCases;
-using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
-using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
@@ -8,23 +7,28 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 
-namespace EstateDataCollection.AzureFunctions.Admin.Routes;
+namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 
 /// <summary>
-/// Schedules activation windows, lifecycle transitions (Activate, Deprecate, Retire), or URN identifier configuration.
-/// Route: PATCH /api/schemas/{schemaName}/versions/{version:int}/schedule
+/// Replaces and re-verifies the stored valid/invalid golden regression test fixtures
+/// (.valid.json / .invalid.json) for an existing schema version without mutating the schema contract.
+/// Route: PUT /api/schemas/{schemaName}/versions/{version:int}/tests
 /// </summary>
-public sealed class ScheduleSchemaEndpoint(
-    IUseCase<ScheduleSchemaResult, ScheduleSchemaRequest> scheduleUseCase,
+public sealed class UpdateSchemaTestsEndpoint(
+    IUseCase<UpdateSchemaTestsResult, UpdateSchemaTestsRequest> updateTestsUseCase,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : FunctionEndpointBase(instrumentation)
 {
-    public const string EndpointName = "ScheduleSchema";
+    public const string EndpointName = "UpdateSchemaTests";
+
+    private sealed record UpdateSchemaTestsBodyDto(
+        IReadOnlyList<string>? ValidFixtures = null,
+        IReadOnlyList<string>? InvalidFixtures = null);
 
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
-        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Patch),
-            Route = "api/schemas/{schemaName}/versions/{version:int}/schedule")]
+        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Put),
+            Route = "api/schemas/{schemaName}/versions/{version:int}/tests")]
         HttpRequest http,
         string schemaName,
         int version,
@@ -32,14 +36,14 @@ public sealed class ScheduleSchemaEndpoint(
     {
         return ExecuteAsync(
             EndpointName,
-            scheduleUseCase,
+            updateTestsUseCase,
             () => BindAsync(http, schemaName, version, cancellationToken),
             StatusCodes.Status200OK,
             context: $"{schemaName} v{version}",
             cancellationToken: cancellationToken);
     }
 
-    private static async Task<Result<ScheduleSchemaRequest>> BindAsync(
+    private static async Task<Result<UpdateSchemaTestsRequest>> BindAsync(
         HttpRequest http,
         string schemaName,
         int version,
@@ -51,19 +55,17 @@ public sealed class ScheduleSchemaEndpoint(
             return Error.Failure(ErrorCodes.PayloadEmpty);
         }
 
-        var dtoResult = DeserializeJson<ScheduleSchemaBodyDto>(rawBody, "Invalid schedule request JSON body.");
+        var dtoResult = DeserializeJson<UpdateSchemaTestsBodyDto>(rawBody, "Invalid update schema tests request JSON body.");
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;
         }
 
         var body = dtoResult.Value;
-        return new ScheduleSchemaRequest(
+        return new UpdateSchemaTestsRequest(
             SchemaName: schemaName,
             Version: version,
-            EffectiveFromUtc: body.EffectiveFromUtc,
-            EffectiveToUtc: body.EffectiveToUtc,
-            LifecycleAction: body.LifecycleAction,
-            IdentifierConfig: body.IdentifierConfig);
+            ValidFixtures: body.ValidFixtures ?? [],
+            InvalidFixtures: body.InvalidFixtures ?? []);
     }
 }

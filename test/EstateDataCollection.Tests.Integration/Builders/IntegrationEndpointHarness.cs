@@ -15,7 +15,7 @@ using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.AzureFunctions.Admin.Events;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
-using EstateDataCollection.AzureFunctions.Admin.Routes;
+using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.AzureFunctions.Public.Routes;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Infrastructure.Persistence;

@@ -2,7 +2,7 @@ using System.Reflection;
 using AwesomeAssertions;
 using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application;
-using EstateDataCollection.AzureFunctions.Admin.Routes;
+using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.AzureFunctions.Public.Routes;
 using EstateDataCollection.Common.Web;
 using EstateDataCollection.Common.Web.Endpoints;
