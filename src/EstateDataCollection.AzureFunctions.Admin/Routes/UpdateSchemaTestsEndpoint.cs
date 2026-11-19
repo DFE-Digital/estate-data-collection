@@ -12,7 +12,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 /// <summary>
 /// Replaces and re-verifies the stored valid/invalid golden regression test fixtures
 /// (.valid.json / .invalid.json) for an existing schema version without mutating the schema contract.
-/// Route: PUT /schemas/{schemaName}/versions/{version:int}/tests
+/// Route: PUT /api/schemas/{schemaName}/versions/{version:int}/tests
 /// </summary>
 public sealed class UpdateSchemaTestsEndpoint(
     IUseCase<UpdateSchemaTestsResult, UpdateSchemaTestsRequest> updateTestsUseCase,
@@ -28,7 +28,7 @@ public sealed class UpdateSchemaTestsEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Put),
-            Route = "schemas/{schemaName}/versions/{version:int}/tests")]
+            Route = "api/schemas/{schemaName}/versions/{version:int}/tests")]
         HttpRequest http,
         string schemaName,
         int version,

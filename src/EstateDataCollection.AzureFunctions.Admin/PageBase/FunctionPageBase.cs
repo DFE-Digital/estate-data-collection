@@ -2,23 +2,18 @@ using System.Text;
 using System.Text.Json;
 using EstateDataCollection.Admin.UI.Models;
 using EstateDataCollection.Admin.UI.Rendering;
-using EstateDataCollection.AzureFunctions.AdminUi.Options;
 using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
-namespace EstateDataCollection.AzureFunctions.AdminUi.PageBase;
+namespace EstateDataCollection.AzureFunctions.Admin.PageBase;
 
 public abstract class FunctionPageBase(
     RazorComponentRenderer renderer,
-    IOptions<AdminUiOptions> uiOptions,
-    IHostEnvironment hostEnvironment,
     FunctionEndpointInstrumentation? instrumentation = null
 ) : IFunctionEndpoint
 {

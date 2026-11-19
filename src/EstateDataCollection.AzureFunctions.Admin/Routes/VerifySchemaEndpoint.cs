@@ -16,7 +16,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 /// Dry-run verification endpoint for the Data Team / CI pipelines.
 /// Evaluates schema syntax (Draft-07 / Draft 2020-12), validates quality rules (JsonLogic / CEL),
 /// validates identifier extraction alignment, supports direct ODCS YAML contracts, and runs in-flight golden fixture checks without persisting to Blob.
-/// Route: POST /schemas/verify
+/// Route: POST /api/schemas/verify
 /// </summary>
 public sealed class VerifySchemaEndpoint(
     IUseCase<VerifySchemaResult, VerifySchemaRequest> verifyUseCase,
@@ -28,7 +28,7 @@ public sealed class VerifySchemaEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
-            Route = "schemas/verify")]
+            Route = "api/schemas/verify")]
         HttpRequest http,
         CancellationToken cancellationToken)
     {

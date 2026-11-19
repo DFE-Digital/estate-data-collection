@@ -5,25 +5,20 @@ using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
-using EstateDataCollection.AzureFunctions.AdminUi.Helpers;
-using EstateDataCollection.AzureFunctions.AdminUi.Options;
-using EstateDataCollection.AzureFunctions.AdminUi.PageBase;
+using EstateDataCollection.AzureFunctions.Admin.Helpers;
+using EstateDataCollection.AzureFunctions.Admin.PageBase;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 
-namespace EstateDataCollection.AzureFunctions.AdminUi.Routes;
+namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 
 public sealed class ScheduleSchemaPageEndpoint(
     IUseCase<SchemaVersionDetail, GetSchemaDetailRequest> getSchemaDetailUseCase,
     RazorComponentRenderer renderer,
-    IOptions<AdminUiOptions> uiOptions,
-    IHostEnvironment hostEnvironment,
     FunctionEndpointInstrumentation? instrumentation = null
-) : FunctionPageBase(renderer, uiOptions, hostEnvironment, instrumentation)
+) : FunctionPageBase(renderer, instrumentation)
 {
     public const string EndpointName = "AdminUiScheduleSchemaPage";
 

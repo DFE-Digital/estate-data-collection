@@ -4,7 +4,7 @@ using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using Microsoft.AspNetCore.Http;
 
-namespace EstateDataCollection.AzureFunctions.AdminUi.Helpers;
+namespace EstateDataCollection.AzureFunctions.Admin.Helpers;
 
 public static class WorkbenchFormParser
 {

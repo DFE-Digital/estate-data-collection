@@ -12,7 +12,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 
 /// <summary>
 /// Admin view of a specific schema version's metadata, fields, rules, and raw JSON schema.
-/// Route: GET /schemas/{schemaName}/versions/{version:int}
+/// Route: GET /api/schemas/{schemaName}/versions/{version:int}
 /// </summary>
 public sealed class GetAdminSchemaVersionDetailEndpoint(
     IUseCase<SchemaVersionDetail, GetSchemaDetailRequest> getSchemaDetailUseCase,
@@ -24,7 +24,7 @@ public sealed class GetAdminSchemaVersionDetailEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Get),
-            Route = "schemas/{schemaName}/versions/{version:int}")]
+            Route = "api/schemas/{schemaName}/versions/{version:int}")]
         HttpRequest http,
         string schemaName,
         int version,

@@ -12,7 +12,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 
 /// <summary>
 /// Schedules activation windows, lifecycle transitions (Activate, Deprecate, Retire), or URN identifier configuration.
-/// Route: PATCH /schemas/{schemaName}/versions/{version:int}/schedule
+/// Route: PATCH /api/schemas/{schemaName}/versions/{version:int}/schedule
 /// </summary>
 public sealed class ScheduleSchemaEndpoint(
     IUseCase<ScheduleSchemaResult, ScheduleSchemaRequest> scheduleUseCase,
@@ -24,7 +24,7 @@ public sealed class ScheduleSchemaEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Patch),
-            Route = "schemas/{schemaName}/versions/{version:int}/schedule")]
+            Route = "api/schemas/{schemaName}/versions/{version:int}/schedule")]
         HttpRequest http,
         string schemaName,
         int version,

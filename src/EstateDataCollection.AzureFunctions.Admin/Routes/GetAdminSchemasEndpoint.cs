@@ -11,7 +11,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 
 /// <summary>
 /// Admin view of all schemas in the registry, including unscheduled (Validated / Draft) and Retired versions by default.
-/// Route: GET /schemas
+/// Route: GET /api/schemas
 /// </summary>
 public sealed class GetAdminSchemasEndpoint(
     IUseCase<GetSchemasResult, GetSchemasRequest> getSchemasUseCase,
@@ -23,7 +23,7 @@ public sealed class GetAdminSchemasEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Get),
-            Route = "schemas")]
+            Route = "api/schemas")]
         HttpRequest http,
         CancellationToken cancellationToken)
     {

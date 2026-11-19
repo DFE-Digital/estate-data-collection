@@ -3,7 +3,7 @@ using EstateDataCollection.Admin.UI.Models.ViewModels;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
-namespace EstateDataCollection.AzureFunctions.AdminUi.Helpers;
+namespace EstateDataCollection.AzureFunctions.Admin.Helpers;
 
 public sealed record ParsedWorkbenchInput(
     string InputMode,

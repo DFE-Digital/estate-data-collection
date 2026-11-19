@@ -13,7 +13,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 
 /// <summary>
 /// Dry-run verification endpoint specifically for quality / business logic rules and fixtures.
-/// Route: POST /logic/verify
+/// Route: POST /api/logic/verify
 /// </summary>
 public sealed class VerifyLogicEndpoint(
     IUseCase<VerifySchemaResult, VerifySchemaRequest> verifyUseCase,
@@ -25,7 +25,7 @@ public sealed class VerifyLogicEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
-            Route = "logic/verify")]
+            Route = "api/logic/verify")]
         HttpRequest http,
         CancellationToken cancellationToken)
     {

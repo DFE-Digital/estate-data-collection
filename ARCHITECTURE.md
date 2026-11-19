@@ -7,7 +7,7 @@ The **Estate Data Collection (EDC)** platform is a data ingestion and contract g
 
 ## 1. High-Level System Architecture
 
-The service follows **Clean Architecture** organized around generic **Use Cases** (`IUseCase<TResult, TRequest>`). Domain invariants and business orchestration are completely isolated from transport hosts (`AzureFunctions.Public`, `AzureFunctions.Admin`, and `AzureFunctions.AdminUi`) and UI rendering (`EstateDataCollection.Admin.UI`).
+The service follows **Clean Architecture** organized around generic **Use Cases** (`IUseCase<TResult, TRequest>`). Domain invariants and business orchestration are completely isolated from transport hosts (`AzureFunctions.Public` and `AzureFunctions.Admin`) and UI rendering (`EstateDataCollection.Admin.UI`).
 
 ```mermaid
 flowchart TD
@@ -25,8 +25,7 @@ flowchart TD
 
     subgraph Hosts["Azure Functions v4 (.NET 10 Isolated Worker)"]
         F_PUB["<b>AzureFunctions.Public</b> (:7071)<br/>• /api/schemas*<br/>• /api/submissions*<br/>• /api/about"]:::host
-        F_ADM["<b>AzureFunctions.Admin</b> (:7072)<br/>• /api/schemas* &amp; /api/logic/verify<br/>• /api/schemas/tests/run &amp; .../tests<br/>• IngestDraftSchemaEvent"]:::host
-        F_UI["<b>AzureFunctions.AdminUi</b> (:7073)<br/>• /manage/* (SSR HTML + PRG Forms)<br/>• /assets/* (Embedded GOV.UK/DfE)<br/>• Direct or HttpProxy Mode"]:::host
+        F_ADM["<b>AzureFunctions.Admin</b> (:7072)<br/>• /api/schemas* &amp; /api/logic/verify<br/>• /api/schemas/tests/run &amp; .../tests<br/>• /manage/* (SSR HTML) &amp; /assets/*<br/>• IngestDraftSchemaEvent"]:::host
     end
 
     subgraph AdminUI["EstateDataCollection.Admin.UI (Razor Class Library)"]
@@ -57,13 +56,11 @@ flowchart TD
     end
 
     M2M --> F_PUB
-    Operator --> F_UI
+    Operator --> F_ADM
     M2M --> F_ADM
     EG --> F_ADM
 
-    F_UI --> AdminUI
-    F_UI -. "HttpProxy (x-functions-key)" .-> F_ADM
-    F_UI -- "Direct Mode" --> Application
+    F_ADM --> AdminUI
     F_PUB --> Application
     F_ADM --> Application
 
@@ -192,10 +189,8 @@ stateDiagram-v2
 
 ## 5. Admin Portal Architecture ([ADR 0017](docs/decisions/0017-ssr-admin-portal-and-proxy-boundary.md) & [ADR 0018](docs/decisions/0018-zero-logic-razor-views-and-presentation-viewmodels.md))
 
-- **Pure Static SSR + Progressive Enhancement:** [`EstateDataCollection.AzureFunctions.AdminUi`](src/EstateDataCollection.AzureFunctions.AdminUi) renders compliant GOV.UK Frontend / DfE Branding HTML via [`RazorComponentRenderer`](src/EstateDataCollection.Admin.UI/Rendering/RazorComponentRenderer.cs) (`HtmlRenderer`) and serves embedded CSS, fonts, images, and minimal vanilla JS (`workbench.js`) directly from `EstateDataCollection.Admin.UI` via `StaticAssetEndpoint` (`/assets/*`).
-- **Dual Execution Modes (`AdminUi:ExecutionMode`):**
-  - `HttpProxy`: Calls `EstateDataCollection.AzureFunctions.Admin` over typed HTTP proxies (`Http*UseCaseProxy`) carrying `x-functions-key`, preserving a strict UI/storage trust boundary.
-  - `Direct`: Resolves `IUseCase<TResult, TRequest>` in-process for local convenience or consolidated single-host deployments.
+- **Pure Static SSR + Progressive Enhancement:** [`EstateDataCollection.AzureFunctions.Admin`](src/EstateDataCollection.AzureFunctions.Admin) hosts the SSR portal routes (`/manage/*`, `/assets/*`), rendering compliant GOV.UK Frontend / DfE Branding HTML via [`RazorComponentRenderer`](src/EstateDataCollection.Admin.UI/Rendering/RazorComponentRenderer.cs) (`HtmlRenderer`) and serving embedded CSS, fonts, images, and minimal vanilla JS (`workbench.js`) directly from `EstateDataCollection.Admin.UI` via `StaticAssetEndpoint`.
+- **Unified In-Process Host (`"routePrefix": ""`):** Admin UI endpoints resolve `IUseCase<TResult, TRequest>` directly in-process inside `EstateDataCollection.AzureFunctions.Admin`, while JSON API routes retain explicit `api/...` route prefixes with `AuthorizationLevel.Function`.
 - **Zero-Logic `.razor` Templates:** Every `.razor` page and component binds exclusively to precomputed properties, boolean flags, and child projection records in `EstateDataCollection.Admin.UI/Models/ViewModels/*.cs`. No `@{ ... }` blocks, helper methods, LINQ, URL encoding, or date/JSON formatting exist inside `.razor` templates.
 - **Portal Routes:**
   - `GET /manage` — Schema catalogue dashboard with `SchemaSectionCard` test status badges (`Passed`, `Passed (warnings)`, `Failed`, `Not run`) and global `POST /manage/tests/run` trigger.

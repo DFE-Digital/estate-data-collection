@@ -9,8 +9,7 @@ The EDC platform operates on **Azure Functions v4 (Isolated Worker Model)** targ
 | Deployable Host Project | Responsibility | Artifact Name |
 | :--- | :--- | :--- |
 | `src/EstateDataCollection.AzureFunctions.Public` | Public M2M survey ingestion & active schema discovery API (`/api/schemas*`, `/api/submissions*`, `/api/about`) | `edc-functions-public-linux-x64.zip` |
-| `src/EstateDataCollection.AzureFunctions.Admin` | Admin contract governance API (`/api/schemas*`, `/api/logic/verify`, `/api/schemas/tests/run`) & Event Grid draft ingestion | `edc-functions-admin-linux-x64.zip` |
-| `src/EstateDataCollection.AzureFunctions.AdminUi` | SSR GOV.UK / DfE Admin Portal (`/manage/*`, `/assets/*`) connecting via `HttpProxy` or `Direct` mode | `edc-functions-adminui-linux-x64.zip` *(optional host or consolidated)* |
+| `src/EstateDataCollection.AzureFunctions.Admin` | Unified Admin contract governance API (`/api/schemas*`, `/api/logic/verify`, `/api/schemas/tests/run`), SSR Admin Portal (`/manage/*`, `/assets/*`), & Event Grid draft ingestion | `edc-functions-admin-linux-x64.zip` |
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -19,7 +18,7 @@ The EDC platform operates on **Azure Functions v4 (Isolated Worker Model)** targ
 │   ├──> Run 227 automated tests (Unit + isolated Azurite Integration)   │
 │   ├──> dotnet publish -c Release -r linux-x64 --self-contained true     │
 │   ├──> Exclude local.settings.json, *.http, *.pdb                      │
-│   └──> Package Public & Admin (+ optional AdminUi) Linux x64 zips      │
+│   └──> Package Public & Admin Linux x64 zips      │
 │                                                                        │
 │ Azure Cloud (Flex Consumption / Linux)                                 │
 │   │                                                                    │
@@ -38,8 +37,8 @@ The EDC platform operates on **Azure Functions v4 (Isolated Worker Model)** targ
   Binaries are compiled and verified once in CI, generating immutable zip artifacts (`edc-functions-public-linux-x64.zip` and `edc-functions-admin-linux-x64.zip`) promoted sequentially across Dev $\to$ Test $\to$ Prod.
 - **Sanitised Packages**:
   Local dev settings (`local.settings.json`), REST client files (`*.http`), and symbol files (`*.pdb`) are strictly excluded from all deployable packages.
-- **Admin UI Hosting Topology ([ADR 0017](decisions/0017-ssr-admin-portal-and-proxy-boundary.md))**:
-  `AzureFunctions.AdminUi` runs either as its own Function App forwarding calls over `x-functions-key` (`AdminUi__ExecutionMode=HttpProxy`), or can be consolidated into `AzureFunctions.Admin` (`Direct` mode + unified `"routePrefix": ""`) to eliminate an extra Function App plan.
+- **Unified Admin Host (`"routePrefix": ""`)**:
+  `AzureFunctions.Admin` serves both the Admin JSON API (`/api/*` with `AuthorizationLevel.Function`) and the SSR Admin Portal (`/manage/*`, `/assets/*` with `AuthorizationLevel.Anonymous`) in a single Function App.
 
 ## Environment Topology
 
@@ -90,14 +89,14 @@ For emergency hotfixes, rollbacks, or deploying a specific commit to `developmen
 
 ### Option C: Manual CLI Zip Deploy (`az CLI`)
 
-To package and deploy any of the Function App hosts manually (example shows `Public`, `Admin`, and `AdminUi`):
+To package and deploy the Function App hosts manually:
 
 ```bash
 # 1. Navigate to the repository root
 cd /path/to/estate-data-collection
 
-# 2. Publish and zip Public, Admin, and AdminUi for Linux x64
-for APP in Public Admin AdminUi; do
+# 2. Publish and zip Public and Admin for Linux x64
+for APP in Public Admin; do
   rm -rf "./publish-$APP" "./edc-functions-$APP.zip"
   dotnet publish "src/EstateDataCollection.AzureFunctions.$APP/EstateDataCollection.AzureFunctions.$APP.csproj" \
     -c Release \
@@ -122,13 +121,8 @@ az functionapp deployment source config-zip \
   --name "<ADMIN_FUNCTION_APP_NAME>" \
   --src "./edc-functions-Admin.zip"
 
-az functionapp deployment source config-zip \
-  --resource-group "<RESOURCE_GROUP_NAME>" \
-  --name "<ADMINUI_FUNCTION_APP_NAME>" \
-  --src "./edc-functions-AdminUi.zip"
-
 # 4. Clean up local build artifacts
-rm -rf ./publish-Public ./publish-Admin ./publish-AdminUi ./edc-functions-*.zip
+rm -rf ./publish-Public ./publish-Admin ./edc-functions-*.zip
 ```
 
 ### Option D: Azure Functions Core Tools (`func`)
@@ -176,16 +170,13 @@ Configure these settings on Azure Function Apps (double underscore `__` represen
 | Setting Name | Scope | Purpose | Example / Default |
 | :--- | :--- | :--- | :--- |
 | `ASPNETCORE_ENVIRONMENT` | All | Environment profile | `Development` / `Test` / `Production` |
-| `ConnectionStrings__BlobStorage` or `BlobStorageOptions__ServiceUri` | Public, Admin, Direct UI | Storage account connection string or Managed Identity blob endpoint | `https://stedc<env>uksouth.blob.core.windows.net` |
+| `ConnectionStrings__BlobStorage` or `BlobStorageOptions__ServiceUri` | Public, Admin | Storage account connection string or Managed Identity blob endpoint | `https://stedc<env>uksouth.blob.core.windows.net` |
 | `AZURE_APPCONFIGURATION_ENDPOINT` | Public, Admin | Optional Azure App Configuration endpoint | `https://appcs-edc-<env>.azconfig.io` |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | All | Azure Application Insights telemetry | `InstrumentationKey=...` |
-| `Blob__Schema__ContainerName` | Public, Admin, Direct UI | Registered contracts, rules, fixtures & metadata container | `schemas` |
-| `Blob__Schema__DraftContainerName` | Admin, Direct UI | Event Grid-watched draft dropzone container | `draft-schemas` |
+| `Blob__Schema__ContainerName` | Public, Admin | Registered contracts, rules, fixtures & metadata container | `schemas` |
+| `Blob__Schema__DraftContainerName` | Admin | Event Grid-watched draft dropzone container | `draft-schemas` |
 | `Blob__Submission__PayloadContainerName` | Public | In-flight survey sessions & drafts container | `payloads` |
 | `Blob__Submission__ProcessedContainerName` | Public | Finalised CDE-ready partitioned lake container | `processed` |
-| `AdminUi__ExecutionMode` | AdminUi | `HttpProxy` (calls Admin API over HTTP) or `Direct` (in-process) | `HttpProxy` *(in cloud)* / `Direct` *(single-host)* |
-| `AdminUi__AdminApiBaseUrl` | AdminUi (`HttpProxy`) | Base URL of Admin Function App API | `https://<admin-app>.azurewebsites.net/api` |
-| `AdminUi__AdminApiFunctionKey` | AdminUi (`HttpProxy`) | Function key (prefer Key Vault reference `@Microsoft.KeyVault(...)`) | *(Key Vault secret)* |
 
 > [!IMPORTANT]
 > On Azure Functions **Flex Consumption**, do **not** manually set `FUNCTIONS_WORKER_RUNTIME` in Application Settings—the runtime is configured at the platform `functionAppConfig` level ([ADR 0006](decisions/0006-flex-consumption-self-contained-deployment.md)).
@@ -253,9 +244,7 @@ Expected `/api/about` response (`200 OK`):
    - Assign **Storage Blob Data Contributor** to the Function App's Managed Identity on the target storage account.
 3. **`Blob storage container does not exist`**
    - Ensure `schemas`, `draft-schemas`, `payloads`, and `processed` exist (or enable self-healing container initialisation per [ADR 0016](decisions/0016-self-healing-storage-container-initialisation.md)).
-4. **AdminUi `401 Unauthorized` calling Admin API**
-   - Verify `AdminUi__ExecutionMode=HttpProxy`, `AdminUi__AdminApiBaseUrl` ends with `/api`, and `AdminUi__AdminApiFunctionKey` matches a valid host/function key on `AzureFunctions.Admin`.
-5. **GitHub Actions `Federated token validation failed`**
+4. **GitHub Actions `Federated token validation failed`**
    - Confirm the Entra ID federated credential subject matches `repo:<org>/<repo>:environment:<environment_name>`.
 
 ---

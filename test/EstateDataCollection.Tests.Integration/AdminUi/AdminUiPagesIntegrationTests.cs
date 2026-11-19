@@ -9,8 +9,7 @@ using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
-using EstateDataCollection.AzureFunctions.AdminUi.Options;
-using EstateDataCollection.AzureFunctions.AdminUi.Routes;
+using EstateDataCollection.AzureFunctions.Admin.Routes;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
@@ -19,10 +18,7 @@ using EstateDataCollection.Tests.Integration.Fixtures;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace EstateDataCollection.Tests.Integration.AdminUi;
@@ -30,14 +26,6 @@ namespace EstateDataCollection.Tests.Integration.AdminUi;
 [Collection("AzuriteCollection")]
 public sealed class AdminUiPagesIntegrationTests
 {
-    private sealed class StubHostEnvironment : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = Environments.Development;
-        public string ApplicationName { get; set; } = "EstateDataCollection.AdminUi.Tests";
-        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
-
     private readonly IntegrationEndpointHarness _harness;
     private readonly StaticAssetEndpoint _staticAssetEndpoint;
     private readonly DashboardPageEndpoint _dashboardPageEndpoint;
@@ -59,9 +47,6 @@ public sealed class AdminUiPagesIntegrationTests
         var renderer = new RazorComponentRenderer(
             new ServiceCollection().BuildServiceProvider(),
             NullLoggerFactory.Instance);
-        var uiOptions = Options.Create(new AdminUiOptions { ExecutionMode = AdminUiOptions.DirectMode });
-        var hostEnv = new StubHostEnvironment();
-
         var getSchemasUseCase = new GetSchemasUseCase(_harness.SchemaRegistry);
         var getSchemaDetailUseCase = new GetSchemaDetailUseCase(_harness.SchemaRegistry);
         var verifyUseCase = new VerifySchemaUseCase(_harness.SchemaRegistry, odcsParser: new Infrastructure.Registry.OdcsContractParser());
@@ -71,17 +56,17 @@ public sealed class AdminUiPagesIntegrationTests
         var updateTestsUseCase = new UpdateSchemaTestsUseCase(_harness.SchemaRegistry);
 
         _staticAssetEndpoint = new StaticAssetEndpoint();
-        _dashboardPageEndpoint = new DashboardPageEndpoint(getSchemasUseCase, renderer, uiOptions, hostEnv);
-        _schemaDetailPageEndpoint = new SchemaDetailPageEndpoint(getSchemaDetailUseCase, renderer, uiOptions, hostEnv);
-        _schemaTestsPageEndpoint = new SchemaTestsPageEndpoint(getSchemaDetailUseCase, renderer, uiOptions, hostEnv);
-        _updateSchemaVersionTestsEndpoint = new UpdateSchemaVersionTestsEndpoint(updateTestsUseCase, getSchemaDetailUseCase, renderer, uiOptions, hostEnv);
-        _runSchemaVersionTestsEndpoint = new RunSchemaVersionTestsEndpoint(runTestsUseCase, getSchemaDetailUseCase, renderer, uiOptions, hostEnv);
-        _runAllSchemaTestsEndpoint = new RunAllSchemaTestsEndpoint(runTestsUseCase, getSchemasUseCase, renderer, uiOptions, hostEnv);
-        _scheduleSchemaPageEndpoint = new ScheduleSchemaPageEndpoint(getSchemaDetailUseCase, renderer, uiOptions, hostEnv);
-        _scheduleSchemaSubmitEndpoint = new ScheduleSchemaSubmitEndpoint(scheduleUseCase, getSchemaDetailUseCase, renderer, uiOptions, hostEnv);
-        _workbenchPageEndpoint = new WorkbenchPageEndpoint(renderer, uiOptions, hostEnv);
-        _workbenchVerifyEndpoint = new WorkbenchVerifyEndpoint(verifyUseCase, renderer, uiOptions, hostEnv);
-        _workbenchSubmitEndpoint = new WorkbenchSubmitEndpoint(submitUseCase, renderer, uiOptions, hostEnv);
+        _dashboardPageEndpoint = new DashboardPageEndpoint(getSchemasUseCase, renderer);
+        _schemaDetailPageEndpoint = new SchemaDetailPageEndpoint(getSchemaDetailUseCase, renderer);
+        _schemaTestsPageEndpoint = new SchemaTestsPageEndpoint(getSchemaDetailUseCase, renderer);
+        _updateSchemaVersionTestsEndpoint = new UpdateSchemaVersionTestsEndpoint(updateTestsUseCase, getSchemaDetailUseCase, renderer);
+        _runSchemaVersionTestsEndpoint = new RunSchemaVersionTestsEndpoint(runTestsUseCase, getSchemaDetailUseCase, renderer);
+        _runAllSchemaTestsEndpoint = new RunAllSchemaTestsEndpoint(runTestsUseCase, getSchemasUseCase, renderer);
+        _scheduleSchemaPageEndpoint = new ScheduleSchemaPageEndpoint(getSchemaDetailUseCase, renderer);
+        _scheduleSchemaSubmitEndpoint = new ScheduleSchemaSubmitEndpoint(scheduleUseCase, getSchemaDetailUseCase, renderer);
+        _workbenchPageEndpoint = new WorkbenchPageEndpoint(renderer);
+        _workbenchVerifyEndpoint = new WorkbenchVerifyEndpoint(verifyUseCase, renderer);
+        _workbenchSubmitEndpoint = new WorkbenchSubmitEndpoint(submitUseCase, renderer);
     }
 
     private static async Task<HttpRequest> CreateFormRequestAsync(

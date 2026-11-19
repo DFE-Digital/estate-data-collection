@@ -1,9 +1,8 @@
 using System.Reflection;
 using AwesomeAssertions;
+using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application;
 using EstateDataCollection.AzureFunctions.Admin.Routes;
-using EstateDataCollection.AzureFunctions.AdminUi.Extensions;
-using EstateDataCollection.AzureFunctions.AdminUi.Routes;
 using EstateDataCollection.AzureFunctions.Public.Routes;
 using EstateDataCollection.Common.Web;
 using EstateDataCollection.Common.Web.Endpoints;
@@ -33,7 +32,6 @@ public class FunctionEndpointAndEventArchitectureTests
     {
         yield return [typeof(VerifySchemaEndpoint).Assembly];
         yield return [typeof(GetSchemasEndpoint).Assembly];
-        yield return [typeof(DashboardPageEndpoint).Assembly];
     }
 
     [Theory]
@@ -72,48 +70,59 @@ public class FunctionEndpointAndEventArchitectureTests
     [MemberData(nameof(FunctionHostAssemblies))]
     public void AddFunctions_Should_Resolve_All_Registered_Endpoints_And_Events_From_DI(Assembly hostAssembly)
     {
-        var config = BuildBaseConfiguration("Direct");
+        var config = BuildBaseConfiguration();
 
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<IConfiguration>(config);
         services.AddSingleton<IHostEnvironment>(new TestHostEnvironment());
         services.AddFunctions(hostAssembly);
+        services.AddApplication();
         services.AddDomain();
+        services.AddInfrastructure(config);
 
-        if (hostAssembly == typeof(DashboardPageEndpoint).Assembly)
+        if (hostAssembly == typeof(GetAdminSchemasEndpoint).Assembly)
         {
-            services.AddAdminUiUseCases(config);
-        }
-        else
-        {
-            services.AddApplication();
-            services.AddInfrastructure(config);
+            services.AddScoped<RazorComponentRenderer>();
         }
 
         AssertAllEndpointsResolve(services, hostAssembly);
     }
 
-    [Theory]
-    [InlineData("Direct")]
-    [InlineData("HttpProxy")]
-    public void AdminUi_Should_Resolve_All_Endpoints_In_Both_Direct_And_HttpProxy_Execution_Modes(string executionMode)
+    [Fact]
+    public void AdminHost_Routes_Should_Partition_Api_Manage_And_Assets_With_Expected_Auth_Levels()
     {
-        var hostAssembly = typeof(DashboardPageEndpoint).Assembly;
-        var config = BuildBaseConfiguration(executionMode);
+        var adminAssembly = typeof(GetAdminSchemasEndpoint).Assembly;
+        var triggers = adminAssembly.GetTypes()
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            .Select(m => m.GetParameters()
+                .Select(p => p.GetCustomAttribute<HttpTriggerAttribute>())
+                .FirstOrDefault(a => a is not null))
+            .Where(a => a is not null)
+            .Cast<HttpTriggerAttribute>()
+            .ToList();
 
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton<IConfiguration>(config);
-        services.AddSingleton<IHostEnvironment>(new TestHostEnvironment());
-        services.AddFunctions(hostAssembly);
-        services.AddDomain();
-        services.AddAdminUiUseCases(config);
+        triggers.Should().NotBeEmpty();
 
-        AssertAllEndpointsResolve(services, hostAssembly);
+        foreach (var trigger in triggers)
+        {
+            var route = trigger.Route ?? string.Empty;
+            if (route.StartsWith("api/", StringComparison.Ordinal))
+            {
+                trigger.AuthLevel.Should().Be(AuthorizationLevel.Function, $"API route '{route}' should require Function auth level.");
+            }
+            else if (route.StartsWith("manage", StringComparison.Ordinal) || route.StartsWith("assets/", StringComparison.Ordinal))
+            {
+                trigger.AuthLevel.Should().Be(AuthorizationLevel.Anonymous, $"UI route '{route}' should allow browser navigation.");
+            }
+            else
+            {
+                Assert.Fail($"Unexpected Admin host route '{route}'. Expected 'api/...', 'manage...', or 'assets/...'.");
+            }
+        }
     }
 
-    private static IConfiguration BuildBaseConfiguration(string executionMode)
+    private static IConfiguration BuildBaseConfiguration()
     {
         return new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -122,10 +131,7 @@ public class FunctionEndpointAndEventArchitectureTests
                 ["BlobSchemaRegistry:ContainerName"] = "schemas",
                 ["BlobSchemaRegistry:DraftContainerName"] = "draft-schemas",
                 ["BlobSubmissionRepository:PayloadContainerName"] = "payloads",
-                ["BlobSubmissionRepository:ProcessedContainerName"] = "processed",
-                ["AdminUi:ExecutionMode"] = executionMode,
-                ["AdminUi:AdminApiBaseUrl"] = "http://localhost:7072/api",
-                ["AdminUi:AdminApiFunctionKey"] = "test-key"
+                ["BlobSubmissionRepository:ProcessedContainerName"] = "processed"
             })
             .Build();
     }

@@ -23,8 +23,7 @@ The solution splits responsibilities cleanly across Clean Architecture layers an
 | `src/EstateDataCollection.Common` & `Common.Web` | `Result<T>`, `Error`, CalVer `AppVersionProvider`, Scrutor registration, `FunctionEndpointBase`, and worker middleware | — |
 | `src/EstateDataCollection.Admin.UI` | Server-Side Rendered GOV.UK / DfE Razor pages, components, **Zero-Logic Presentation ViewModels**, and embedded static assets | — |
 | `src/EstateDataCollection.AzureFunctions.Public` | Public M2M ingestion and schema discovery API (`/api/schemas*`, `/api/submissions*`, `/api/about`) | `http://localhost:7071` |
-| `src/EstateDataCollection.AzureFunctions.Admin` | Admin API (`/api/schemas*`, `/api/logic/verify`, `/api/schemas/tests/run`) & Event Grid draft ingestion (`IngestDraftSchemaEvent`) | `http://localhost:7072` |
-| `src/EstateDataCollection.AzureFunctions.AdminUi` | SSR Admin Portal (`/manage`, `/manage/workbench`, `/manage/schemas/{name}/{v}/tests`, `/assets/*`) operating in `Direct` or `HttpProxy` mode | `http://localhost:7073` |
+| `src/EstateDataCollection.AzureFunctions.Admin` | Unified Admin API (`/api/schemas*`, `/api/logic/verify`, `/api/schemas/tests/run`), SSR Admin Portal (`/manage`, `/manage/workbench`, `/manage/schemas/{name}/{v}/tests`, `/assets/*`), & Event Grid draft ingestion (`IngestDraftSchemaEvent`) | `http://localhost:7072` |
 
 ---
 
@@ -78,7 +77,7 @@ sequenceDiagram
 
 ## Admin Portal & Schema Regression Testing
 
-Navigate to **`http://localhost:7073/manage`** when running `EstateDataCollection.AzureFunctions.AdminUi`:
+Navigate to **`http://localhost:7072/manage`** when running `EstateDataCollection.AzureFunctions.Admin`:
 
 - **Schema Catalogue Dashboard (`/manage`)**: Displays schema families, version lifecycle tags (`Draft`, `Validated`, `Scheduled`, `Active`, `Deprecated`, `Retired`), **last regression test run state** (`Passed`, `Passed (warnings)`, `Failed`, `Not run` + UTC timestamp) on every version card, and a one-click **Run All Schema Tests** button.
 - **Contract Workbench (`/manage/workbench`)**: Dry-run verify or ingest **ODCS v3.2.0 YAML** or **JSON Schema + JsonLogic/CEL rules**, auto-discover scalar identifier properties from the contract AST (`URN`, `LAEstab`, `UKPRN`, custom pointer, or `None`), and test candidate valid/invalid fixtures before saving.
@@ -154,25 +153,18 @@ Copy each host's `local.settings.example.json` to `local.settings.json` (git-ign
 ```bash
 cp src/EstateDataCollection.AzureFunctions.Public/local.settings.example.json src/EstateDataCollection.AzureFunctions.Public/local.settings.json
 cp src/EstateDataCollection.AzureFunctions.Admin/local.settings.example.json src/EstateDataCollection.AzureFunctions.Admin/local.settings.json
-cp src/EstateDataCollection.AzureFunctions.AdminUi/local.settings.example.json src/EstateDataCollection.AzureFunctions.AdminUi/local.settings.json
 ```
-
-Key `AdminUi` settings in `EstateDataCollection.AzureFunctions.AdminUi/local.settings.json`:
-- `AdminUi:ExecutionMode`: `"Direct"` (executes use cases in-process against Azurite) or `"HttpProxy"` (forwards calls via HTTP to `AdminUi:AdminApiBaseUrl`, e.g. `http://localhost:7072/api`, using `AdminUi:AdminApiFunctionKey`).
 
 ### 4. Running Locally
 
-Run any or all of the three hosts in separate terminals:
+Run either or both hosts in separate terminals:
 
 ```bash
 # Public Ingestion & Schema Discovery API (http://localhost:7071/api)
 func start --script-root src/EstateDataCollection.AzureFunctions.Public --port 7071
 
-# Admin Contract Management & Test API (http://localhost:7072/api)
+# Admin API (http://localhost:7072/api) & SSR Admin Portal UI (http://localhost:7072/manage)
 func start --script-root src/EstateDataCollection.AzureFunctions.Admin --port 7072
-
-# SSR Admin Portal UI (http://localhost:7073/manage)
-func start --script-root src/EstateDataCollection.AzureFunctions.AdminUi --port 7073
 ```
 
 ### 5. Running Automated Tests
@@ -198,6 +190,6 @@ Use [EstateDataCollection.Admin.http](src/EstateDataCollection.AzureFunctions.Ad
 
 See the complete guide in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [ADR 0006](docs/decisions/0006-flex-consumption-self-contained-deployment.md).
 
-- **Self-contained `linux-x64` packages:** Published via `.github/actions/setup-and-test/action.yml` for `EstateDataCollection.AzureFunctions.Public` (`edc-functions-public-linux-x64.zip`) and `EstateDataCollection.AzureFunctions.Admin` (`edc-functions-admin-linux-x64.zip`), and optionally `EstateDataCollection.AzureFunctions.AdminUi`.
+- **Self-contained `linux-x64` packages:** Published via `.github/actions/setup-and-test/action.yml` for `EstateDataCollection.AzureFunctions.Public` (`edc-functions-public-linux-x64.zip`) and `EstateDataCollection.AzureFunctions.Admin` (`edc-functions-admin-linux-x64.zip`), which includes both the Admin API and SSR Admin Portal.
 - **`FUNCTIONS_WORKER_RUNTIME`:** Do **not** set in Flex Consumption App Settings (managed at the platform `functionAppConfig` runtime level).
 - **Storage auth:** Supports Managed Identity (`AzureWebJobsStorage__accountName`, `BlobStorageOptions__ServiceUri`) or connection strings (`ConnectionStrings__BlobStorage`).

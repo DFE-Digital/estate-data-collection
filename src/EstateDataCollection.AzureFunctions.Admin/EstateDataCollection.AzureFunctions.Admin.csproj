@@ -27,6 +27,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\EstateDataCollection.Admin.UI\EstateDataCollection.Admin.UI.csproj" />
         <ProjectReference Include="..\EstateDataCollection.Application\EstateDataCollection.Application.csproj" />
         <ProjectReference Include="..\EstateDataCollection.Common.Web\EstateDataCollection.Common.Web.csproj" />
         <ProjectReference Include="..\EstateDataCollection.Common\EstateDataCollection.Common.csproj" />

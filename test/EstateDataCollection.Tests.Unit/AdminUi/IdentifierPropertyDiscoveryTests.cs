@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 using EstateDataCollection.Admin.UI.Models;
-using EstateDataCollection.AzureFunctions.AdminUi.Helpers;
+using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Builders;

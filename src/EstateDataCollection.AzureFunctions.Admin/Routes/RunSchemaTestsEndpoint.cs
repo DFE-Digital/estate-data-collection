@@ -12,7 +12,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 /// <summary>
 /// Executes stored schema regression tests (JSON Schema, business logic rules, identifier alignment,
 /// and stored valid/invalid payload fixtures) across a single version or all active/non-retired schemas.
-/// Route: POST /schemas/tests/run
+/// Route: POST /api/schemas/tests/run
 /// </summary>
 public sealed class RunSchemaTestsEndpoint(
     IUseCase<RunSchemaTestsResult, RunSchemaTestsRequest> runTestsUseCase,
@@ -28,7 +28,7 @@ public sealed class RunSchemaTestsEndpoint(
 
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
-        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post), Route = "schemas/tests/run")]
+        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post), Route = "api/schemas/tests/run")]
         HttpRequest http,
         CancellationToken cancellationToken)
     {

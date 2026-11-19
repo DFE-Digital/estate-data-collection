@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace EstateDataCollection.AzureFunctions.AdminUi.Routes;
+namespace EstateDataCollection.AzureFunctions.Admin.Routes;
 
 public sealed class StaticAssetEndpoint(
     FunctionEndpointInstrumentation? instrumentation = null
