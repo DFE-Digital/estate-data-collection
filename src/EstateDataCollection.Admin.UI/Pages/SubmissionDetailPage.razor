@@ -1,0 +1,303 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Pages
+
+<DfeAdminLayout Meta="Model.Page">
+    <a href="@AppRoutes.AdminUi.Submissions" class="govuk-back-link">Back to Submissions</a>
+
+    <ErrorSummary Model="Model.ErrorSummary" />
+
+    @if (Model.HasDetail)
+    {
+        <span class="govuk-caption-l">Submission Inspector &bull; @Model.SchemaVersionDisplay</span>
+        <h1 class="govuk-heading-xl govuk-!-margin-bottom-3">
+            <code class="dfe-code-badge" style="font-size: 1.5rem;">@Model.SubmissionIdDisplay</code>
+        </h1>
+
+        <div class="dfe-actions-inline govuk-!-margin-bottom-5">
+            <strong class="@Model.LifecycleTagCssClass">@Model.LifecycleTagText</strong>
+            <strong class="@Model.ReadinessTagCssClass">@Model.ReadinessTagText</strong>
+            <a href="@Model.SchemaDetailUrl" class="govuk-link govuk-!-margin-left-2">View Schema @Model.SchemaVersionDisplay</a>
+            <a href="@Model.SchemaSubmissionsUrl" class="govuk-link govuk-!-margin-left-2">All Submissions for @Model.SchemaVersionDisplay</a>
+        </div>
+
+        <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Submission ID</dt>
+                <dd class="govuk-summary-list__value"><code class="dfe-code-badge">@Model.SubmissionIdDisplay</code></dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Pinned schema contract</dt>
+                <dd class="govuk-summary-list__value">
+                    <a href="@Model.SchemaDetailUrl" class="govuk-link">@Model.SchemaVersionDisplay</a>
+                </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Identifier / URN</dt>
+                <dd class="govuk-summary-list__value">@Model.IdentifierDisplay</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Created (UTC)</dt>
+                <dd class="govuk-summary-list__value">@Model.CreatedAtDisplay</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Finalised (UTC)</dt>
+                <dd class="govuk-summary-list__value">@Model.FinalisedAtDisplay</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Recorded items</dt>
+                <dd class="govuk-summary-list__value">
+                    <strong>@Model.DraftCount</strong> draft upload(s), <strong>@Model.AuditCount</strong> audit event(s)
+                </dd>
+            </div>
+        </dl>
+
+        <div class="dfe-pane govuk-!-margin-bottom-6" id="submission-next-steps">
+            <h2 class="govuk-heading-m govuk-!-margin-bottom-2">Validation Status &amp; Next Steps</h2>
+            <p class="govuk-body">@Model.NextStepsSummary</p>
+            @if (Model.HasNextSteps)
+            {
+                <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-2">
+                    @foreach (var step in Model.NextSteps)
+                    {
+                        <li>@step</li>
+                    }
+                </ul>
+            }
+            @if (Model.HasPendingErrors)
+            {
+                <h3 class="govuk-heading-s govuk-!-margin-top-3 govuk-!-margin-bottom-2">Pending Validation Issues</h3>
+                <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                    @foreach (var err in Model.PendingErrors)
+                    {
+                        <li>
+                            @if (err.HasPropertyPath)
+                            {
+                                <code class="dfe-code-badge">@err.PropertyPath</code>
+                            }
+                            <span>@err.Message</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <h2 class="govuk-heading-l">Individual Submission Items</h2>
+
+        @if (Model.HasProcessedArtifact)
+        {
+            <div class="govuk-summary-card govuk-!-margin-bottom-4" id="processed-artifact-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h3 class="govuk-summary-card__title">
+                        Processed Canonical Envelope (<code class="dfe-code-badge">@Model.ProcessedBlobName</code>)
+                    </h3>
+                    <ul class="govuk-summary-card__actions">
+                        <li class="govuk-summary-card__action">
+                            <strong class="govuk-tag govuk-tag--green">@Model.ProcessedStatus</strong>
+                        </li>
+                    </ul>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body-s govuk-!-margin-bottom-2">
+                        Size: <strong>@Model.ProcessedSizeDisplay</strong> &bull;
+                        SHA-256: <code class="dfe-code-badge">@Model.ProcessedSha256</code>
+                    </p>
+                    <details class="govuk-details govuk-!-margin-bottom-0" data-module="govuk-details" open>
+                        <summary class="govuk-details__summary">
+                            <span class="govuk-details__summary-text">View merged finalised JSON payload</span>
+                        </summary>
+                        <div class="govuk-details__text">
+                            <pre class="dfe-code-pre">@Model.FormattedProcessedPayload</pre>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        }
+        else if (Model.HasMergedDraftPayload)
+        {
+            <div class="govuk-summary-card govuk-!-margin-bottom-4" id="merged-draft-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h3 class="govuk-summary-card__title">
+                        Current Merged Draft Preview (@Model.DraftCount upload(s) merged via RFC 7396)
+                    </h3>
+                    <ul class="govuk-summary-card__actions">
+                        <li class="govuk-summary-card__action">
+                            <strong class="@Model.ReadinessTagCssClass">@Model.ReadinessTagText</strong>
+                        </li>
+                    </ul>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <details class="govuk-details govuk-!-margin-bottom-0" data-module="govuk-details" open>
+                        <summary class="govuk-details__summary">
+                            <span class="govuk-details__summary-text">View merged draft JSON</span>
+                        </summary>
+                        <div class="govuk-details__text">
+                            <pre class="dfe-code-pre">@Model.FormattedMergedDraftPayload</pre>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        }
+
+        <div class="govuk-summary-card govuk-!-margin-bottom-4" id="session-item-card">
+            <div class="govuk-summary-card__title-wrapper">
+                <h3 class="govuk-summary-card__title">Session Metadata (<code class="dfe-code-badge">session.json</code>)</h3>
+            </div>
+            <div class="govuk-summary-card__content">
+                <details class="govuk-details govuk-!-margin-bottom-0" data-module="govuk-details">
+                    <summary class="govuk-details__summary">
+                        <span class="govuk-details__summary-text">View raw session.json</span>
+                    </summary>
+                    <div class="govuk-details__text">
+                        <pre class="dfe-code-pre">@Model.RawSessionJson</pre>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <h3 class="govuk-heading-m govuk-!-margin-top-6">Timestamped Draft Uploads (@Model.DraftCount)</h3>
+        @if (Model.HasDraftChunks)
+        {
+            @foreach (var chunk in Model.DraftChunks)
+            {
+                <div class="govuk-summary-card govuk-!-margin-bottom-3">
+                    <div class="govuk-summary-card__title-wrapper">
+                        <h4 class="govuk-summary-card__title">
+                            Draft Upload #@chunk.Index &mdash; @chunk.CreatedAtDisplay
+                        </h4>
+                        <ul class="govuk-summary-card__actions">
+                            <li class="govuk-summary-card__action">@chunk.SizeDisplay</li>
+                        </ul>
+                    </div>
+                    <div class="govuk-summary-card__content">
+                        <p class="govuk-body-s govuk-!-margin-bottom-2">
+                            Blob: <code class="dfe-code-badge">@chunk.BlobName</code>
+                        </p>
+                        <details class="govuk-details govuk-!-margin-bottom-0" data-module="govuk-details">
+                            <summary class="govuk-details__summary">
+                                <span class="govuk-details__summary-text">View @chunk.ShortBlobName</span>
+                            </summary>
+                            <div class="govuk-details__text">
+                                <pre class="dfe-code-pre">@chunk.FormattedJson</pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="govuk-inset-text">No timestamped draft uploads have been persisted for this submission yet.</div>
+        }
+
+        <h2 class="govuk-heading-l govuk-!-margin-top-7" id="audit-trail-section">
+            Audit Trail &amp; Processes Consumed (@Model.AuditCount)
+        </h2>
+
+        @if (Model.HasAuditItems)
+        {
+            @foreach (var audit in Model.AuditItems)
+            {
+                <div class="govuk-summary-card govuk-!-margin-bottom-4" data-audit-event="@audit.EventId">
+                    <div class="govuk-summary-card__title-wrapper">
+                        <h3 class="govuk-summary-card__title">
+                            #@audit.SequenceNumber &bull; @audit.Action &mdash; @audit.TimestampDisplay
+                        </h3>
+                        <ul class="govuk-summary-card__actions">
+                            <li class="govuk-summary-card__action">
+                                <strong class="@audit.OutcomeTagCssClass">@audit.OutcomeStatusText</strong>
+                            </li>
+                            <li class="govuk-summary-card__action">@audit.HttpStatusDisplay</li>
+                        </ul>
+                    </div>
+                    <div class="govuk-summary-card__content">
+                        @if (audit.HasMessage)
+                        {
+                            <p class="govuk-body govuk-!-margin-bottom-2">@audit.Message</p>
+                        }
+                        <p class="govuk-body-s govuk-!-margin-bottom-3">
+                            Event ID: <code class="dfe-code-badge">@audit.EventId</code>
+                            @if (audit.HasErrorCode)
+                            {
+                                <span> &bull; Error Code: <code class="dfe-code-badge">@audit.ErrorCode</code></span>
+                            }
+                            @if (audit.HasIdentifier)
+                            {
+                                <span> &bull; Identifier: <strong>@audit.IdentifierDisplay</strong></span>
+                            }
+                            @if (audit.HasTraceId)
+                            {
+                                <span> &bull; Trace ID: <code class="dfe-code-badge">@audit.TraceId</code></span>
+                            }
+                        </p>
+
+                        @if (audit.HasValidationIssues)
+                        {
+                            <h4 class="govuk-heading-s govuk-!-margin-bottom-1">Validation Issues Recorded</h4>
+                            <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-3">
+                                @foreach (var issue in audit.ValidationIssues)
+                                {
+                                    <li class="govuk-body-s">
+                                        @if (issue.HasPropertyPath)
+                                        {
+                                            <code class="dfe-code-badge">@issue.PropertyPath</code>
+                                        }
+                                        <span>@issue.Message</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+
+                        @if (audit.HasProcesses)
+                        {
+                            <h4 class="govuk-heading-s govuk-!-margin-bottom-2">Processes Consumed</h4>
+                            <table class="govuk-table govuk-!-margin-bottom-3">
+                                <thead class="govuk-table__head">
+                                    <tr class="govuk-table__row">
+                                        <th scope="col" class="govuk-table__header">Process</th>
+                                        <th scope="col" class="govuk-table__header">Engine</th>
+                                        <th scope="col" class="govuk-table__header">Outcome</th>
+                                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Duration</th>
+                                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Items</th>
+                                        <th scope="col" class="govuk-table__header">Summary</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="govuk-table__body">
+                                    @foreach (var proc in audit.Processes)
+                                    {
+                                        <tr class="govuk-table__row">
+                                            <td class="govuk-table__cell govuk-body-s"><code class="dfe-code-badge">@proc.ProcessName</code></td>
+                                            <td class="govuk-table__cell govuk-body-s">@proc.EngineDisplay</td>
+                                            <td class="govuk-table__cell"><strong class="@proc.OutcomeTagCssClass">@proc.OutcomeText</strong></td>
+                                            <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s">@proc.DurationDisplay</td>
+                                            <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s">@proc.ItemCountDisplay</td>
+                                            <td class="govuk-table__cell govuk-body-s">@proc.SummaryDisplay</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <details class="govuk-details govuk-!-margin-bottom-0" data-module="govuk-details">
+                            <summary class="govuk-details__summary">
+                                <span class="govuk-details__summary-text">View raw audit JSON</span>
+                            </summary>
+                            <div class="govuk-details__text">
+                                <pre class="dfe-code-pre">@audit.RawAuditJson</pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="govuk-inset-text">
+                No audit events were recorded for this submission.
+            </div>
+        }
+    }
+</DfeAdminLayout>
+
+@code {
+    [Parameter, EditorRequired] public SubmissionDetailViewModel Model { get; set; } = default!;
+}

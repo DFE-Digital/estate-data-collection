@@ -7,4 +7,6 @@ public sealed record FinaliseSubmissionResult(
     int SchemaVersion,
     string Status,
     string ProcessedBlobUri,
-    DateTimeOffset FinalisedAtUtc);
+    DateTimeOffset FinalisedAtUtc,
+    string? Identifier = null,
+    string? IdentifierType = null);

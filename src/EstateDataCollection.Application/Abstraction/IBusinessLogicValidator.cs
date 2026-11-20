@@ -1,0 +1,18 @@
+using EstateDataCollection.Application.Models;
+using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Markers;
+using EstateDataCollection.Common.Results;
+
+namespace EstateDataCollection.Application.Abstraction;
+
+public interface IBusinessLogicValidator : IInfrastructure
+{
+    Result<IReadOnlyList<ValidationMessage>> ValidateRulesSyntax(
+        string rawLogicJson,
+        out IReadOnlyList<BusinessRule>? parsedRules);
+
+    Task<Result<BusinessRuleValidationResult>> ValidateAsync(
+        string payloadJson,
+        IReadOnlyList<BusinessRule> rules,
+        CancellationToken cancellationToken = default);
+}

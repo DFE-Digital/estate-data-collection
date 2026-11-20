@@ -1,0 +1,30 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Pages
+
+<DfeAdminLayout Meta="Model.Page">
+    <a href="@AppRoutes.AdminUi.Dashboard" class="govuk-back-link">Back to Schema Catalogue</a>
+
+    <div class="govuk-grid-row">
+        <div class="govuk-grid-column-full">
+            <span class="govuk-caption-l">Schema Contract Version</span>
+            <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">
+                @Model.SchemaName
+            </h1>
+        </div>
+    </div>
+
+    <ErrorSummary Model="Model.ErrorSummary" />
+
+    @if (Model.HasSchema)
+    {
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-full">
+                <SchemaSectionCard Model="Model.SchemaCard" />
+            </div>
+        </div>
+    }
+</DfeAdminLayout>
+
+@code {
+    [Parameter, EditorRequired] public SchemaVersionsViewModel Model { get; set; } = default!;
+}

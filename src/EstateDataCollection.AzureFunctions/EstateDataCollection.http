@@ -1,76 +1,541 @@
 @baseUrl = http://localhost:7071/api
+@adminBaseUrl = http://localhost:7072/api
+@functionKey = 
+@adminFunctionKey = 
 @schemaName = edc_payload
+@cdcSchemaName = cdc_survey
+@odcsSiteSchemaName = edc-survey-sites
+
+# Working submission session IDs (auto-captured via named requests or update manually after session creation)
+@submissionId = 01a15aae-92f2-7267-9057-d28d7eaccf53
+@odcsSubmissionId = 01a19900-4455-7c22-9100-112233445566
+@cdcSubmissionId = 01a18735-217b-7b18-8430-45586e029368
 
 ### =========================================================================
-### 1. SCHEMA MANAGEMENT (Data Team & CI/CD)
+### 0. OBSERVABILITY & DIAGNOSTICS (Public API)
 ### =========================================================================
 
-### 1.1 Verify / Dry-Run Schema Candidate (Draft 2020-12 Syntax & Fixture Test)
+### 0.1 Service About & Version Metadata
+# Anonymous health/diagnostic endpoint returning service name, CalVer version, commit SHA, and environment.
+GET {{baseUrl}}/about
+Accept: application/json
+
+
+### =========================================================================
+### 1. ADMIN SCHEMA & QUALITY RULE VERIFICATION — DRY-RUN (Admin API)
+###    Supports JSON Schema (Draft-07 & 2020-12), ODCS v3.2.0 YAML,
+###    and Multi-Engine Quality Rules (JsonLogic & CEL)
+### =========================================================================
+
+### 1.1 Verify Schema Candidate (Draft 2020-12 Syntax & Fixture Dry-Run)
+# Route: POST /schemas/verify
 # Does NOT write to Blob Storage. Validates schema and tests against sample payloads.
-POST {{baseUrl}}/schemas/verify
+POST {{adminBaseUrl}}/schemas/verify
 Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
 
 {
-  "schemaJson": "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"title\":\"edc_payload\",\"schemaVersion\":1,\"type\":\"object\",\"properties\":{\"urn\":{\"type\":\"integer\"},\"school_name\":{\"type\":\"string\"},\"school_address\":{\"type\":\"string\"},\"school_capacity\":{\"type\":[\"integer\",\"null\"]}},\"required\":[\"urn\",\"school_name\",\"school_address\"],\"additionalProperties\":false}",
+  "schemaJson": "{\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", \"title\": \"edc_payload\", \"schemaVersion\": 1, \"type\": \"object\", \"properties\": {\"urn\": {\"type\": \"integer\"}, \"school_name\": {\"type\": \"string\"}, \"school_address\": {\"type\": \"string\"}, \"school_capacity\": {\"type\": [\"integer\", \"null\"]}}, \"required\": [\"urn\", \"school_name\", \"school_address\"], \"additionalProperties\": false}",
   "sampleValidFixtures": [
-    "{\"urn\":104521,\"school_name\":\"St Mary's High School\",\"school_address\":\"High Street, Leeds\",\"school_capacity\":450}"
+    "{\"urn\": 104521, \"school_name\": \"St Mary's High School\", \"school_address\": \"High Street, Leeds\", \"school_capacity\": 450}"
   ],
   "sampleInvalidFixtures": [
-    "{\"school_name\":\"Missing URN and Address\"}"
+    "{\"school_name\": \"Missing URN and Address\"}"
   ]
 }
 
-### 1.2 Submit & Schedule Schema v1 (Saves to "schemas" container)
-# Note: Route is /schemas/{schemaName}/versions/{version}
-POST {{baseUrl}}/schemas/{{schemaName}}/versions/1
+
+### 1.2 Verify Standalone Quality Rules (Direct Raw Array — JsonLogic & CEL)
+# Route: POST /logic/verify accepts a direct JSON array of quality rules across enabled engines
+POST {{adminBaseUrl}}/logic/verify
 Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+[
+  {
+    "id": "CDC-DQ1-JSONLogic",
+    "type": "custom",
+    "engine": "jsonlogic",
+    "description": "Survey updated timestamp must be greater than or equal to survey creation timestamp.",
+    "severity": "ERROR",
+    "path": "survey",
+    "message": "Survey updated timestamp must be greater than or equal to survey creation timestamp.",
+    "implementation": {
+      ">=": [
+        { "var": "survey.updated_at" },
+        { "var": "survey.created_at" }
+      ]
+    }
+  },
+  {
+    "id": "CDC-DQ2-CEL",
+    "type": "custom",
+    "engine": "cel",
+    "description": "School URN must be a 6-character string and survey must have a non-empty participant_id.",
+    "severity": "ERROR",
+    "path": "school",
+    "message": "School URN must be 6 characters long.",
+    "implementation": "size(school.urn) == 6"
+  }
+]
+
+
+### 1.3 Verify Multi-Engine Quality Rules (JsonLogic + CEL) with Fixture Dry-Runs
+# Route: POST /logic/verify with rulesJson, sampleValidFixtures, and sampleInvalidFixtures
+POST {{adminBaseUrl}}/logic/verify
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
 
 {
-  "schemaJson": "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"title\":\"edc_payload\",\"schemaVersion\":1,\"type\":\"object\",\"properties\":{\"urn\":{\"type\":\"integer\"},\"school_name\":{\"type\":\"string\"},\"school_address\":{\"type\":\"string\"},\"school_capacity\":{\"type\":[\"integer\",\"null\"]}},\"required\":[\"urn\",\"school_name\",\"school_address\"],\"additionalProperties\":false}",
-  "effectiveFromUtc": "2026-10-01T00:00:00Z"
+  "rulesJson": "[{\"id\": \"CDC-DQ1-JSONLogic\", \"type\": \"custom\", \"engine\": \"jsonlogic\", \"description\": \"Survey updated timestamp must be >= created timestamp.\", \"severity\": \"ERROR\", \"path\": \"survey\", \"message\": \"Survey updated timestamp must be greater than or equal to survey creation timestamp.\", \"implementation\": {\">=\": [{\"var\": \"survey.updated_at\"}, {\"var\": \"survey.created_at\"}]}}, {\"id\": \"CDC-DQ2-CEL-CAPACITY\", \"type\": \"custom\", \"engine\": \"cel\", \"description\": \"School capacity when present must be positive.\", \"severity\": \"ERROR\", \"path\": \"school\", \"message\": \"School capacity must be greater than zero.\", \"implementation\": \"school.capacity > 0\"}]",
+  "sampleValidFixtures": [
+    "{\"survey\": {\"id\": \"SURV-001\", \"created_at\": \"2026-10-15T10:00:00Z\", \"updated_at\": \"2026-10-15T14:30:00Z\"}, \"school\": {\"urn\": \"123456\", \"capacity\": 450}}"
+  ],
+  "sampleInvalidFixtures": [
+    "{\"survey\": {\"id\": \"SURV-001\", \"created_at\": \"2026-10-15T16:00:00Z\", \"updated_at\": \"2026-10-15T10:00:00Z\"}, \"school\": {\"urn\": \"123456\", \"capacity\": 450}}",
+    "{\"survey\": {\"id\": \"SURV-001\", \"created_at\": \"2026-10-15T10:00:00Z\", \"updated_at\": \"2026-10-15T14:30:00Z\"}, \"school\": {\"urn\": \"123456\", \"capacity\": 0}}"
+  ]
 }
 
-### 1.3 Submit & Schedule Schema v2 (e.g. school_capacity deprecated/removed)
-POST {{baseUrl}}/schemas/{{schemaName}}/versions/2
+
+### 1.4 Verify Route A: Paired Draft-07 JSON Schema + Companion Rules (edc-school-site)
+# Route: POST /schemas/verify with schemaJson + rulesJson + fixtures
+POST {{adminBaseUrl}}/schemas/verify
 Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
 
 {
-  "schemaJson": "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"title\":\"edc_payload\",\"schemaVersion\":2,\"type\":\"object\",\"properties\":{\"urn\":{\"type\":\"integer\"},\"school_name\":{\"type\":\"string\"},\"school_address\":{\"type\":\"string\"},\"local_authority\":{\"type\":[\"string\",\"null\"]}},\"required\":[\"urn\",\"school_name\",\"school_address\"],\"additionalProperties\":false}",
-  "effectiveFromUtc": "2026-11-01T00:00:00Z"
+  "schemaJson": "{\"$schema\": \"http://json-schema.org/draft-07/schema#\", \"type\": \"object\", \"properties\": {\"survey\": {\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"string\", \"pattern\": \"^SURV-[A-Za-z0-9-]+$\"}, \"survey_name\": {\"type\": \"string\"}, \"participant_id\": {\"type\": \"string\"}, \"surveyor_email\": {\"type\": [\"string\", \"null\"], \"format\": \"email\"}, \"is_complete\": {\"type\": \"boolean\"}, \"created_at\": {\"type\": \"string\", \"format\": \"date-time\"}, \"updated_at\": {\"type\": \"string\", \"format\": \"date-time\"}}, \"required\": [\"id\", \"survey_name\", \"participant_id\", \"is_complete\", \"created_at\", \"updated_at\"]}, \"school\": {\"type\": \"object\", \"properties\": {\"urn\": {\"type\": \"string\", \"pattern\": \"^[0-9]{6}$\"}, \"name\": {\"type\": \"string\"}, \"local_authority\": {\"type\": [\"string\", \"null\"]}}, \"required\": [\"urn\", \"name\"]}, \"sites\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"blocks\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"type\": {\"type\": \"string\"}, \"floors\": {\"type\": [\"array\", \"null\"], \"items\": {\"type\": [\"object\", \"null\"], \"properties\": {\"name\": {\"type\": \"string\"}}, \"required\": [\"name\"]}}}, \"required\": [\"name\", \"type\"]}}}, \"required\": [\"name\", \"blocks\"]}}}, \"required\": [\"survey\", \"school\", \"sites\"]}",
+  "rulesJson": "[{\"id\": \"CDC-DQ1-JSONLogic\", \"type\": \"custom\", \"engine\": \"jsonlogic\", \"description\": \"Survey updated timestamp must be greater than or equal to survey creation timestamp.\", \"severity\": \"ERROR\", \"path\": \"survey\", \"message\": \"Survey updated timestamp must be greater than or equal to survey creation timestamp.\", \"implementation\": {\">=\": [{\"var\": \"survey.updated_at\"}, {\"var\": \"survey.created_at\"}]}}]",
+  "sampleValidFixtures": [
+    "{\"survey\": {\"id\": \"SURV-1234-5678\", \"survey_name\": \"CCD\", \"participant_id\": \"abc-def-ghi\", \"surveyor_email\": \"surveyor@supplier.com\", \"is_complete\": true, \"created_at\": \"2026-10-15T10:00:00Z\", \"updated_at\": \"2026-10-15T14:30:00Z\"}, \"school\": {\"urn\": \"123456\", \"name\": \"Example School\"}, \"sites\": [{\"name\": \"EFA1\", \"blocks\": [{\"name\": \"EFAA\", \"type\": \"block\", \"floors\": [{\"name\": \"EFAA-GF\"}]}]}]}"
+  ],
+  "sampleInvalidFixtures": [
+    "{\"survey\": {\"id\": \"SURV-1234-5678\", \"survey_name\": \"CCD\", \"participant_id\": \"abc-def-ghi\", \"surveyor_email\": \"surveyor@supplier.com\", \"is_complete\": true, \"created_at\": \"2026-10-15T16:00:00Z\", \"updated_at\": \"2026-10-15T10:00:00Z\"}, \"school\": {\"urn\": \"123456\", \"name\": \"Example School\"}, \"sites\": [{\"name\": \"EFA1\", \"blocks\": [{\"name\": \"EFAA\", \"type\": \"block\", \"floors\": [{\"name\": \"EFAA-GF\"}]}]}]}"
+  ]
+}
+
+
+### 1.5 Verify Route B (Raw YAML): Direct ODCS v3.2.0 Data Contract Verification
+# Route: POST /schemas/verify with Content-Type: application/yaml
+# Automatically parses ODCS v3.2.0 YAML into Draft-07 JSON Schema and extracts embedded quality rules.
+POST {{adminBaseUrl}}/schemas/verify
+Content-Type: application/yaml
+X-File-Name: edc-school-site-jsonlogic.odcs.yaml
+x-functions-key: {{adminFunctionKey}}
+
+version: "1.0.0"
+kind: DataContract
+apiVersion: v3.2.0
+id: edc-survey-sites
+name: CCDSurveySubmission-Sites
+status: draft
+schema:
+  - name: submission
+    logicalType: object
+    description: Top-level CCDSurveySubmission-Sites payload container
+    properties:
+      - name: survey
+        logicalType: object
+        required: true
+        quality:
+          - id: CDC-DQ1-JSONLogic
+            type: custom
+            engine: jsonlogic
+            description: Survey updated timestamp must be greater than or equal to survey creation timestamp.
+            implementation:
+              ">=":
+                - var: survey.updated_at
+                - var: survey.created_at
+        properties:
+          - name: id
+            logicalType: string
+            required: true
+            logicalTypeOptions:
+              pattern: "^SURV-[A-Za-z0-9-]+$"
+          - name: survey_name
+            logicalType: string
+            required: true
+          - name: participant_id
+            logicalType: string
+            required: true
+          - name: surveyor_email
+            logicalType: string
+            required: false
+            logicalTypeOptions:
+              format: email
+          - name: is_complete
+            logicalType: boolean
+            required: true
+          - name: created_at
+            logicalType: timestamp
+            required: true
+          - name: updated_at
+            logicalType: timestamp
+            required: true
+      - name: school
+        logicalType: object
+        required: true
+        properties:
+          - name: urn
+            logicalType: string
+            required: true
+            logicalTypeOptions:
+              pattern: "^[0-9]{6}$"
+          - name: name
+            logicalType: string
+            required: true
+      - name: sites
+        logicalType: array
+        required: true
+        items:
+          logicalType: object
+          required: true
+          properties:
+            - name: name
+              logicalType: string
+              required: true
+            - name: blocks
+              logicalType: array
+              required: true
+              items:
+                logicalType: object
+                required: true
+                properties:
+                  - name: name
+                    logicalType: string
+                    required: true
+                  - name: type
+                    logicalType: string
+                    required: true
+
+
+### 1.6 Verify Route B (JSON Envelope): ODCS v3.2.0 YAML + Fixture Dry-Runs
+# Route: POST /schemas/verify with odcsYaml + sampleValidFixtures + sampleInvalidFixtures
+POST {{adminBaseUrl}}/schemas/verify
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "fileName": "edc-school-site-jsonlogic.odcs.yaml",
+  "odcsYaml": "version: \"1.0.0\"\nkind: DataContract\napiVersion: v3.2.0\nid: edc-survey-sites\nname: CCDSurveySubmission-Sites\nschema:\n  - name: submission\n    logicalType: object\n    properties:\n      - name: survey\n        logicalType: object\n        required: true\n        quality:\n          - id: CDC-DQ1-JSONLogic\n            type: custom\n            engine: jsonlogic\n            description: Survey updated timestamp must be greater than or equal to survey creation timestamp.\n            implementation:\n              \">=\":\n                - var: survey.updated_at\n                - var: survey.created_at\n        properties:\n          - name: id\n            logicalType: string\n            required: true\n          - name: created_at\n            logicalType: timestamp\n            required: true\n          - name: updated_at\n            logicalType: timestamp\n            required: true\n      - name: school\n        logicalType: object\n        required: true\n        properties:\n          - name: urn\n            logicalType: string\n            required: true\n            logicalTypeOptions:\n              pattern: \"^[0-9]{6}$\"\n          - name: name\n            logicalType: string\n            required: true\n",
+  "sampleValidFixtures": [
+    "{\"survey\": {\"id\": \"SURV-100\", \"created_at\": \"2026-10-15T10:00:00Z\", \"updated_at\": \"2026-10-15T12:00:00Z\"}, \"school\": {\"urn\": \"123456\", \"name\": \"Example School\"}}"
+  ],
+  "sampleInvalidFixtures": [
+    "{\"survey\": {\"id\": \"SURV-100\", \"created_at\": \"2026-10-15T15:00:00Z\", \"updated_at\": \"2026-10-15T12:00:00Z\"}, \"school\": {\"urn\": \"123456\", \"name\": \"Example School\"}}"
+  ]
 }
 
 
 ### =========================================================================
-### 2. SURVEY INGESTION WORKFLOW (Surveyor / Mobile Client)
+### 2. ADMIN SCHEMA INGESTION, SCHEDULING & CATALOGUE INSPECTION (Admin API)
+###    Submitted schemas are stored as 'Validated' (unscheduled) until
+###    scheduled via PATCH /schemas/{schemaName}/versions/{version}/schedule
 ### =========================================================================
 
-### 2.1 Create Submission Session (Auto-resolves current active schema schedule)
+### 2.1 Submit Schema v1 with Companion Quality Rules (edc_payload) — Stored Unscheduled ('Validated')
+# Route: POST /schemas/{schemaName}/versions/{version:int}
+POST {{adminBaseUrl}}/schemas/{{schemaName}}/versions/1
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "schemaJson": "{\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", \"$id\": \"https://dfe_cde_edc_integtration/schemas/edc_payload.schema.json\", \"title\": \"edc_payload\", \"description\": \"JSON Schema for eed_catalogue_30_bronze.cde_edc_integration.edc_payload\", \"schemaVersion\": 1, \"type\": \"object\", \"properties\": {\"urn\": {\"type\": \"integer\", \"minimum\": 100000, \"maximum\": 999999, \"description\": \"Unique Reference Number\"}, \"school_name\": {\"type\": \"string\", \"minLength\": 1}, \"school_address\": {\"type\": \"string\"}, \"local_authority\": {\"type\": [\"string\", \"null\"]}, \"telephone\": {\"type\": [\"string\", \"null\"]}, \"diocese\": {\"type\": [\"string\", \"null\"]}, \"school_capacity\": {\"type\": [\"integer\", \"null\"], \"minimum\": 0}}, \"required\": [\"urn\", \"school_name\", \"school_address\"], \"additionalProperties\": false}",
+  "rulesJson": "[{\"id\": \"RULE-CAPACITY-POSITIVE\", \"type\": \"custom\", \"engine\": \"jsonlogic\", \"description\": \"School capacity must be positive when specified.\", \"severity\": \"ERROR\", \"path\": \"school_capacity\", \"message\": \"School capacity must be greater than zero when specified.\", \"implementation\": {\"or\": [{\"==\": [{\"var\": \"school_capacity\"}, null]}, {\">\": [{\"var\": \"school_capacity\"}, 0]}]}}]",
+  "identifierConfig": {
+    "type": "URN",
+    "jsonPointer": "/urn",
+    "required": true
+  }
+}
+
+
+### 2.2 Submit Schema v2 (Evolution Example — school_capacity removed) — Stored Unscheduled ('Validated')
+# Route: POST /schemas/{schemaName}/versions/{version:int}
+POST {{adminBaseUrl}}/schemas/{{schemaName}}/versions/2
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "schemaJson": "{\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", \"$id\": \"https://dfe_cde_edc_integtration/schemas/edc_payload.schema.json\", \"title\": \"edc_payload\", \"description\": \"JSON Schema for eed_catalogue_30_bronze.cde_edc_integration.edc_payload v2\", \"schemaVersion\": 2, \"type\": \"object\", \"properties\": {\"urn\": {\"type\": \"integer\"}, \"school_name\": {\"type\": \"string\"}, \"school_address\": {\"type\": \"string\"}, \"local_authority\": {\"type\": [\"string\", \"null\"]}, \"telephone\": {\"type\": [\"string\", \"null\"]}, \"diocese\": {\"type\": [\"string\", \"null\"]}}, \"required\": [\"urn\", \"school_name\", \"school_address\"], \"additionalProperties\": false}"
+}
+
+
+### 2.3 Submit ODCS v3.2.0 Contract Directly via Raw YAML (edc-survey-sites v1)
+# Route: POST /schemas/{schemaName}/versions/{version:int}
+POST {{adminBaseUrl}}/schemas/{{odcsSiteSchemaName}}/versions/1
+Content-Type: application/yaml
+X-File-Name: edc-school-site-jsonlogic.odcs.yaml
+x-functions-key: {{adminFunctionKey}}
+
+version: "1.0.0"
+kind: DataContract
+apiVersion: v3.2.0
+id: edc-survey-sites
+name: CCDSurveySubmission-Sites
+status: draft
+schema:
+  - name: submission
+    logicalType: object
+    description: Top-level CCDSurveySubmission-Sites payload container
+    properties:
+      - name: survey
+        logicalType: object
+        required: true
+        quality:
+          - id: CDC-DQ1-JSONLogic
+            type: custom
+            engine: jsonlogic
+            description: Survey updated timestamp must be greater than or equal to survey creation timestamp.
+            implementation:
+              ">=":
+                - var: survey.updated_at
+                - var: survey.created_at
+        properties:
+          - name: id
+            logicalType: string
+            required: true
+            logicalTypeOptions:
+              pattern: "^SURV-[A-Za-z0-9-]+$"
+          - name: survey_name
+            logicalType: string
+            required: true
+          - name: participant_id
+            logicalType: string
+            required: true
+          - name: surveyor_email
+            logicalType: string
+            required: false
+            logicalTypeOptions:
+              format: email
+          - name: is_complete
+            logicalType: boolean
+            required: true
+          - name: created_at
+            logicalType: timestamp
+            required: true
+          - name: updated_at
+            logicalType: timestamp
+            required: true
+      - name: school
+        logicalType: object
+        required: true
+        properties:
+          - name: urn
+            logicalType: string
+            required: true
+            logicalTypeOptions:
+              pattern: "^[0-9]{6}$"
+          - name: name
+            logicalType: string
+            required: true
+          - name: local_authority
+            logicalType: string
+            required: false
+      - name: sites
+        logicalType: array
+        required: true
+        items:
+          logicalType: object
+          required: true
+          properties:
+            - name: name
+              logicalType: string
+              required: true
+            - name: blocks
+              logicalType: array
+              required: true
+              items:
+                logicalType: object
+                required: true
+                properties:
+                  - name: name
+                    logicalType: string
+                    required: true
+                  - name: type
+                    logicalType: string
+                    required: true
+                  - name: floors
+                    logicalType: array
+                    required: false
+                    items:
+                      logicalType: object
+                      properties:
+                        - name: name
+                          logicalType: string
+                          required: true
+
+
+### 2.4 Admin List All Schemas (Includes Unscheduled 'Validated' & 'Retired' Versions)
+# Route: GET /schemas (Admin App defaults: includeUnscheduled=true, includeFields=true)
+GET {{adminBaseUrl}}/schemas?includeUnscheduled=true&includeFields=true
+Accept: application/json
+x-functions-key: {{adminFunctionKey}}
+
+
+### 2.5 Admin Filter Schemas by Name
+# Route: GET /schemas?schemaName={schemaName}
+GET {{adminBaseUrl}}/schemas?schemaName={{schemaName}}&includeUnscheduled=true&includeFields=true
+Accept: application/json
+x-functions-key: {{adminFunctionKey}}
+
+
+### 2.6 Admin Get Schema Version Full Detail (Includes Unscheduled & Raw JSON Schema)
+# Route: GET /schemas/{schemaName}/versions/{version:int}
+# Admin App defaults: includeUnscheduled=true, includeRawJsonSchema=true
+GET {{adminBaseUrl}}/schemas/{{schemaName}}/versions/1?includeUnscheduled=true&includeRawJsonSchema=true
+Accept: application/json
+x-functions-key: {{adminFunctionKey}}
+
+
+### 2.7 Schedule / Activate Schema v1 (edc_payload)
+# Route: PATCH /schemas/{schemaName}/versions/{version:int}/schedule
+# Assigns effective dates so Schema v1 transitions from 'Validated' to 'Active' and becomes publicly discoverable.
+PATCH {{adminBaseUrl}}/schemas/{{schemaName}}/versions/1/schedule
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "effectiveFromUtc": "2026-01-01T00:00:00Z",
+  "effectiveToUtc": "2027-12-31T23:59:59Z",
+  "lifecycleAction": "Schedule"
+}
+
+
+### 2.8 Schedule / Activate ODCS Schema v1 (edc-survey-sites) & Set URN Pointer (/school/urn)
+# Route: PATCH /schemas/{schemaName}/versions/{version:int}/schedule
+PATCH {{adminBaseUrl}}/schemas/{{odcsSiteSchemaName}}/versions/1/schedule
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "effectiveFromUtc": "2026-01-01T00:00:00Z",
+  "effectiveToUtc": "2027-12-31T23:59:59Z",
+  "lifecycleAction": "Schedule",
+  "identifierConfig": {
+    "type": "URN",
+    "jsonPointer": "/school/urn",
+    "required": true
+  }
+}
+
+
+### 2.9 Schedule Schema v2 for Future Activation Window
+# Route: PATCH /schemas/{schemaName}/versions/{version:int}/schedule
+PATCH {{adminBaseUrl}}/schemas/{{schemaName}}/versions/2/schedule
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "effectiveFromUtc": "2027-01-01T00:00:00Z",
+  "effectiveToUtc": "2028-12-31T23:59:59Z",
+  "lifecycleAction": "Schedule"
+}
+
+
+### 2.10 Deprecate a Schema Version (Lifecycle Transition)
+# Route: PATCH /schemas/{schemaName}/versions/{version:int}/schedule
+# Allowed lifecycleAction values: "Schedule", "Activate", "Deprecate", "Retire"
+PATCH {{adminBaseUrl}}/schemas/{{schemaName}}/versions/2/schedule
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "lifecycleAction": "Deprecate"
+}
+
+
+### 2.11 Retire a Schema Version (Lifecycle Transition — Blocks Traffic)
+# Route: PATCH /schemas/{schemaName}/versions/{version:int}/schedule
+PATCH {{adminBaseUrl}}/schemas/{{schemaName}}/versions/2/schedule
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "lifecycleAction": "Retire"
+}
+
+
+### =========================================================================
+### 3. PUBLIC SCHEMA DISCOVERY & CATALOGUE (Public API)
+###    Exposes only scheduled/active schemas unless includeUnscheduled=true
+### =========================================================================
+
+### 3.1 List All Publicly Visible Schemas
+# Route: GET /schemas
+# Returns all scheduled/active schemas with their activeVersion, version summaries, and extracted activeVersionFields.
+GET {{baseUrl}}/schemas?includeFields=true
+Accept: application/json
+x-functions-key: {{functionKey}}
+
+
+### 3.2 Get Specific Schema Catalogue Entry by Name (edc_payload)
+# Route: GET /schemas/{schemaName}
+GET {{baseUrl}}/schemas/{{schemaName}}?includeFields=true
+Accept: application/json
+x-functions-key: {{functionKey}}
+
+
+### 3.3 Get Public Schema Version Detail (Extracted Fields, Constraints & Quality Rules)
+# Route: GET /schemas/{schemaName}/versions/{version:int}
+# Set includeRawJsonSchema=true to also include the raw JSON Schema string in the response.
+GET {{baseUrl}}/schemas/{{schemaName}}/versions/1?includeRawJsonSchema=true
+Accept: application/json
+x-functions-key: {{functionKey}}
+
+
+### 3.4 Get Public ODCS Schema Version Detail (edc-survey-sites v1)
+# Route: GET /schemas/{schemaName}/versions/{version:int}
+GET {{baseUrl}}/schemas/{{odcsSiteSchemaName}}/versions/1?includeRawJsonSchema=true
+Accept: application/json
+x-functions-key: {{functionKey}}
+
+
+### =========================================================================
+### 4. SURVEY INGESTION WORKFLOW — GENERIC EDC SCHEMA (Public API)
+### =========================================================================
+
+### 4.1 Create Submission Session (Auto-resolves current active schema schedule)
 # @name createSessionAuto
 POST {{baseUrl}}/submissions/{{schemaName}}
+x-functions-key: {{functionKey}}
 
-### Store the submission ID from the creation response
-#@submissionId = {{createSessionAuto.response.body.submissionId}}
+> {%
+  if (response.body && response.body.data && response.body.data.submissionId) {
+    client.global.set("submissionId", response.body.data.submissionId);
+  }
+%}
 
-### 2.2 Create Submission Session (Explicitly pinning Version 1)
+
+### 4.2 Create Submission Session (Explicitly pinning Version 1)
 # @name createSessionExplicit
 POST {{baseUrl}}/submissions/{{schemaName}}?version=1
+x-functions-key: {{functionKey}}
 
-### 
-@submissionId = 01a15aae-92f2-7267-9057-d28d7eaccf53
+> {%
+  if (response.body && response.body.data && response.body.data.submissionId) {
+    client.global.set("submissionId", response.body.data.submissionId);
+  }
+%}
 
-### 2.3 Upload Partial Draft 1 (Incomplete: Missing required 'school_address')
-# Persists to "payloads" blob container and returns pending validation issues with 200 OK
+
+### 4.3 Upload Partial Draft 1 (Incomplete: Missing required 'school_address')
+# Persists to 'payloads' landing container and returns pending validation issues with 200 OK
 PUT {{baseUrl}}/submissions/{{submissionId}}
 Content-Type: application/json
+x-functions-key: {{functionKey}}
 
 {
   "urn": 104521,
   "school_name": "St Mary's High School"
 }
 
-### 2.4 Upload Partial Draft 2 (Incomplete: Wrong data type on 'urn')
+
+### 4.4 Upload Partial Draft 2 (Incomplete: Wrong data type on 'urn')
 PUT {{baseUrl}}/submissions/{{submissionId}}
 Content-Type: application/json
+x-functions-key: {{functionKey}}
 
 {
   "urn": "NOT_A_VALID_NUMBER",
@@ -78,25 +543,784 @@ Content-Type: application/json
   "school_address": "High Street, Leeds"
 }
 
-### 2.5 Upload Complete & Valid Draft
-# All required fields present and conforms to pinned Schema v1
+
+### 4.5 Upload Complete & Valid Draft
+# All required fields present and conforms to pinned Schema v1 and JsonLogic rules
 PUT {{baseUrl}}/submissions/{{submissionId}}
 Content-Type: application/json
+x-functions-key: {{functionKey}}
 
 {
   "urn": 104521,
   "school_name": "St Mary's High School",
   "school_address": "High Street, Leeds",
+  "local_authority": "Leeds",
+  "telephone": "0113 123 4567",
+  "diocese": "Diocese of Leeds",
   "school_capacity": 450
 }
 
 
-### 2.6 Attempt to Finalise when Invalid (Demonstrating 422 Rejection)
-# If called while draft is in state 2.3 or 2.4, this returns 422 Unprocessable Entity
-# and payload remains in "payloads" container.
+### 4.6 Attempt to Finalise when Invalid (Demonstrating 422 Rejection)
+# If called while draft is in state 4.3 or 4.4, this returns 422 Unprocessable Entity
+# and payload remains safely in 'payloads' container.
 POST {{baseUrl}}/submissions/{{submissionId}}/finalise
+x-functions-key: {{functionKey}}
 
-### 2.7 Finalise Submission (Success: Promotes from "payloads" to "processed")
-# Validates complete payload, tags with SHA-256 integrity hash, moves to "processed",
+
+### 4.7 Finalise Submission (Success: Promotes from 'payloads' to 'processed' data lake storage)
+# Validates complete payload, extracts URN, tags with SHA-256 integrity hash, moves to 'processed' container,
 # and flags status as ReadyForCde.
 POST {{baseUrl}}/submissions/{{submissionId}}/finalise
+x-functions-key: {{functionKey}}
+
+
+### =========================================================================
+### 5. ODCS v3.2.0 SURVEY SITES WORKFLOW (edc-survey-sites)
+###    Tests Draft-07 Schema + Extracted ODCS Quality Rule (CDC-DQ1-JSONLogic)
+### =========================================================================
+
+### 5.1 Create ODCS Survey Sites Submission Session
+# @name createOdcsSession
+POST {{baseUrl}}/submissions/{{odcsSiteSchemaName}}?version=1
+x-functions-key: {{functionKey}}
+
+> {%
+  if (response.body && response.body.data && response.body.data.submissionId) {
+    client.global.set("odcsSubmissionId", response.body.data.submissionId);
+  }
+%}
+
+
+### 5.2 Upload Invalid ODCS Draft (Passes Schema, Fails CDC-DQ1-JSONLogic: updated_at < created_at)
+PUT {{baseUrl}}/submissions/{{odcsSubmissionId}}
+Content-Type: application/json
+x-functions-key: {{functionKey}}
+
+{
+  "survey": {
+    "id": "SURV-1234-5678",
+    "survey_name": "CCD",
+    "participant_id": "abc-def-ghi",
+    "surveyor_email": "surveyor@supplier.com",
+    "is_complete": true,
+    "created_at": "2026-10-15T16:00:00Z",
+    "updated_at": "2026-10-15T10:00:00Z"
+  },
+  "school": {
+    "urn": "123456",
+    "name": "Example School",
+    "local_authority": "Leeds"
+  },
+  "sites": [
+    {
+      "name": "EFA1",
+      "blocks": [
+        {
+          "name": "EFAA",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAA-GF"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+
+### 5.3 Upload Valid ODCS Draft (Conforms to Schema & CDC-DQ1-JSONLogic)
+PUT {{baseUrl}}/submissions/{{odcsSubmissionId}}
+Content-Type: application/json
+x-functions-key: {{functionKey}}
+
+{
+  "survey": {
+    "id": "SURV-1234-5678",
+    "survey_name": "CCD",
+    "participant_id": "abc-def-ghi",
+    "surveyor_email": "surveyor@supplier.com",
+    "is_complete": true,
+    "created_at": "2026-10-15T10:00:00Z",
+    "updated_at": "2026-10-15T14:30:00Z"
+  },
+  "school": {
+    "urn": "123456",
+    "name": "Example School",
+    "local_authority": "Leeds"
+  },
+  "sites": [
+    {
+      "name": "EFA1",
+      "blocks": [
+        {
+          "name": "EFAA",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAA-GF"
+            },
+            {
+              "name": "EFAA-1F"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+
+### 5.4 Finalise ODCS Survey Sites Submission
+POST {{baseUrl}}/submissions/{{odcsSubmissionId}}/finalise
+x-functions-key: {{functionKey}}
+
+
+### ==========================================================================
+### 6. TWO-STEP VALIDATION PIPELINE (CDC Survey / Comprehensive Ruleset)
+###    Step 1: JSON Schema (Structure) -> Step 2: Quality Rules (10 Rules)
+### ==========================================================================
+
+### 6.1 Submit CDC Survey Schema v1 with 10 Companion Quality Rules (Admin API)
+# Registers the full CCDSurveySubmission JSON Schema alongside its 10 JsonLogic business rules.
+POST {{adminBaseUrl}}/schemas/{{cdcSchemaName}}/versions/1
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "schemaJson": "{\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", \"title\": \"CCDSurveySubmission\", \"type\": \"object\", \"additionalProperties\": false, \"required\": [\"survey\", \"school\", \"sites\", \"elements\", \"answers\", \"evidence\"], \"properties\": {\"survey\": {\"type\": \"object\", \"required\": [\"id\", \"survey_name\", \"participant_id\", \"is_complete\", \"created_at\", \"updated_at\"], \"properties\": {\"id\": {\"type\": \"string\", \"pattern\": \"^SURV-[A-Za-z0-9-]+$\"}, \"survey_name\": {\"type\": \"string\"}, \"participant_id\": {\"type\": \"string\"}, \"surveyor_email\": {\"type\": \"string\", \"format\": \"email\"}, \"is_complete\": {\"type\": \"boolean\"}, \"created_at\": {\"type\": \"string\", \"format\": \"date-time\"}, \"updated_at\": {\"type\": \"string\", \"format\": \"date-time\"}}, \"additionalProperties\": false}, \"school\": {\"type\": \"object\", \"required\": [\"urn\"], \"properties\": {\"urn\": {\"type\": \"string\"}, \"name\": {\"type\": \"string\"}}, \"additionalProperties\": false}, \"sites\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/site\"}}, \"elements\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/element\"}}, \"answers\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/answer\"}}, \"evidence\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/evidence\"}}}, \"$defs\": {\"site\": {\"type\": \"object\", \"required\": [\"name\", \"blocks\"], \"properties\": {\"name\": {\"type\": \"string\"}, \"blocks\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/block\"}}}, \"additionalProperties\": false}, \"block\": {\"type\": \"object\", \"required\": [\"name\", \"type\"], \"properties\": {\"name\": {\"type\": \"string\"}, \"type\": {\"type\": \"string\", \"enum\": [\"block\"]}, \"floors\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/floor\"}}}, \"additionalProperties\": false}, \"floor\": {\"type\": \"object\", \"required\": [\"name\"], \"properties\": {\"name\": {\"type\": \"string\"}}, \"additionalProperties\": false}, \"element\": {\"type\": \"object\", \"required\": [\"id\", \"NRM3_code\", \"description\", \"asset_id\", \"asset_type\"], \"properties\": {\"id\": {\"type\": \"string\", \"pattern\": \"^ELM-[0-9]+$\"}, \"NRM3_code\": {\"type\": \"string\"}, \"description\": {\"type\": \"string\"}, \"asset_id\": {\"type\": \"string\"}, \"asset_type\": {\"type\": \"string\", \"enum\": [\"site\", \"block\", \"floor\", \"space\"]}, \"occurrences\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/occurrence\"}}}, \"additionalProperties\": false}, \"occurrence\": {\"type\": \"object\", \"required\": [\"id\", \"name\"], \"properties\": {\"id\": {\"type\": \"string\", \"pattern\": \"^OCC-[0-9]+$\"}, \"name\": {\"type\": \"string\"}, \"basis_of_assessment\": {\"type\": \"string\", \"enum\": [\"Seen\", \"Not Seen\", \"Assumed\"]}, \"condition_grade\": {\"type\": \"string\", \"enum\": [\"A\", \"B\", \"C\", \"D\"]}, \"condition_description\": {\"type\": \"string\"}, \"replacement\": {\"$ref\": \"#/$defs/replacement\"}, \"repairs\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/repair\"}}}, \"additionalProperties\": false}, \"replacement\": {\"type\": \"object\", \"properties\": {\"rem_life\": {\"type\": \"integer\", \"minimum\": 0}, \"uom\": {\"type\": \"string\"}, \"replacement_quantity\": {\"type\": \"number\", \"minimum\": 0}, \"replacement_rate\": {\"type\": \"number\", \"minimum\": 0}}, \"additionalProperties\": false}, \"repair\": {\"type\": \"object\", \"required\": [\"id\"], \"properties\": {\"id\": {\"type\": \"string\", \"pattern\": \"^REP-[0-9]+$\"}, \"repair_description\": {\"type\": \"string\"}, \"repair_item\": {\"type\": \"string\"}, \"repair_classification\": {\"type\": \"string\", \"enum\": [\"X\", \"Y\", \"Z\"]}, \"uom\": {\"type\": \"string\"}, \"repair_quantity\": {\"type\": \"number\", \"minimum\": 0}, \"repair_rate\": {\"type\": \"number\", \"minimum\": 0}, \"estimated_cost\": {\"type\": \"number\", \"minimum\": 0}}, \"additionalProperties\": false}, \"answer\": {\"type\": \"object\", \"required\": [\"id\", \"question_id\", \"asset_id\", \"asset_type\", \"value\"], \"properties\": {\"id\": {\"type\": \"string\", \"pattern\": \"^ANS-[0-9]+$\"}, \"question_id\": {\"type\": \"string\"}, \"asset_id\": {\"type\": \"string\"}, \"asset_type\": {\"type\": \"string\", \"enum\": [\"site\", \"block\", \"floor\", \"space\", \"element\"]}, \"value\": {}, \"value_type\": {\"type\": \"string\", \"enum\": [\"text\", \"number\", \"boolean\", \"lookup_list\", \"date\"]}, \"created_at\": {\"type\": \"string\", \"format\": \"date-time\"}, \"updated_at\": {\"type\": \"string\", \"format\": \"date-time\"}, \"evidence\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"required\": [\"id\"], \"properties\": {}}}}}, \"evidence\": {\"type\": \"object\", \"required\": [\"id\"], \"properties\": {\"id\": {\"type\": \"string\", \"pattern\": \"^EVD-[0-9]+$\"}, \"asset_id\": {\"type\": \"string\"}, \"asset_type\": {\"type\": \"string\"}, \"description\": {\"type\": \"string\"}, \"mime_type\": {\"type\": \"string\"}, \"blob_key\": {\"type\": \"string\"}, \"file_origin\": {\"type\": \"string\"}, \"created_at\": {\"type\": \"string\", \"format\": \"date-time\"}, \"updated_at\": {\"type\": \"string\", \"format\": \"date-time\"}}, \"additionalProperties\": false}}}",
+  "rulesJson": "[{\"id\": \"RULE-CONDITION-GRADE-D\", \"description\": \"Condition Grade D elements must have at least one repair identified.\", \"severity\": \"ERROR\", \"path\": \"elements[].occurrences[].repairs\", \"message\": \"At least one repair must be provided when condition grade is D.\", \"assert\": {\"or\": [{\"!=\": [{\"var\": \"condition_grade\"}, \"D\"]}, {\">\": [{\"var\": \"repairs.length\"}, 0]}]}}, {\"id\": \"RULE-REPLACEMENT-LIFE\", \"description\": \"Grade D elements should have a replacement life specified.\", \"severity\": \"ERROR\", \"path\": \"elements[].occurrences[].replacement.rem_life\", \"message\": \"Replacement remaining life is required when condition grade is D.\", \"assert\": {\"or\": [{\"!=\": [{\"var\": \"condition_grade\"}, \"D\"]}, {\"!=\": [{\"var\": \"replacement.rem_life\"}, null]}]}}, {\"id\": \"RULE-REPAIR-COST-CALCULATION\", \"description\": \"Repair cost must equal quantity multiplied by rate.\", \"severity\": \"ERROR\", \"path\": \"elements[].occurrences[].repairs[].estimated_cost\", \"message\": \"Estimated cost must equal repair quantity \\u00d7 repair rate.\", \"assert\": {\"==\": [{\"var\": \"estimated_cost\"}, {\"*\": [{\"var\": \"repair_quantity\"}, {\"var\": \"repair_rate\"}]}]}}, {\"id\": \"RULE-REPLACEMENT-COST-REQUIRED\", \"description\": \"Assets nearing end of life must have a replacement quantity and rate.\", \"severity\": \"ERROR\", \"path\": \"elements[].occurrences[].replacement\", \"message\": \"Replacement quantity and rate are required when remaining life is less than or equal to 5 years.\", \"assert\": {\"or\": [{\">\": [{\"var\": \"replacement.rem_life\"}, 5]}, {\"and\": [{\">\": [{\"var\": \"replacement.replacement_quantity\"}, 0]}, {\">\": [{\"var\": \"replacement.replacement_rate\"}, 0]}]}]}}, {\"id\": \"RULE-EVIDENCE-REQUIRED\", \"description\": \"Poor or critical conditions must have supporting evidence.\", \"severity\": \"ERROR\", \"path\": \"answers[].evidence\", \"message\": \"Evidence is required for condition grades C and D.\", \"assert\": {\"or\": [{\"!in\": [{\"var\": \"condition_grade\"}, [\"C\", \"D\"]]}, {\">\": [{\"var\": \"evidence.length\"}, 0]}]}}, {\"id\": \"RULE-SITE-ANSWER-VALIDATION\", \"description\": \"Site level answers must reference a valid site asset.\", \"severity\": \"ERROR\", \"path\": \"answers[].asset_id\", \"message\": \"Site answers must reference an existing site.\", \"assert\": {\"or\": [{\"!=\": [{\"var\": \"asset_type\"}, \"site\"]}, {\"in\": [{\"var\": \"asset_id\"}, {\"var\": \"valid_site_ids\"}]}]}}, {\"id\": \"RULE-BLOCK-ANSWER-VALIDATION\", \"description\": \"Block level answers must reference a valid block.\", \"severity\": \"ERROR\", \"path\": \"answers[].asset_id\", \"message\": \"Block answers must reference an existing block.\", \"assert\": {\"or\": [{\"!=\": [{\"var\": \"asset_type\"}, \"block\"]}, {\"in\": [{\"var\": \"asset_id\"}, {\"var\": \"valid_block_ids\"}]}]}}, {\"id\": \"RULE-EVIDENCE-REFERENCE\", \"description\": \"Evidence references must exist in the submission evidence collection.\", \"severity\": \"ERROR\", \"path\": \"answers[].evidence[].id\", \"message\": \"Evidence reference does not exist.\", \"assert\": {\"in\": [{\"var\": \"id\"}, {\"var\": \"valid_evidence_ids\"}]}}, {\"id\": \"RULE-ANSWER-VALUE-TYPE\", \"description\": \"Answer value must match declared value type.\", \"severity\": \"ERROR\", \"path\": \"answers[].value\", \"message\": \"Answer value does not match configured value type.\", \"assert\": {\"or\": [{\"and\": [{\"==\": [{\"var\": \"value_type\"}, \"number\"]}, {\"==\": [{\"var\": \"value_is_numeric\"}, true]}]}, {\"and\": [{\"==\": [{\"var\": \"value_type\"}, \"boolean\"]}, {\"==\": [{\"var\": \"value_is_boolean\"}, true]}]}, {\"==\": [{\"var\": \"value_type\"}, \"text\"]}, {\"==\": [{\"var\": \"value_type\"}, \"lookup_list\"]}]}}, {\"id\": \"RULE-QUESTION-ASSET-TYPE\", \"description\": \"Question must be answered against the correct hierarchy level.\", \"severity\": \"ERROR\", \"path\": \"answers[].asset_type\", \"message\": \"Question cannot be answered at this asset level.\", \"assert\": {\"==\": [{\"var\": \"asset_type\"}, {\"var\": \"question.expected_asset_type\"}]}}]"
+}
+
+
+### 6.2 Schedule / Activate CDC Survey Schema v1 (Admin API)
+PATCH {{adminBaseUrl}}/schemas/{{cdcSchemaName}}/versions/1/schedule
+Content-Type: application/json
+x-functions-key: {{adminFunctionKey}}
+
+{
+  "effectiveFromUtc": "2026-01-01T00:00:00Z",
+  "effectiveToUtc": "2027-12-31T23:59:59Z",
+  "lifecycleAction": "Schedule"
+}
+
+
+### 6.3 Create CDC Survey Submission Session (Public API)
+# @name createCdcSession
+POST {{baseUrl}}/submissions/{{cdcSchemaName}}
+x-functions-key: {{functionKey}}
+
+> {%
+  if (response.body && response.body.data && response.body.data.submissionId) {
+    client.global.set("cdcSubmissionId", response.body.data.submissionId);
+  }
+%}
+
+
+### 6.4 Upload CDC Draft 1 (Fails Step 1 JSON Schema: Missing required sections 'sites', 'elements', etc.)
+# Returns 200 OK with pending JSON schema structural violations.
+PUT {{baseUrl}}/submissions/{{cdcSubmissionId}}
+Content-Type: application/json
+x-functions-key: {{functionKey}}
+
+{
+  "survey": {
+    "id": "SURV-2026-001",
+    "survey_name": "Condition Survey 2026",
+    "participant_id": "PART-001",
+    "is_complete": false,
+    "created_at": "2026-10-28T10:00:00Z",
+    "updated_at": "2026-10-28T10:00:00Z"
+  },
+  "school": {
+    "urn": "104521",
+    "name": "St Mary's High School"
+  }
+}
+
+
+### 6.5 Upload CDC Draft 2 (Step 1 Passes, Step 2 Fails: Condition Grade D Without Repairs)
+# Triggers RULE-CONDITION-GRADE-D: 'At least one repair must be provided when condition grade is D.'
+# Path: /elements/0/occurrences/0/repairs
+PUT {{baseUrl}}/submissions/{{cdcSubmissionId}}
+Content-Type: application/json
+x-functions-key: {{functionKey}}
+
+{
+  "survey": {
+    "id": "SURV-1234-5678",
+    "survey_name": "CCD",
+    "participant_id": "abc-def-ghi",
+    "surveyor_email": "surveyor@supplier.com",
+    "is_complete": true,
+    "created_at": "2026-10-15T10:00:00Z",
+    "updated_at": "2026-10-15T14:30:00Z"
+  },
+  "school": {
+    "urn": "123456",
+    "name": "Example School"
+  },
+  "sites": [
+    {
+      "name": "EFA1",
+      "blocks": [
+        {
+          "name": "EFAA",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAA-GF"
+            },
+            {
+              "name": "EFAA-1F"
+            }
+          ]
+        },
+        {
+          "name": "EFAB",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAB-GF"
+            }
+          ]
+        },
+        {
+          "name": "EFAC",
+          "type": "block",
+          "floors": []
+        }
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "id": "ELM-001",
+      "NRM3_code": "25.10.10",
+      "description": "Windows",
+      "asset_id": "EFA1",
+      "asset_type": "site",
+      "occurrences": [
+        {
+          "id": "OCC-001",
+          "name": "Main Building Windows",
+          "basis_of_assessment": "Seen",
+          "condition_grade": "D",
+          "condition_description": "Defective glazed units and ironmongery",
+          "replacement": {
+            "rem_life": 7,
+            "uom": "m2",
+            "replacement_quantity": 400,
+            "replacement_rate": 1000.0
+          },
+          "repairs": []
+        }
+      ]
+    }
+  ],
+  "answers": [
+    {
+      "id": "ANS-001",
+      "question_id": "Q-101",
+      "asset_id": "EFA1",
+      "asset_type": "site",
+      "value": "Yes",
+      "value_type": "lookup_list",
+      "created_at": "2026-10-15T11:00:00Z",
+      "updated_at": "2026-10-15T11:00:00Z",
+      "evidence": [
+        {
+          "id": "EVD-001"
+        }
+      ]
+    },
+    {
+      "id": "ANS-002",
+      "question_id": "Q-102",
+      "asset_id": "EFAA",
+      "asset_type": "block",
+      "value": "Critical",
+      "value_type": "lookup_list",
+      "created_at": "2026-10-15T11:00:00Z",
+      "updated_at": "2026-10-15T11:00:00Z",
+      "evidence": [
+        {
+          "id": "EVD-001"
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EVD-001",
+      "asset_id": "ELM-001",
+      "asset_type": "element",
+      "description": "Photograph showing rust on the main boiler casing",
+      "mime_type": "image/jpeg",
+      "blob_key": "s3://dfe-surveys/evidence/EVD-001.jpg",
+      "file_origin": "iPad Camera",
+      "created_at": "2026-10-15T11:02:00Z",
+      "updated_at": "2026-10-15T11:02:00Z"
+    }
+  ]
+}
+
+
+### 6.6 Upload CDC Draft 3 (Step 1 Passes, Step 2 Fails: Repair Cost Calculation Mismatch)
+# Triggers RULE-REPAIR-COST-CALCULATION: 'Estimated cost must equal repair quantity × repair rate.'
+# Repair REP-001 has quantity 20 x rate 400 = 8000, but estimated_cost is set to 9999.00
+# Path: /elements/0/occurrences/0/repairs/0/estimated_cost
+PUT {{baseUrl}}/submissions/{{cdcSubmissionId}}
+Content-Type: application/json
+x-functions-key: {{functionKey}}
+
+{
+  "survey": {
+    "id": "SURV-1234-5678",
+    "survey_name": "CCD",
+    "participant_id": "abc-def-ghi",
+    "surveyor_email": "surveyor@supplier.com",
+    "is_complete": true,
+    "created_at": "2026-10-15T10:00:00Z",
+    "updated_at": "2026-10-15T14:30:00Z"
+  },
+  "school": {
+    "urn": "123456",
+    "name": "Example School"
+  },
+  "sites": [
+    {
+      "name": "EFA1",
+      "blocks": [
+        {
+          "name": "EFAA",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAA-GF"
+            },
+            {
+              "name": "EFAA-1F"
+            }
+          ]
+        },
+        {
+          "name": "EFAB",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAB-GF"
+            }
+          ]
+        },
+        {
+          "name": "EFAC",
+          "type": "block",
+          "floors": []
+        }
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "id": "ELM-001",
+      "NRM3_code": "25.10.10",
+      "description": "Windows",
+      "asset_id": "EFA1",
+      "asset_type": "site",
+      "occurrences": [
+        {
+          "id": "OCC-001",
+          "name": "Main Building Windows",
+          "basis_of_assessment": "Seen",
+          "condition_grade": "C",
+          "condition_description": "Defective glazed units and ironmongery",
+          "replacement": {
+            "rem_life": 7,
+            "uom": "m2",
+            "replacement_quantity": 400,
+            "replacement_rate": 1000.0
+          },
+          "repairs": [
+            {
+              "id": "REP-001",
+              "repair_description": "(1) Replace 20no. Defective Double Glazed Units",
+              "repair_item": "Double Glazed Unit Replacement",
+              "repair_classification": "Y",
+              "uom": "No.",
+              "repair_quantity": 20,
+              "repair_rate": 400.0,
+              "estimated_cost": 9999.0
+            },
+            {
+              "id": "REP-002",
+              "repair_description": "(2) Replace Defective Ironmongery: 2no GF Windows and 5no 1st Floor Windows",
+              "repair_item": "Aluminium Window Handle Replacement",
+              "repair_classification": "X",
+              "uom": "No.",
+              "repair_quantity": 7,
+              "repair_rate": 100.0,
+              "estimated_cost": 700.0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "answers": [
+    {
+      "id": "ANS-001",
+      "question_id": "Q-101",
+      "asset_id": "EFA1",
+      "asset_type": "site",
+      "value": "Yes",
+      "value_type": "lookup_list",
+      "created_at": "2026-10-15T11:00:00Z",
+      "updated_at": "2026-10-15T11:00:00Z",
+      "evidence": [
+        {
+          "id": "EVD-001"
+        }
+      ]
+    },
+    {
+      "id": "ANS-002",
+      "question_id": "Q-102",
+      "asset_id": "EFAA",
+      "asset_type": "block",
+      "value": "Critical",
+      "value_type": "lookup_list",
+      "created_at": "2026-10-15T11:00:00Z",
+      "updated_at": "2026-10-15T11:00:00Z",
+      "evidence": [
+        {
+          "id": "EVD-001"
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EVD-001",
+      "asset_id": "ELM-001",
+      "asset_type": "element",
+      "description": "Photograph showing rust on the main boiler casing",
+      "mime_type": "image/jpeg",
+      "blob_key": "s3://dfe-surveys/evidence/EVD-001.jpg",
+      "file_origin": "iPad Camera",
+      "created_at": "2026-10-15T11:02:00Z",
+      "updated_at": "2026-10-15T11:02:00Z"
+    }
+  ]
+}
+
+
+### 6.7 Upload CDC Draft 4 (Step 1 Passes, Step 2 Fails: Invalid Site Hierarchy Reference)
+# Triggers RULE-SITE-ANSWER-VALIDATION: 'Site answers must reference an existing site.'
+# Answer ANS-001 references 'NON-EXISTENT-SITE-ID' instead of 'EFA1'
+# Path: /answers/0/asset_id
+PUT {{baseUrl}}/submissions/{{cdcSubmissionId}}
+Content-Type: application/json
+x-functions-key: {{functionKey}}
+
+{
+  "survey": {
+    "id": "SURV-1234-5678",
+    "survey_name": "CCD",
+    "participant_id": "abc-def-ghi",
+    "surveyor_email": "surveyor@supplier.com",
+    "is_complete": true,
+    "created_at": "2026-10-15T10:00:00Z",
+    "updated_at": "2026-10-15T14:30:00Z"
+  },
+  "school": {
+    "urn": "123456",
+    "name": "Example School"
+  },
+  "sites": [
+    {
+      "name": "EFA1",
+      "blocks": [
+        {
+          "name": "EFAA",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAA-GF"
+            },
+            {
+              "name": "EFAA-1F"
+            }
+          ]
+        },
+        {
+          "name": "EFAB",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAB-GF"
+            }
+          ]
+        },
+        {
+          "name": "EFAC",
+          "type": "block",
+          "floors": []
+        }
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "id": "ELM-001",
+      "NRM3_code": "25.10.10",
+      "description": "Windows",
+      "asset_id": "EFA1",
+      "asset_type": "site",
+      "occurrences": [
+        {
+          "id": "OCC-001",
+          "name": "Main Building Windows",
+          "basis_of_assessment": "Seen",
+          "condition_grade": "C",
+          "condition_description": "Defective glazed units and ironmongery",
+          "replacement": {
+            "rem_life": 7,
+            "uom": "m2",
+            "replacement_quantity": 400,
+            "replacement_rate": 1000.0
+          },
+          "repairs": [
+            {
+              "id": "REP-001",
+              "repair_description": "(1) Replace 20no. Defective Double Glazed Units",
+              "repair_item": "Double Glazed Unit Replacement",
+              "repair_classification": "Y",
+              "uom": "No.",
+              "repair_quantity": 20,
+              "repair_rate": 400.0,
+              "estimated_cost": 8000.0
+            },
+            {
+              "id": "REP-002",
+              "repair_description": "(2) Replace Defective Ironmongery: 2no GF Windows and 5no 1st Floor Windows",
+              "repair_item": "Aluminium Window Handle Replacement",
+              "repair_classification": "X",
+              "uom": "No.",
+              "repair_quantity": 7,
+              "repair_rate": 100.0,
+              "estimated_cost": 700.0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "answers": [
+    {
+      "id": "ANS-001",
+      "question_id": "Q-101",
+      "asset_id": "NON-EXISTENT-SITE-ID",
+      "asset_type": "site",
+      "value": "Yes",
+      "value_type": "lookup_list",
+      "created_at": "2026-10-15T11:00:00Z",
+      "updated_at": "2026-10-15T11:00:00Z",
+      "evidence": [
+        {
+          "id": "EVD-001"
+        }
+      ]
+    },
+    {
+      "id": "ANS-002",
+      "question_id": "Q-102",
+      "asset_id": "EFAA",
+      "asset_type": "block",
+      "value": "Critical",
+      "value_type": "lookup_list",
+      "created_at": "2026-10-15T11:00:00Z",
+      "updated_at": "2026-10-15T11:00:00Z",
+      "evidence": [
+        {
+          "id": "EVD-001"
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EVD-001",
+      "asset_id": "ELM-001",
+      "asset_type": "element",
+      "description": "Photograph showing rust on the main boiler casing",
+      "mime_type": "image/jpeg",
+      "blob_key": "s3://dfe-surveys/evidence/EVD-001.jpg",
+      "file_origin": "iPad Camera",
+      "created_at": "2026-10-15T11:02:00Z",
+      "updated_at": "2026-10-15T11:02:00Z"
+    }
+  ]
+}
+
+
+### 6.8 Upload Complete & Fully Valid CDC Survey Payload
+# Conforms to both Step 1 JSON Schema and all Step 2 JsonLogic business rules (0 pending errors)
+PUT {{baseUrl}}/submissions/{{cdcSubmissionId}}
+Content-Type: application/json
+x-functions-key: {{functionKey}}
+
+{
+  "survey": {
+    "id": "SURV-1234-5678",
+    "survey_name": "CCD",
+    "participant_id": "abc-def-ghi",
+    "surveyor_email": "surveyor@supplier.com",
+    "is_complete": true,
+    "created_at": "2026-10-15T10:00:00Z",
+    "updated_at": "2026-10-15T14:30:00Z"
+  },
+  "school": {
+    "urn": "123456",
+    "name": "Example School"
+  },
+  "sites": [
+    {
+      "name": "EFA1",
+      "blocks": [
+        {
+          "name": "EFAA",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAA-GF"
+            },
+            {
+              "name": "EFAA-1F"
+            }
+          ]
+        },
+        {
+          "name": "EFAB",
+          "type": "block",
+          "floors": [
+            {
+              "name": "EFAB-GF"
+            }
+          ]
+        },
+        {
+          "name": "EFAC",
+          "type": "block",
+          "floors": []
+        }
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "id": "ELM-001",
+      "NRM3_code": "25.10.10",
+      "description": "Windows",
+      "asset_id": "EFA1",
+      "asset_type": "site",
+      "occurrences": [
+        {
+          "id": "OCC-001",
+          "name": "Main Building Windows",
+          "basis_of_assessment": "Seen",
+          "condition_grade": "C",
+          "condition_description": "Defective glazed units and ironmongery",
+          "replacement": {
+            "rem_life": 7,
+            "uom": "m2",
+            "replacement_quantity": 400,
+            "replacement_rate": 1000.0
+          },
+          "repairs": [
+            {
+              "id": "REP-001",
+              "repair_description": "(1) Replace 20no. Defective Double Glazed Units",
+              "repair_item": "Double Glazed Unit Replacement",
+              "repair_classification": "Y",
+              "uom": "No.",
+              "repair_quantity": 20,
+              "repair_rate": 400.0,
+              "estimated_cost": 8000.0
+            },
+            {
+              "id": "REP-002",
+              "repair_description": "(2) Replace Defective Ironmongery: 2no GF Windows and 5no 1st Floor Windows",
+              "repair_item": "Aluminium Window Handle Replacement",
+              "repair_classification": "X",
+              "uom": "No.",
+              "repair_quantity": 7,
+              "repair_rate": 100.0,
+              "estimated_cost": 700.0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "answers": [
+    {
+      "id": "ANS-001",
+      "question_id": "Q-101",
+      "asset_id": "EFA1",
+      "asset_type": "site",
+      "value": "Yes",
+      "value_type": "lookup_list",
+      "created_at": "2026-10-15T11:00:00Z",
+      "updated_at": "2026-10-15T11:00:00Z",
+      "evidence": [
+        {
+          "id": "EVD-001"
+        }
+      ]
+    },
+    {
+      "id": "ANS-002",
+      "question_id": "Q-102",
+      "asset_id": "EFAA",
+      "asset_type": "block",
+      "value": "Critical",
+      "value_type": "lookup_list",
+      "created_at": "2026-10-15T11:00:00Z",
+      "updated_at": "2026-10-15T11:00:00Z",
+      "evidence": [
+        {
+          "id": "EVD-001"
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EVD-001",
+      "asset_id": "ELM-001",
+      "asset_type": "element",
+      "description": "Photograph showing rust on the main boiler casing",
+      "mime_type": "image/jpeg",
+      "blob_key": "s3://dfe-surveys/evidence/EVD-001.jpg",
+      "file_origin": "iPad Camera",
+      "created_at": "2026-10-15T11:02:00Z",
+      "updated_at": "2026-10-15T11:02:00Z"
+    }
+  ]
+}
+
+
+### 6.9 Attempt to Finalise CDC Survey when Invalid (Fails with 422 Unprocessable Entity)
+# If called after steps 6.4, 6.5, 6.6, or 6.7, returns 422 with validation problem details.
+POST {{baseUrl}}/submissions/{{cdcSubmissionId}}/finalise
+x-functions-key: {{functionKey}}
+
+
+### 6.10 Finalise CDC Survey (Success: Promotes from 'payloads' to 'processed' lake storage)
+# Validates complete payload through Step 1 and Step 2, stamps SHA-256 integrity hash, and promotes blob to:
+# processed/urn=123456/schema=cdc_survey/v=1/{cdcSubmissionId}.json with status 'ReadyForCde'.
+POST {{baseUrl}}/submissions/{{cdcSubmissionId}}/finalise
+x-functions-key: {{functionKey}}

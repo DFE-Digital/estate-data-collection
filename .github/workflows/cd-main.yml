@@ -41,11 +41,13 @@ jobs:
           run-number: ${{ github.run_number }}
           commit-sha: ${{ github.sha }}
 
-      - name: Upload Deployment Artifact
+      - name: Upload Deployment Artifacts (Public & Admin)
         uses: actions/upload-artifact@v4
         with:
           name: edc-release-bundle
-          path: ${{ steps.build.outputs.package-path }}
+          path: |
+            ${{ steps.build.outputs.public-package-path }}
+            ${{ steps.build.outputs.admin-package-path }}
           retention-days: 14
 
   deploy-dev:
@@ -54,14 +56,15 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: development
-      url: ${{ steps.deploy.outputs.app-url }}
+      url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: edc-release-bundle
 
-      - id: deploy
+      - name: Deploy Public Function App
+        id: deploy-public
         uses: ./.github/actions/deploy-function
         with:
           environment-name: development
@@ -69,23 +72,36 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
-          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
-          package-path: ./edc-functions-linux-x64.zip
+          function-app-name: ${{ vars.AZURE_PUBLIC_FUNCTION_APP_NAME || vars.AZURE_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-public-linux-x64.zip
+
+      - name: Deploy Admin Function App
+        id: deploy-admin
+        uses: ./.github/actions/deploy-function
+        with:
+          environment-name: development
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          function-app-name: ${{ vars.AZURE_ADMIN_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-admin-linux-x64.zip
 
   deploy-test:
-    name: Deploy to Test
+    name: Deploy to Test / UAT
     needs: deploy-dev
     runs-on: ubuntu-latest
     environment:
       name: test
-      url: ${{ steps.deploy.outputs.app-url }}
+      url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: edc-release-bundle
 
-      - id: deploy
+      - name: Deploy Public Function App
+        id: deploy-public
         uses: ./.github/actions/deploy-function
         with:
           environment-name: test
@@ -93,8 +109,20 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
-          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
-          package-path: ./edc-functions-linux-x64.zip
+          function-app-name: ${{ vars.AZURE_PUBLIC_FUNCTION_APP_NAME || vars.AZURE_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-public-linux-x64.zip
+
+      - name: Deploy Admin Function App
+        id: deploy-admin
+        uses: ./.github/actions/deploy-function
+        with:
+          environment-name: test
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          function-app-name: ${{ vars.AZURE_ADMIN_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-admin-linux-x64.zip
 
   deploy-prod:
     name: Deploy to Production
@@ -102,14 +130,15 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: ${{ steps.deploy.outputs.app-url }}
+      url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: edc-release-bundle
 
-      - id: deploy
+      - name: Deploy Public Function App
+        id: deploy-public
         uses: ./.github/actions/deploy-function
         with:
           environment-name: production
@@ -117,5 +146,17 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
-          function-app-name: ${{ vars.AZURE_FUNCTION_APP_NAME }}
-          package-path: ./edc-functions-linux-x64.zip
+          function-app-name: ${{ vars.AZURE_PUBLIC_FUNCTION_APP_NAME || vars.AZURE_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-public-linux-x64.zip
+
+      - name: Deploy Admin Function App
+        id: deploy-admin
+        uses: ./.github/actions/deploy-function
+        with:
+          environment-name: production
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          function-app-name: ${{ vars.AZURE_ADMIN_FUNCTION_APP_NAME }}
+          package-path: ./edc-functions-admin-linux-x64.zip

@@ -1,0 +1,110 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Components
+
+<section class="dfe-schema-card" aria-label="@Model.SchemaName">
+    <div class="dfe-schema-card__header">
+        <div>
+            <h2 class="govuk-heading-m govuk-!-margin-bottom-1">@Model.SchemaName</h2>
+            <p class="govuk-body-s govuk-!-margin-bottom-0">
+                @if (Model.HasActiveVersion)
+                {
+                    <span>Active version: <strong>@Model.ActiveVersionDisplay</strong></span>
+                }
+                else
+                {
+                    <span class="govuk-hint">No active version (not publicly exposed)</span>
+                }
+            </p>
+        </div>
+        <div>
+            <a href="@Model.ManageUrl"
+               class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">
+                Manage
+            </a>
+        </div>
+    </div>
+
+    <div class="dfe-schema-card__body">
+        <table class="govuk-table govuk-!-margin-bottom-0">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Version</th>
+                    <th scope="col" class="govuk-table__header">State</th>
+                    <th scope="col" class="govuk-table__header">Tests</th>
+                    <th scope="col" class="govuk-table__header">Effective Window (UTC)</th>
+                    @if (Model.EnrichedView)
+                    {
+                        <th scope="col" class="govuk-table__header">Identifier</th>
+                        <th scope="col" class="govuk-table__header">SHA-256</th>
+                    }
+                    <th scope="col" class="govuk-table__header">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+                @foreach (var v in Model.Versions)
+                {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell govuk-!-font-weight-bold">@v.Version</td>
+                        <td class="govuk-table__cell">
+                            <LifecycleTag Model="v.StateTag" />
+                        </td>
+                        <td class="govuk-table__cell govuk-body-s">
+                            <strong class="@v.TestStatusTagCssClass">@v.TestStatusTagText</strong>
+                            @if (v.HasTestRunTimestamp)
+                            {
+                                <div class="govuk-hint govuk-!-font-size-14 govuk-!-margin-bottom-0 govuk-!-margin-top-1">@v.TestRunTimestampDisplay</div>
+                            }
+                        </td>
+                        <td class="govuk-table__cell govuk-body-s">
+                            <div><strong>From:</strong> @v.EffectiveFromDisplay</div>
+                            <div><strong>To:</strong> @v.EffectiveToDisplay</div>
+                        </td>
+                        @if (Model.EnrichedView)
+                        {
+                            <td class="govuk-table__cell govuk-body-s">
+                                @if (v.HasCustomIdentifier)
+                                {
+                                    <span>@v.IdentifierType <code class="dfe-code-badge">@v.IdentifierPointer</code></span>
+                                }
+                                else if (v.IsIdentifierDisabled)
+                                {
+                                    <span>None (disabled)</span>
+                                }
+                                else
+                                {
+                                    <span class="govuk-hint">Default / Unconfigured</span>
+                                }
+                            </td>
+                            <td class="govuk-table__cell">
+                                <code class="dfe-code-badge">@v.ShortSha256Hash</code>
+                            </td>
+                        }
+                        <td class="govuk-table__cell">
+                            <div class="dfe-actions-inline">
+                                <a href="@v.DetailsUrl"
+                                   class="govuk-button govuk-!-margin-bottom-0">
+                                    Inspect
+                                </a>
+                                <a href="@v.TestsUrl"
+                                   class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">
+                                    Tests
+                                </a>
+                                @if (v.CanModifyLifecycle)
+                                {
+                                    <a href="@v.ScheduleUrl"
+                                       class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">
+                                        Manage Lifecycle
+                                    </a>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public SchemaSectionCardViewModel Model { get; set; } = default!;
+}

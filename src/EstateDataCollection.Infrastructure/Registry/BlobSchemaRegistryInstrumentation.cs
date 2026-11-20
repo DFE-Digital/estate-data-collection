@@ -38,14 +38,38 @@ public sealed partial class BlobSchemaRegistryInstrumentation(
     public partial void SchemaSavedToBlob(string schemaName, int version);
 
     [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Updated stored test fixtures for {SchemaName} v{Version}: {ValidCount} valid, {InvalidCount} invalid"
+    )]
+    public partial void SchemaFixturesUpdated(string schemaName, int version, int validCount, int invalidCount);
+
+    [LoggerMessage(
         Level = LogLevel.Error,
         Message = "Failed to upload schema blobs for {SchemaName} v{Version}: {Error}"
     )]
     public partial void SchemaSaveToBlobFailed(string schemaName, int version, string error);
 
     [LoggerMessage(
+        Level = LogLevel.Error,
+        Message = "Failed to rollback upload schema blobs for {SchemaName} v{Version}: {Error}"
+    )]
+    public partial void SchemaSaveToBlobRollbackFailed(string schemaName, int version, string error);
+
+    [LoggerMessage(
         Level = LogLevel.Information,
         Message = "Candidate schema verification completed. Valid: {IsValid}, SyntaxErrors: {SyntaxErrorCount}, FixtureErrors: {FixtureErrorCount}"
     )]
     public partial void CandidateVerificationCompleted(bool isValid, int syntaxErrorCount, int fixtureErrorCount);
+
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Deleted {Count} processed draft blob(s) from container {DraftContainer} for {TriggerBlobPath}"
+    )]
+    public partial void DraftBlobsCleanedUp(int count, string draftContainer, string triggerBlobPath);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Recorded draft ingestion failure diagnostic blob {ErrorBlobPath} with {ErrorCount} error(s)"
+    )]
+    public partial void DraftFailureRecorded(string errorBlobPath, int errorCount);
 }

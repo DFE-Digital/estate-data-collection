@@ -1,5 +1,5 @@
 name: 'Setup, Test & Package EDC Functions'
-description: 'Sets up .NET 10, executes automated tests with TRX metrics, stamps CalVer, and packages self-contained Linux x64 artifact'
+description: 'Sets up .NET 10, executes automated tests with TRX metrics, stamps CalVer, and packages self-contained Linux x64 artifacts for Public and Admin Function Apps'
 
 inputs:
   dotnet-version:
@@ -36,8 +36,14 @@ outputs:
     description: 'Test execution duration'
     value: ${{ steps.test-metrics.outputs.duration }}
   package-path:
-    description: 'Path to the compiled zip package'
-    value: 'edc-functions-linux-x64.zip'
+    description: 'Path to the compiled Public Function App zip package'
+    value: 'edc-functions-public-linux-x64.zip'
+  public-package-path:
+    description: 'Path to the compiled Public Function App zip package'
+    value: 'edc-functions-public-linux-x64.zip'
+  admin-package-path:
+    description: 'Path to the compiled Admin Function App zip package'
+    value: 'edc-functions-admin-linux-x64.zip'
 
 runs:
   using: 'composite'
@@ -60,14 +66,15 @@ runs:
 
     - name: Restore Dependencies
       shell: bash
-      run: dotnet restore
+      run: dotnet restore EstateDataCollection.slnx
 
     - name: Run Tests with TRX Logger & Coverage
       shell: bash
       run: |
+        rm -rf ./test-results
         mkdir -p ./test-results
-        dotnet test --configuration Release --no-restore \
-          --logger "trx;LogFileName=test-results.trx" \
+        dotnet test EstateDataCollection.slnx --configuration Release --no-restore \
+          --logger "trx" \
           --results-directory ./test-results \
           --collect:"XPlat Code Coverage"
 
@@ -75,28 +82,62 @@ runs:
       id: test-metrics
       shell: bash
       run: |
-        TRX_FILE=$(find ./test-results -name "test-results.trx" | head -n 1)
-        if [ -f "$TRX_FILE" ]; then
-          TOTAL=$(grep -o 'total="[0-9]*"' "$TRX_FILE" | head -1 | cut -d'"' -f2 || echo "0")
-          PASSED=$(grep -o 'passed="[0-9]*"' "$TRX_FILE" | head -1 | cut -d'"' -f2 || echo "0")
-          FAILED=$(grep -o 'failed="[0-9]*"' "$TRX_FILE" | head -1 | cut -d'"' -f2 || echo "0")
-          SKIPPED=$(grep -o 'executed="[0-9]*"' "$TRX_FILE" | head -1 | cut -d'"' -f2 || echo "0")
-          DURATION=$(grep -o 'duration="[^"]*"' "$TRX_FILE" | head -1 | cut -d'"' -f2 || echo "N/A")
-        else
-          TOTAL="78"; PASSED="78"; FAILED="0"; SKIPPED="0"; DURATION="~1s"
-        fi
-        
-        echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
-        echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
-        echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
-        echo "skipped=$SKIPPED" >> "$GITHUB_OUTPUT"
-        echo "duration=$DURATION" >> "$GITHUB_OUTPUT"
-        echo "Test Results: $PASSED passed / $TOTAL total (Duration: $DURATION)"
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import datetime, glob, re, sys, xml.etree.ElementTree as ET
 
-    - name: Publish Self-Contained Linux x64 Bundle
+        def parse_iso(raw):
+            norm = re.sub(r"\.(\d{6})\d+", r".\1", raw.strip())
+            if norm.endswith("Z"):
+                norm = norm[:-1] + "+00:00"
+            return datetime.datetime.fromisoformat(norm)
+
+        trx_files = sorted(glob.glob("./test-results/**/*.trx", recursive=True))
+        total = passed = failed = skipped = 0
+        elapsed_seconds = 0.0
+        has_duration = False
+
+        for path in trx_files:
+            root = ET.parse(path).getroot()
+            ns = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+            counters = root.find(".//t:Counters", ns)
+            if counters is not None:
+                t = int(counters.attrib.get("total", "0"))
+                e = int(counters.attrib.get("executed", "0"))
+                p = int(counters.attrib.get("passed", "0"))
+                f = int(counters.attrib.get("failed", "0"))
+                total += t
+                passed += p
+                failed += f
+                skipped += max(0, t - e)
+
+            times = root.find(".//t:Times", ns)
+            if times is not None:
+                start_raw = times.attrib.get("start")
+                finish_raw = times.attrib.get("finish")
+                if start_raw and finish_raw:
+                    try:
+                        elapsed_seconds += max(0.0, (parse_iso(finish_raw) - parse_iso(start_raw)).total_seconds())
+                        has_duration = True
+                    except ValueError:
+                        pass
+
+        duration = f"{elapsed_seconds:.2f}s" if has_duration else "N/A"
+        print(f"total={total}")
+        print(f"passed={passed}")
+        print(f"failed={failed}")
+        print(f"skipped={skipped}")
+        print(f"duration={duration}")
+        print(
+            f"Test Results ({len(trx_files)} TRX files): {passed} passed / {total} total, {failed} failed, {skipped} skipped ({duration})",
+            flush=True,
+            file=sys.stderr,
+        )
+        PY
+
+    - name: Publish Self-Contained Linux x64 Bundle (Public Function App)
       shell: bash
       run: |
-        dotnet publish src/EstateDataCollection.AzureFunctions \
+        dotnet publish src/EstateDataCollection.AzureFunctions.Public/EstateDataCollection.AzureFunctions.Public.csproj \
           --configuration Release \
           --runtime linux-x64 \
           --self-contained true \
@@ -104,11 +145,31 @@ runs:
           /p:AssemblyVersion="${{ steps.calver.outputs.version }}" \
           /p:FileVersion="${{ steps.calver.outputs.version }}" \
           /p:InformationalVersion="${{ steps.calver.outputs.full_version }}" \
-          --output ./publish
+          --output ./publish-public
 
-    - name: Package Function App Zip
+    - name: Package Public Function App Zip
       shell: bash
       run: |
-        cd ./publish
-        zip -r ../edc-functions-linux-x64.zip . -x "local.settings.json" "*.http" "*.pdb"
+        cd ./publish-public
+        zip -r ../edc-functions-public-linux-x64.zip . -x "local.settings.json" "*.http" "*.pdb"
+        cd ..
+
+    - name: Publish Self-Contained Linux x64 Bundle (Admin Function App)
+      shell: bash
+      run: |
+        dotnet publish src/EstateDataCollection.AzureFunctions.Admin/EstateDataCollection.AzureFunctions.Admin.csproj \
+          --configuration Release \
+          --runtime linux-x64 \
+          --self-contained true \
+          /p:Version="${{ steps.calver.outputs.version }}" \
+          /p:AssemblyVersion="${{ steps.calver.outputs.version }}" \
+          /p:FileVersion="${{ steps.calver.outputs.version }}" \
+          /p:InformationalVersion="${{ steps.calver.outputs.full_version }}" \
+          --output ./publish-admin
+
+    - name: Package Admin Function App Zip
+      shell: bash
+      run: |
+        cd ./publish-admin
+        zip -r ../edc-functions-admin-linux-x64.zip . -x "local.settings.json" "*.http" "*.pdb"
         cd ..

@@ -1,0 +1,28 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+
+@namespace EstateDataCollection.Admin.UI.Components
+
+@if (Model is not null)
+{
+    <div class="@Model.CssClass"
+         role="@Model.Role"
+         aria-labelledby="notification-banner-title"
+         data-module="govuk-notification-banner">
+        <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="notification-banner-title">
+                @Model.HeadingText
+            </h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+            <p class="govuk-notification-banner__heading">@Model.Message</p>
+            @if (Model.HasDetail)
+            {
+                <p class="govuk-body">@Model.Detail</p>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public NotificationBannerViewModel? Model { get; set; }
+}

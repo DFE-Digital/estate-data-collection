@@ -1,4 +1,5 @@
 using EstateDataCollection.Common;
+using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 
@@ -8,5 +9,6 @@ public sealed record SubmitSchemaResult(
     Node<int> State,
     string Sha256Hash,
     DateTimeOffset? EffectiveFromUtc,
-    DateTimeOffset? EffectiveToUtc
+    DateTimeOffset? EffectiveToUtc,
+    SchemaIdentifierConfig? IdentifierConfig = null
 );

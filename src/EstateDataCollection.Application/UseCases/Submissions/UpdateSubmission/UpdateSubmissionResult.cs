@@ -6,4 +6,7 @@ public sealed record UpdateSubmissionResult(
     Guid SubmissionId,
     bool IsSuccessful,
     IReadOnlyList<ValidationError> PendingErrors,
-    DateTimeOffset SavedAtUtc);
+    DateTimeOffset SavedAtUtc,
+    int DraftCount = 1,
+    IReadOnlyList<string>? NextSteps = null,
+    string? Summary = null);

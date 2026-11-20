@@ -1,0 +1,84 @@
+using System.ComponentModel.DataAnnotations;
+using EstateDataCollection.Common.Markers;
+
+namespace EstateDataCollection.Application.Models.Options;
+
+public sealed class ValidationOptions : IOption<ValidationOptions>
+{
+    public static string SectionName
+    {
+        get { return "Validation"; }
+    }
+
+    /// <summary>
+    /// Quality rule engines enabled at runtime and during schema verification.
+    /// Defaults to "jsonlogic" and "cel".
+    /// </summary>
+    [Required]
+    public IReadOnlyList<string> EnabledEngines { get; init; } = ["jsonlogic", "cel"];
+
+    /// <summary>
+    /// Default engine used when a rule does not explicitly specify an "engine" field.
+    /// </summary>
+    [Required, MinLength(1)]
+    public string DefaultEngine { get; init; } = "jsonlogic";
+
+    /// <summary>
+    /// Behavior when a quality rule specifies an unknown or disabled engine.
+    /// Defaults to Fail so invalid/unsupported engines are rejected immediately.
+    /// </summary>
+    public UnknownEngineBehavior UnknownEngineBehavior { get; init; } = UnknownEngineBehavior.Fail;
+
+    /// <summary>
+    /// Whether quality rules (JsonLogic, CEL) are evaluated during draft updates (PUT /submissions/{id}).
+    /// </summary>
+    public bool RunQualityRulesOnDraftUpdate { get; init; } = true;
+
+    /// <summary>
+    /// Whether school/establishment identifier extraction is checked during draft updates (PUT /submissions/{id})
+    /// and surfaced in PendingErrors.
+    /// </summary>
+    public bool ValidateIdentifierOnDraftUpdate { get; init; } = true;
+
+    /// <summary>
+    /// Whether rules with Severity = "WARNING" are treated as blocking validation errors.
+    /// </summary>
+    public bool TreatWarningsAsErrors { get; init; } = false;
+
+    /// <summary>
+    /// Whether JSON Schema format annotations (e.g. email, date-time) are strictly validated.
+    /// </summary>
+    public bool RequireFormatValidation { get; init; } = true;
+
+    /// <summary>
+    /// Allowed JSON Schema $schema URIs during verification (supports both Draft 2020-12 and Draft-07 exported by datacontract-cli).
+    /// </summary>
+    [Required]
+    public IReadOnlyList<string> AllowedMetaSchemas { get; init; } =
+    [
+        "https://json-schema.org/draft/2020-12/schema",
+        "http://json-schema.org/draft/2020-12/schema",
+        "http://json-schema.org/draft-07/schema#",
+        "https://json-schema.org/draft-07/schema#",
+        "http://json-schema.org/draft-07/schema",
+        "https://json-schema.org/draft-07/schema"
+    ];
+
+    /// <summary>
+    /// Whether a school identifier (URN) is required by default when a schema lacks an explicit IdentifierConfig
+    /// and does not declare one as optional.
+    /// </summary>
+    public bool RequireUrnOnFinalise { get; init; } = true;
+
+    /// <summary>
+    /// Ordered JSON paths searched to extract the identifier when a schema does not specify an explicit JsonPointer.
+    /// Supports both nested ODCS schemas ("school.urn") and flat schemas ("urn").
+    /// </summary>
+    [Required]
+    public IReadOnlyList<string> UrnJsonPaths { get; init; } = ["school.urn", "urn"];
+
+    /// <summary>
+    /// Maximum comprehension/loop iterations allowed per CEL evaluation.
+    /// </summary>
+    public int CelMaxIterations { get; init; } = 10_000;
+}

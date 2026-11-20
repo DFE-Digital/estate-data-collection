@@ -1,23 +1,26 @@
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Schema;
 using EstateDataCollection.Common.Results;
 using Json.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace EstateDataCollection.Infrastructure.Validation;
 
 public class JsonSchemaNetValidator(
-    JsonSchemaNetValidatorInstrumentation? instrumentation = null
+    JsonSchemaNetValidatorInstrumentation? instrumentation = null,
+    IOptions<ValidationOptions>? options = null
 ) : ISchemaValidator
 {
     private readonly JsonSchemaNetValidatorInstrumentation _instrumentation =
         instrumentation ?? new JsonSchemaNetValidatorInstrumentation(NullLogger<JsonSchemaNetValidator>.Instance);
 
-    private static readonly EvaluationOptions EvaluationOpts = new()
+    private readonly EvaluationOptions _evaluationOpts = new()
     {
         OutputFormat = OutputFormat.List,
-        RequireFormatValidation = true
+        RequireFormatValidation = options?.Value.RequireFormatValidation ?? true
     };
 
     public async Task<Result<SchemaValidationResult>> ValidateAsync(string payload, JsonSchema schema,
@@ -38,7 +41,7 @@ public class JsonSchemaNetValidator(
                 return Error.Validation(ErrorCodes.JsonEmptyPayload);
             }
             
-            var result = schema.Evaluate(node, EvaluationOpts);
+            var result = schema.Evaluate(node, _evaluationOpts);
 
             if (result.IsValid)
             {

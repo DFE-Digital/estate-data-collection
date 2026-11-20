@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "c1f79f22-9650-48e2-9ef4-7cb45d625d19",
     "name": "Estate Data Collection (EDC) API",
-    "description": "Comprehensive Postman test kit for the Estate Data Collection (EDC) Azure Functions platform.\n\nCovers:\n1. Health & Version Observability (/api/about)\n2. Schema Management & Dry-Run Validation (/api/schemas/*)\n3. End-to-End Submission Session Lifecycle: Create -> Multi-Draft Ingestion -> Finalisation Promotion (/api/submissions/*)",
+    "description": "Comprehensive Postman test kit for the Estate Data Collection (EDC) Azure Functions platform (Public & Admin Function Apps).\n\nCovers:\n0. Health & Version Observability (GET /api/about)\n1. Admin Schema & Multi-Engine Quality Rule Verification (POST /api/schemas/verify, POST /api/logic/verify \u2014 JSON Schema Draft-07 & 2020-12, ODCS v3.2.0 YAML, JsonLogic & CEL)\n2. Admin Schema Ingestion, Scheduling & Catalogue Management (POST /api/schemas/{schemaName}/versions/{version}, PATCH /api/schemas/{schemaName}/versions/{version}/schedule, GET /api/schemas, GET /api/schemas/{schemaName}/versions/{version})\n3. Public Schema Discovery & Catalogue (GET /api/schemas, GET /api/schemas/{schemaName}, GET /api/schemas/{schemaName}/versions/{version})\n4. Generic EDC Submission Lifecycle (POST /api/submissions/{schemaName}, PUT /api/submissions/{submissionId}, POST /api/submissions/{submissionId}/finalise)\n5. ODCS v3.2.0 Survey Sites Workflow (edc-survey-sites)\n6. CDC Survey Two-Step Validation Pipeline (cdc_survey with 10 Quality Rules)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -12,8 +12,23 @@
       "type": "string"
     },
     {
+      "key": "adminBaseUrl",
+      "value": "http://localhost:7072/api",
+      "type": "string"
+    },
+    {
       "key": "schemaName",
       "value": "edc_payload",
+      "type": "string"
+    },
+    {
+      "key": "cdcSchemaName",
+      "value": "cdc_survey",
+      "type": "string"
+    },
+    {
+      "key": "odcsSiteSchemaName",
+      "value": "edc-survey-sites",
       "type": "string"
     },
     {
@@ -22,14 +37,29 @@
       "type": "string"
     },
     {
+      "key": "adminFunctionKey",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "submissionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cdcSubmissionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "odcsSubmissionId",
       "value": "",
       "type": "string"
     }
   ],
   "item": [
     {
-      "name": "0. Diagnostics & Health",
+      "name": "0. Diagnostics & Health (Public API)",
       "item": [
         {
           "name": "0.1 Get About & Service Version",
@@ -45,9 +75,9 @@
                   "pm.test(\"Returns expected service metadata and versioning\", function () {",
                   "    const jsonData = pm.response.json();",
                   "    pm.expect(jsonData.service).to.eql(\"EstateDataCollection\");",
-                  "    pm.expect(jsonData).to.have.property(\"calver\");",
                   "    pm.expect(jsonData).to.have.property(\"version\");",
-                  "    pm.expect(jsonData).to.have.property(\"commitSha\");",
+                  "    pm.expect(jsonData).to.have.property(\"informativeVersion\");",
+                  "    pm.expect(jsonData).to.have.property(\"sha\");",
                   "    pm.expect(jsonData).to.have.property(\"environment\");",
                   "    pm.expect(jsonData).to.have.property(\"serverUtc\");",
                   "});"
@@ -80,10 +110,10 @@
       ]
     },
     {
-      "name": "1. Schema Management (Data Team & CI)",
+      "name": "1. Admin Verification & Dry-Run (Admin API)",
       "item": [
         {
-          "name": "1.1 Verify Schema Candidate (Dry-Run)",
+          "name": "1.1 Verify Schema Candidate (Draft 2020-12 & Fixtures)",
           "event": [
             {
               "listen": "test",
@@ -93,11 +123,13 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Schema candidate is valid Draft 2020-12\", function () {",
+                  "pm.test(\"Schema candidate verified successfully\", function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.isValidSchema).to.be.true;",
-                  "    pm.expect(jsonData.allValidFixturesPassed).to.be.true;",
-                  "    pm.expect(jsonData.allInvalidFixturesRejected).to.be.true;",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    if (jsonData.successful !== undefined) {",
+                  "        pm.expect(jsonData.successful).to.be.true;",
+                  "    }",
+                  "    pm.expect(data.message).to.be.a(\"string\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -113,7 +145,7 @@
               },
               {
                 "key": "x-functions-key",
-                "value": "{{functionKey}}",
+                "value": "{{adminFunctionKey}}",
                 "disabled": false
               }
             ],
@@ -122,34 +154,37 @@
               "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\":\\\"https://json-schema.org/draft/2020-12/schema\\\",\\\"title\\\":\\\"edc_payload\\\",\\\"schemaVersion\\\":1,\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"urn\\\":{\\\"type\\\":\\\"integer\\\"},\\\"school_name\\\":{\\\"type\\\":\\\"string\\\"},\\\"school_address\\\":{\\\"type\\\":\\\"string\\\"},\\\"school_capacity\\\":{\\\"type\\\":[\\\"integer\\\",\\\"null\\\"]}},\\\"required\\\":[\\\"urn\\\",\\\"school_name\\\",\\\"school_address\\\"],\\\"additionalProperties\\\":false}\",\n  \"sampleValidFixtures\": [\n    \"{\\\"urn\\\":104521,\\\"school_name\\\":\\\"St Mary's High School\\\",\\\"school_address\\\":\\\"High Street, Leeds\\\",\\\"school_capacity\\\":450}\"\n  ],\n  \"sampleInvalidFixtures\": [\n    \"{\\\"school_name\\\":\\\"Missing URN and Address\\\"}\"\n  ]\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/schemas/verify",
+              "raw": "{{adminBaseUrl}}/schemas/verify",
               "host": [
-                "{{baseUrl}}"
+                "{{adminBaseUrl}}"
               ],
               "path": [
                 "schemas",
                 "verify"
               ]
             },
-            "description": "Evaluates schema syntax against JSON Schema Draft 2020-12 and tests sample fixtures without persisting anything to Azure Blob Storage."
+            "description": "Evaluates schema syntax against JSON Schema Draft 2020-12 / Draft-07 and tests sample fixtures without persisting anything to Azure Blob Storage."
           },
           "response": []
         },
         {
-          "name": "1.2 Publish & Schedule Schema v1",
+          "name": "1.2 Verify Standalone Quality Rules (Direct Array - JsonLogic & CEL)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status code is 201 Created\", function () {",
-                  "    pm.response.to.have.status(201);",
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Schema version 1 registered successfully\", function () {",
+                  "pm.test(\"Rules parsed and validated successfully\", function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.schemaName).to.eql(pm.collectionVariables.get(\"schemaName\"));",
-                  "    pm.expect(jsonData.version).to.eql(1);",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    if (jsonData.successful !== undefined) {",
+                  "        pm.expect(jsonData.successful).to.be.true;",
+                  "    }",
+                  "    pm.expect(data.message).to.be.a(\"string\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -165,18 +200,303 @@
               },
               {
                 "key": "x-functions-key",
-                "value": "{{functionKey}}",
+                "value": "{{adminFunctionKey}}",
                 "disabled": false
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\":\\\"https://json-schema.org/draft/2020-12/schema\\\",\\\"$id\\\":\\\"https://dfe_cde_edc_integtration/schemas/edc_payload.schema.json\\\",\\\"title\\\":\\\"edc_payload\\\",\\\"description\\\":\\\"JSON Schema for eed_catalogue_30_bronze.cde_edc_integration.edc_payload\\\",\\\"schemaVersion\\\":1,\\\"createdTimestamp\\\":\\\"2026-10-13T09:41:58Z\\\",\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"urn\\\":{\\\"type\\\":\\\"integer\\\"},\\\"school_name\\\":{\\\"type\\\":\\\"string\\\"},\\\"school_address\\\":{\\\"type\\\":\\\"string\\\"},\\\"local_authority\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"telephone\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"diocese\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"school_capacity\\\":{\\\"type\\\":[\\\"integer\\\",\\\"null\\\"]}},\\\"required\\\":[\\\"urn\\\",\\\"school_name\\\",\\\"school_address\\\"],\\\"additionalProperties\\\":false}\",\n  \"effectiveFromUtc\": \"2026-10-01T00:00:00Z\"\n}"
+              "raw": "[\n  {\n    \"id\": \"CDC-DQ1-JSONLogic\",\n    \"type\": \"custom\",\n    \"engine\": \"jsonlogic\",\n    \"description\": \"Survey updated timestamp must be greater than or equal to survey creation timestamp.\",\n    \"severity\": \"ERROR\",\n    \"path\": \"survey\",\n    \"message\": \"Survey updated timestamp must be greater than or equal to survey creation timestamp.\",\n    \"implementation\": {\n      \">=\": [\n        { \"var\": \"survey.updated_at\" },\n        { \"var\": \"survey.created_at\" }\n      ]\n    }\n  },\n  {\n    \"id\": \"CDC-DQ2-CEL\",\n    \"type\": \"custom\",\n    \"engine\": \"cel\",\n    \"description\": \"School URN must be a 6-character string.\",\n    \"severity\": \"ERROR\",\n    \"path\": \"school\",\n    \"message\": \"School URN must be 6 characters long.\",\n    \"implementation\": \"size(school.urn) == 6\"\n  }\n]"
             },
             "url": {
-              "raw": "{{baseUrl}}/schemas/{{schemaName}}/versions/1",
+              "raw": "{{adminBaseUrl}}/logic/verify",
               "host": [
-                "{{baseUrl}}"
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "logic",
+                "verify"
+              ]
+            },
+            "description": "Validates standalone JsonLogic and CEL quality rules syntax and engine registration."
+          },
+          "response": []
+        },
+        {
+          "name": "1.3 Verify Multi-Engine Quality Rules with Fixtures (JsonLogic + CEL)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Multi-engine rules and fixtures verified\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    if (jsonData.successful !== undefined) {",
+                  "        pm.expect(jsonData.successful).to.be.true;",
+                  "    }",
+                  "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rulesJson\": \"[{\\\"id\\\": \\\"CDC-DQ1-JSONLogic\\\", \\\"type\\\": \\\"custom\\\", \\\"engine\\\": \\\"jsonlogic\\\", \\\"description\\\": \\\"Survey updated timestamp must be >= created timestamp.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"survey\\\", \\\"message\\\": \\\"Survey updated timestamp must be greater than or equal to survey creation timestamp.\\\", \\\"implementation\\\": {\\\">=\\\": [{\\\"var\\\": \\\"survey.updated_at\\\"}, {\\\"var\\\": \\\"survey.created_at\\\"}]}}, {\\\"id\\\": \\\"CDC-DQ2-CEL-CAPACITY\\\", \\\"type\\\": \\\"custom\\\", \\\"engine\\\": \\\"cel\\\", \\\"description\\\": \\\"School capacity when present must be positive.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"school\\\", \\\"message\\\": \\\"School capacity must be greater than zero.\\\", \\\"implementation\\\": \\\"school.capacity > 0\\\"}]\",\n  \"sampleValidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-001\\\", \\\"created_at\\\": \\\"2026-10-15T10:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T14:30:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"capacity\\\": 450}}\"\n  ],\n  \"sampleInvalidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-001\\\", \\\"created_at\\\": \\\"2026-10-15T16:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T10:00:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"capacity\\\": 450}}\",\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-001\\\", \\\"created_at\\\": \\\"2026-10-15T10:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T14:30:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"capacity\\\": 0}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/logic/verify",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "logic",
+                "verify"
+              ]
+            },
+            "description": "Evaluates both JsonLogic and CEL quality rules against valid and invalid golden fixtures."
+          },
+          "response": []
+        },
+        {
+          "name": "1.4 Verify Paired Draft-07 Schema & Quality Rules (Route A)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Paired Draft-07 schema and rules verified\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    if (jsonData.successful !== undefined) {",
+                  "        pm.expect(jsonData.successful).to.be.true;",
+                  "    }",
+                  "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\": \\\"http://json-schema.org/draft-07/schema#\\\", \\\"type\\\": \\\"object\\\", \\\"properties\\\": {\\\"survey\\\": {\\\"type\\\": \\\"object\\\", \\\"properties\\\": {\\\"id\\\": {\\\"type\\\": \\\"string\\\", \\\"pattern\\\": \\\"^SURV-[A-Za-z0-9-]+$\\\"}, \\\"survey_name\\\": {\\\"type\\\": \\\"string\\\"}, \\\"participant_id\\\": {\\\"type\\\": \\\"string\\\"}, \\\"surveyor_email\\\": {\\\"type\\\": [\\\"string\\\", \\\"null\\\"], \\\"format\\\": \\\"email\\\"}, \\\"is_complete\\\": {\\\"type\\\": \\\"boolean\\\"}, \\\"created_at\\\": {\\\"type\\\": \\\"string\\\", \\\"format\\\": \\\"date-time\\\"}, \\\"updated_at\\\": {\\\"type\\\": \\\"string\\\", \\\"format\\\": \\\"date-time\\\"}}, \\\"required\\\": [\\\"id\\\", \\\"survey_name\\\", \\\"participant_id\\\", \\\"is_complete\\\", \\\"created_at\\\", \\\"updated_at\\\"]}, \\\"school\\\": {\\\"type\\\": \\\"object\\\", \\\"properties\\\": {\\\"urn\\\": {\\\"type\\\": \\\"string\\\", \\\"pattern\\\": \\\"^[0-9]{6}$\\\"}, \\\"name\\\": {\\\"type\\\": \\\"string\\\"}, \\\"local_authority\\\": {\\\"type\\\": [\\\"string\\\", \\\"null\\\"]}}, \\\"required\\\": [\\\"urn\\\", \\\"name\\\"]}, \\\"sites\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"type\\\": \\\"object\\\", \\\"properties\\\": {\\\"name\\\": {\\\"type\\\": \\\"string\\\"}, \\\"blocks\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"type\\\": \\\"object\\\", \\\"properties\\\": {\\\"name\\\": {\\\"type\\\": \\\"string\\\"}, \\\"type\\\": {\\\"type\\\": \\\"string\\\"}, \\\"floors\\\": {\\\"type\\\": [\\\"array\\\", \\\"null\\\"], \\\"items\\\": {\\\"type\\\": [\\\"object\\\", \\\"null\\\"], \\\"properties\\\": {\\\"name\\\": {\\\"type\\\": \\\"string\\\"}}, \\\"required\\\": [\\\"name\\\"]}}}, \\\"required\\\": [\\\"name\\\", \\\"type\\\"]}}}, \\\"required\\\": [\\\"name\\\", \\\"blocks\\\"]}}}, \\\"required\\\": [\\\"survey\\\", \\\"school\\\", \\\"sites\\\"]}\",\n  \"rulesJson\": \"[{\\\"id\\\": \\\"CDC-DQ1-JSONLogic\\\", \\\"type\\\": \\\"custom\\\", \\\"engine\\\": \\\"jsonlogic\\\", \\\"description\\\": \\\"Survey updated timestamp must be greater than or equal to survey creation timestamp.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"survey\\\", \\\"message\\\": \\\"Survey updated timestamp must be greater than or equal to survey creation timestamp.\\\", \\\"implementation\\\": {\\\">=\\\": [{\\\"var\\\": \\\"survey.updated_at\\\"}, {\\\"var\\\": \\\"survey.created_at\\\"}]}}]\",\n  \"sampleValidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-1234-5678\\\", \\\"survey_name\\\": \\\"CCD\\\", \\\"participant_id\\\": \\\"abc-def-ghi\\\", \\\"surveyor_email\\\": \\\"surveyor@supplier.com\\\", \\\"is_complete\\\": true, \\\"created_at\\\": \\\"2026-10-15T10:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T14:30:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"name\\\": \\\"Example School\\\"}, \\\"sites\\\": [{\\\"name\\\": \\\"EFA1\\\", \\\"blocks\\\": [{\\\"name\\\": \\\"EFAA\\\", \\\"type\\\": \\\"block\\\", \\\"floors\\\": [{\\\"name\\\": \\\"EFAA-GF\\\"}]}]}]}\"\n  ],\n  \"sampleInvalidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-1234-5678\\\", \\\"survey_name\\\": \\\"CCD\\\", \\\"participant_id\\\": \\\"abc-def-ghi\\\", \\\"surveyor_email\\\": \\\"surveyor@supplier.com\\\", \\\"is_complete\\\": true, \\\"created_at\\\": \\\"2026-10-15T16:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T10:00:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"name\\\": \\\"Example School\\\"}, \\\"sites\\\": [{\\\"name\\\": \\\"EFA1\\\", \\\"blocks\\\": [{\\\"name\\\": \\\"EFAA\\\", \\\"type\\\": \\\"block\\\", \\\"floors\\\": [{\\\"name\\\": \\\"EFAA-GF\\\"}]}]}]}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/verify",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "verify"
+              ]
+            },
+            "description": "Verifies Route A: paired JSON Schema (Draft-07 exported from ODCS) and companion .rules.json against sample valid and invalid fixtures."
+          },
+          "response": []
+        },
+        {
+          "name": "1.5 Verify ODCS v3.2.0 Contract via Raw YAML (Route B)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"ODCS v3.2.0 YAML contract parsed and verified\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    if (jsonData.successful !== undefined) {",
+                  "        pm.expect(jsonData.successful).to.be.true;",
+                  "    }",
+                  "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/yaml"
+              },
+              {
+                "key": "X-File-Name",
+                "value": "edc-school-site-jsonlogic.odcs.yaml"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "version: \"1.0.0\"\nkind: DataContract\napiVersion: v3.2.0\nid: edc-survey-sites\nname: CCDSurveySubmission-Sites\nstatus: draft\nschema:\n  - name: submission\n    logicalType: object\n    description: Top-level CCDSurveySubmission-Sites payload container\n    properties:\n      - name: survey\n        logicalType: object\n        required: true\n        quality:\n          - id: CDC-DQ1-JSONLogic\n            type: custom\n            engine: jsonlogic\n            description: Survey updated timestamp must be greater than or equal to survey creation timestamp.\n            implementation:\n              \">=\":\n                - var: survey.updated_at\n                - var: survey.created_at\n        properties:\n          - name: id\n            logicalType: string\n            required: true\n            logicalTypeOptions:\n              pattern: \"^SURV-[A-Za-z0-9-]+$\"\n          - name: survey_name\n            logicalType: string\n            required: true\n          - name: participant_id\n            logicalType: string\n            required: true\n          - name: surveyor_email\n            logicalType: string\n            required: false\n            logicalTypeOptions:\n              format: email\n          - name: is_complete\n            logicalType: boolean\n            required: true\n          - name: created_at\n            logicalType: timestamp\n            required: true\n          - name: updated_at\n            logicalType: timestamp\n            required: true\n      - name: school\n        logicalType: object\n        required: true\n        properties:\n          - name: urn\n            logicalType: string\n            required: true\n            logicalTypeOptions:\n              pattern: \"^[0-9]{6}$\"\n          - name: name\n            logicalType: string\n            required: true\n      - name: sites\n        logicalType: array\n        required: true\n        items:\n          logicalType: object\n          required: true\n          properties:\n            - name: name\n              logicalType: string\n              required: true\n            - name: blocks\n              logicalType: array\n              required: true\n              items:\n                logicalType: object\n                required: true\n                properties:\n                  - name: name\n                    logicalType: string\n                    required: true\n                  - name: type\n                    logicalType: string\n                    required: true"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/verify",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "verify"
+              ]
+            },
+            "description": "Verifies Route B: posts a raw ODCS v3.2.0 YAML DataContract directly. OdcsContractParser compiles it to Draft-07 JSON Schema and extracts all embedded quality rules."
+          },
+          "response": []
+        },
+        {
+          "name": "1.6 Verify ODCS v3.2.0 Contract via JSON Envelope & Fixtures (Route B)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"ODCS YAML envelope and golden fixtures verified\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    if (jsonData.successful !== undefined) {",
+                  "        pm.expect(jsonData.successful).to.be.true;",
+                  "    }",
+                  "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileName\": \"edc-school-site-jsonlogic.odcs.yaml\",\n  \"odcsYaml\": \"version: \\\"1.0.0\\\"\\nkind: DataContract\\napiVersion: v3.2.0\\nid: edc-survey-sites\\nname: CCDSurveySubmission-Sites\\nschema:\\n  - name: submission\\n    logicalType: object\\n    properties:\\n      - name: survey\\n        logicalType: object\\n        required: true\\n        quality:\\n          - id: CDC-DQ1-JSONLogic\\n            type: custom\\n            engine: jsonlogic\\n            description: Survey updated timestamp must be greater than or equal to survey creation timestamp.\\n            implementation:\\n              \\\">=\\\":\\n                - var: survey.updated_at\\n                - var: survey.created_at\\n        properties:\\n          - name: id\\n            logicalType: string\\n            required: true\\n          - name: created_at\\n            logicalType: timestamp\\n            required: true\\n          - name: updated_at\\n            logicalType: timestamp\\n            required: true\\n      - name: school\\n        logicalType: object\\n        required: true\\n        properties:\\n          - name: urn\\n            logicalType: string\\n            required: true\\n            logicalTypeOptions:\\n              pattern: \\\"^[0-9]{6}$\\\"\\n          - name: name\\n            logicalType: string\\n            required: true\\n\",\n  \"sampleValidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-100\\\", \\\"created_at\\\": \\\"2026-10-15T10:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T12:00:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"name\\\": \\\"Example School\\\"}}\"\n  ],\n  \"sampleInvalidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-100\\\", \\\"created_at\\\": \\\"2026-10-15T15:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T12:00:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"name\\\": \\\"Example School\\\"}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/verify",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "verify"
+              ]
+            },
+            "description": "Verifies an ODCS v3.2.0 YAML contract wrapped in a JSON request alongside sample valid and invalid test fixtures."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Admin Schema Ingestion, Scheduling & Catalogue (Admin API)",
+      "item": [
+        {
+          "name": "2.1 Submit Schema v1 with Companion Rules (Unscheduled 'Validated')",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created or 409 Conflict if already registered\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    pm.test(\"Schema version 1 registered in Validated state\", function () {",
+                  "        const jsonData = pm.response.json();",
+                  "        const data = jsonData.data ?? jsonData;",
+                  "        pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
+                  "        pm.expect(data.version).to.eql(1);",
+                  "        pm.expect(data.sha256Hash).to.be.a(\"string\");",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\":\\\"https://json-schema.org/draft/2020-12/schema\\\",\\\"$id\\\":\\\"https://dfe_cde_edc_integtration/schemas/edc_payload.schema.json\\\",\\\"title\\\":\\\"edc_payload\\\",\\\"description\\\":\\\"JSON Schema for eed_catalogue_30_bronze.cde_edc_integration.edc_payload\\\",\\\"schemaVersion\\\":1,\\\"createdTimestamp\\\":\\\"2026-10-13T09:41:58Z\\\",\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"urn\\\":{\\\"type\\\":\\\"integer\\\",\\\"minimum\\\":100000,\\\"maximum\\\":999999},\\\"school_name\\\":{\\\"type\\\":\\\"string\\\",\\\"minLength\\\":1},\\\"school_address\\\":{\\\"type\\\":\\\"string\\\"},\\\"local_authority\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"telephone\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"diocese\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"school_capacity\\\":{\\\"type\\\":[\\\"integer\\\",\\\"null\\\"],\\\"minimum\\\":0}},\\\"required\\\":[\\\"urn\\\",\\\"school_name\\\",\\\"school_address\\\"],\\\"additionalProperties\\\":false}\",\n  \"rulesJson\": \"[{\\\"id\\\":\\\"RULE-CAPACITY-POSITIVE\\\",\\\"type\\\":\\\"custom\\\",\\\"engine\\\":\\\"jsonlogic\\\",\\\"description\\\":\\\"School capacity must be positive when specified.\\\",\\\"severity\\\":\\\"ERROR\\\",\\\"path\\\":\\\"school_capacity\\\",\\\"message\\\":\\\"School capacity must be greater than zero when specified.\\\",\\\"implementation\\\":{\\\"or\\\":[{\\\"==\\\":[{\\\"var\\\":\\\"school_capacity\\\"},null]},{\\\">\\\":[{\\\"var\\\":\\\"school_capacity\\\"},0]}]}}]\",\n  \"identifierConfig\": {\n    \"type\": \"URN\",\n    \"jsonPointer\": \"/urn\",\n    \"required\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{schemaName}}/versions/1",
+              "host": [
+                "{{adminBaseUrl}}"
               ],
               "path": [
                 "schemas",
@@ -185,26 +505,29 @@
                 "1"
               ]
             },
-            "description": "Submits, schedules, and commits a validated schema contract to the 'schemas' Blob container."
+            "description": "Submits and commits a validated schema contract and companion quality rules to the 'schemas' Blob container in Validated (unscheduled) state."
           },
           "response": []
         },
         {
-          "name": "1.3 Publish & Schedule Schema v2",
+          "name": "2.2 Submit Schema v2 (Evolution - Unscheduled 'Validated')",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status code is 201 Created\", function () {",
-                  "    pm.response.to.have.status(201);",
+                  "pm.test(\"Status code is 201 Created or 409 Conflict if already registered\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
                   "});",
                   "",
-                  "pm.test(\"Schema version 2 registered successfully\", function () {",
-                  "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.schemaName).to.eql(pm.collectionVariables.get(\"schemaName\"));",
-                  "    pm.expect(jsonData.version).to.eql(2);",
-                  "});"
+                  "if (pm.response.code === 201) {",
+                  "    pm.test(\"Schema version 2 registered successfully\", function () {",
+                  "        const jsonData = pm.response.json();",
+                  "        const data = jsonData.data ?? jsonData;",
+                  "        pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
+                  "        pm.expect(data.version).to.eql(2);",
+                  "    });",
+                  "}"
                 ],
                 "type": "text/javascript"
               }
@@ -219,18 +542,18 @@
               },
               {
                 "key": "x-functions-key",
-                "value": "{{functionKey}}",
+                "value": "{{adminFunctionKey}}",
                 "disabled": false
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\":\\\"https://json-schema.org/draft/2020-12/schema\\\",\\\"$id\\\":\\\"https://dfe_cde_edc_integtration/schemas/edc_payload.schema.json\\\",\\\"title\\\":\\\"edc_payload\\\",\\\"description\\\":\\\"JSON Schema for eed_catalogue_30_bronze.cde_edc_integration.edc_payload\\\",\\\"schemaVersion\\\":2,\\\"createdTimestamp\\\":\\\"2026-10-13T09:43:52Z\\\",\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"urn\\\":{\\\"type\\\":\\\"integer\\\"},\\\"school_name\\\":{\\\"type\\\":\\\"string\\\"},\\\"school_address\\\":{\\\"type\\\":\\\"string\\\"},\\\"local_authority\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"telephone\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"diocese\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]}},\\\"required\\\":[\\\"urn\\\",\\\"school_name\\\",\\\"school_address\\\"],\\\"additionalProperties\\\":false}\",\n  \"effectiveFromUtc\": \"2026-11-01T00:00:00Z\"\n}"
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\":\\\"https://json-schema.org/draft/2020-12/schema\\\",\\\"$id\\\":\\\"https://dfe_cde_edc_integtration/schemas/edc_payload.schema.json\\\",\\\"title\\\":\\\"edc_payload\\\",\\\"description\\\":\\\"JSON Schema for eed_catalogue_30_bronze.cde_edc_integration.edc_payload\\\",\\\"schemaVersion\\\":2,\\\"createdTimestamp\\\":\\\"2026-10-13T09:43:52Z\\\",\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"urn\\\":{\\\"type\\\":\\\"integer\\\"},\\\"school_name\\\":{\\\"type\\\":\\\"string\\\"},\\\"school_address\\\":{\\\"type\\\":\\\"string\\\"},\\\"local_authority\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"telephone\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]},\\\"diocese\\\":{\\\"type\\\":[\\\"string\\\",\\\"null\\\"]}},\\\"required\\\":[\\\"urn\\\",\\\"school_name\\\",\\\"school_address\\\"],\\\"additionalProperties\\\":false}\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/schemas/{{schemaName}}/versions/2",
+              "raw": "{{adminBaseUrl}}/schemas/{{schemaName}}/versions/2",
               "host": [
-                "{{baseUrl}}"
+                "{{adminBaseUrl}}"
               ],
               "path": [
                 "schemas",
@@ -239,17 +562,657 @@
                 "2"
               ]
             },
-            "description": "Publishes v2 of the schema with updated fields (e.g., school_capacity retired/removed)."
+            "description": "Submits v2 of the schema (e.g., school_capacity retired/removed) in Validated (unscheduled) state."
+          },
+          "response": []
+        },
+        {
+          "name": "2.3 Submit ODCS v3.2.0 Contract via Raw YAML (edc-survey-sites v1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created or 409 Conflict if already registered\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    pm.test(\"ODCS contract ingested and stored\", function () {",
+                  "        const jsonData = pm.response.json();",
+                  "        const data = jsonData.data ?? jsonData;",
+                  "        pm.expect(data.schemaName).to.eql(pm.variables.get(\"odcsSiteSchemaName\"));",
+                  "        pm.expect(data.version).to.eql(1);",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/yaml"
+              },
+              {
+                "key": "X-File-Name",
+                "value": "edc-school-site-jsonlogic.odcs.yaml"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "version: \"1.0.0\"\nkind: DataContract\napiVersion: v3.2.0\nid: edc-survey-sites\nname: CCDSurveySubmission-Sites\nstatus: draft\nschema:\n  - name: submission\n    logicalType: object\n    description: Top-level CCDSurveySubmission-Sites payload container\n    properties:\n      - name: survey\n        logicalType: object\n        required: true\n        quality:\n          - id: CDC-DQ1-JSONLogic\n            type: custom\n            engine: jsonlogic\n            description: Survey updated timestamp must be greater than or equal to survey creation timestamp.\n            implementation:\n              \">=\":\n                - var: survey.updated_at\n                - var: survey.created_at\n        properties:\n          - name: id\n            logicalType: string\n            required: true\n            logicalTypeOptions:\n              pattern: \"^SURV-[A-Za-z0-9-]+$\"\n          - name: survey_name\n            logicalType: string\n            required: true\n          - name: participant_id\n            logicalType: string\n            required: true\n          - name: surveyor_email\n            logicalType: string\n            required: false\n            logicalTypeOptions:\n              format: email\n          - name: is_complete\n            logicalType: boolean\n            required: true\n          - name: created_at\n            logicalType: timestamp\n            required: true\n          - name: updated_at\n            logicalType: timestamp\n            required: true\n      - name: school\n        logicalType: object\n        required: true\n        properties:\n          - name: urn\n            logicalType: string\n            required: true\n            logicalTypeOptions:\n              pattern: \"^[0-9]{6}$\"\n          - name: name\n            logicalType: string\n            required: true\n          - name: local_authority\n            logicalType: string\n            required: false\n      - name: sites\n        logicalType: array\n        required: true\n        items:\n          logicalType: object\n          required: true\n          properties:\n            - name: name\n              logicalType: string\n              required: true\n            - name: blocks\n              logicalType: array\n              required: true\n              items:\n                logicalType: object\n                required: true\n                properties:\n                  - name: name\n                    logicalType: string\n                    required: true\n                  - name: type\n                    logicalType: string\n                    required: true\n                  - name: floors\n                    logicalType: array\n                    required: false\n                    items:\n                      logicalType: object\n                      properties:\n                        - name: name\n                          logicalType: string\n                          required: true"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{odcsSiteSchemaName}}/versions/1",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{odcsSiteSchemaName}}",
+                "versions",
+                "1"
+              ]
+            },
+            "description": "Submits an ODCS v3.2.0 YAML Data Contract directly. Compiles and persists .schema.json, .rules.json, .odcs.yaml, and .meta.json in the 'schemas' container."
+          },
+          "response": []
+        },
+        {
+          "name": "2.4 Get Admin Schema Catalogue (Includes Unscheduled & Retired)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns schema catalogue entries\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.schemas).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas?includeUnscheduled=true&includeFields=true",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas"
+              ],
+              "query": [
+                {
+                  "key": "includeUnscheduled",
+                  "value": "true"
+                },
+                {
+                  "key": "includeFields",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Admin view of all schemas in the registry, including unscheduled (Validated / Draft) and Retired versions by default."
+          },
+          "response": []
+        },
+        {
+          "name": "2.5 Get Admin Schema Version Detail (Includes Raw JSON Schema & Rules)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns extracted fields, quality rules, and raw JSON Schema\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
+                  "    pm.expect(data.version).to.eql(1);",
+                  "    pm.expect(data.fields).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(data.qualityRules).to.be.an(\"array\");",
+                  "    pm.expect(data.rawJsonSchema).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{schemaName}}/versions/1?includeUnscheduled=true&includeRawJsonSchema=true",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{schemaName}}",
+                "versions",
+                "1"
+              ],
+              "query": [
+                {
+                  "key": "includeUnscheduled",
+                  "value": "true"
+                },
+                {
+                  "key": "includeRawJsonSchema",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Retrieves full detail for a specific schema version on the Admin API, including extracted field descriptors, constraints, quality rule summaries, and raw JSON Schema."
+          },
+          "response": []
+        },
+        {
+          "name": "2.6 Schedule / Activate Schema v1 (edc_payload)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Schema v1 scheduled with effective window\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
+                  "    pm.expect(data.version).to.eql(1);",
+                  "    pm.expect(data.effectiveFromUtc).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"effectiveFromUtc\": \"2026-01-01T00:00:00Z\",\n  \"effectiveToUtc\": \"2027-12-31T23:59:59Z\",\n  \"lifecycleAction\": \"Schedule\",\n  \"identifierConfig\": {\n    \"type\": \"URN\",\n    \"jsonPointer\": \"/urn\",\n    \"required\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{schemaName}}/versions/1/schedule",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{schemaName}}",
+                "versions",
+                "1",
+                "schedule"
+              ]
+            },
+            "description": "Assigns effective dates (EffectiveFromUtc / EffectiveToUtc) to transition Schema v1 to Active so it becomes publicly discoverable and can accept survey submissions."
+          },
+          "response": []
+        },
+        {
+          "name": "2.7 Schedule / Activate ODCS Schema v1 (edc-survey-sites)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"ODCS Schema v1 scheduled with effective window\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"odcsSiteSchemaName\"));",
+                  "    pm.expect(data.version).to.eql(1);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"effectiveFromUtc\": \"2026-01-01T00:00:00Z\",\n  \"effectiveToUtc\": \"2027-12-31T23:59:59Z\",\n  \"lifecycleAction\": \"Schedule\",\n  \"identifierConfig\": {\n    \"type\": \"URN\",\n    \"jsonPointer\": \"/school/urn\",\n    \"required\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{odcsSiteSchemaName}}/versions/1/schedule",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{odcsSiteSchemaName}}",
+                "versions",
+                "1",
+                "schedule"
+              ]
+            },
+            "description": "Activates ODCS Survey Sites v1 contract."
+          },
+          "response": []
+        },
+        {
+          "name": "2.8 Schedule Schema v2 for Future Window",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Schema v2 scheduled for future window\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.version).to.eql(2);",
+                  "    pm.expect(data.effectiveFromUtc).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"effectiveFromUtc\": \"2027-01-01T00:00:00Z\",\n  \"effectiveToUtc\": \"2028-12-31T23:59:59Z\",\n  \"lifecycleAction\": \"Schedule\"\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{schemaName}}/versions/2/schedule",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{schemaName}}",
+                "versions",
+                "2",
+                "schedule"
+              ]
+            },
+            "description": "Schedules Schema v2 for a future effective window."
+          },
+          "response": []
+        },
+        {
+          "name": "2.9 Deprecate Schema v2 (Lifecycle Action)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Schema v2 transitioned to Deprecated\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.state.name).to.eql(\"Deprecated\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lifecycleAction\": \"Deprecate\"\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{schemaName}}/versions/2/schedule",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{schemaName}}",
+                "versions",
+                "2",
+                "schedule"
+              ]
+            },
+            "description": "Transitions Schema v2 to Deprecated state."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "2. Submission Lifecycle (Surveyor Flow)",
+      "name": "3. Public Schema Discovery & Catalogue (Public API)",
       "item": [
         {
-          "name": "2.1 Create Submission Session (Auto Schedule)",
+          "name": "3.1 List Publicly Visible Schemas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns publicly visible scheduled schemas\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.schemas).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/schemas?includeFields=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schemas"
+              ],
+              "query": [
+                {
+                  "key": "includeFields",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Lists all publicly visible (Active / Scheduled / Deprecated) schemas, their versions, effective dates, and extracted activeVersionFields."
+          },
+          "response": []
+        },
+        {
+          "name": "3.2 Get Public Schema Catalogue Entry by Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns catalogue entry for schemaName with activeVersion\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
+                  "    pm.expect(data.activeVersion).to.eql(1);",
+                  "    pm.expect(data.versions).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/schemas/{{schemaName}}?includeFields=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{schemaName}}"
+              ],
+              "query": [
+                {
+                  "key": "includeFields",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Retrieves a specific schema's catalogue entry including all publicly visible versions, effective dates, and extracted fields."
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 Get Public Schema Version Detail (Fields, Constraints & Quality Rules)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns full schema version detail with extracted fields and quality rules\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
+                  "    pm.expect(data.version).to.eql(1);",
+                  "    pm.expect(data.isActiveNow).to.be.true;",
+                  "    pm.expect(data.fields).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(data.qualityRules).to.be.an(\"array\");",
+                  "    pm.expect(data.rawJsonSchema).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/schemas/{{schemaName}}/versions/1?includeRawJsonSchema=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{schemaName}}",
+                "versions",
+                "1"
+              ],
+              "query": [
+                {
+                  "key": "includeRawJsonSchema",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Retrieves full detail for a specific schema version on the Public API, including lifecycle state, effective dates, recursively extracted fields and constraints, quality rule summaries, and optional raw JSON Schema."
+          },
+          "response": []
+        },
+        {
+          "name": "3.4 Get Public ODCS Schema Version Detail (edc-survey-sites v1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns ODCS schema fields and extracted CDC-DQ1-JSONLogic quality rule\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"odcsSiteSchemaName\"));",
+                  "    pm.expect(data.version).to.eql(1);",
+                  "    pm.expect(data.fields).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(data.qualityRules).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/schemas/{{odcsSiteSchemaName}}/versions/1?includeRawJsonSchema=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{odcsSiteSchemaName}}",
+                "versions",
+                "1"
+              ],
+              "query": [
+                {
+                  "key": "includeRawJsonSchema",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Retrieves full detail for the compiled ODCS v3.2.0 Survey Sites schema version."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Submission Lifecycle - Generic EDC Schema (Public API)",
+      "item": [
+        {
+          "name": "4.1 Create Submission Session (Auto Schedule)",
           "event": [
             {
               "listen": "test",
@@ -260,15 +1223,16 @@
                   "});",
                   "",
                   "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
                   "pm.test(\"Contains valid SubmissionId and Schema\", function () {",
-                  "    pm.expect(jsonData.submissionId).to.be.a(\"string\");",
-                  "    pm.expect(jsonData.schemaName).to.eql(pm.collectionVariables.get(\"schemaName\"));",
+                  "    pm.expect(data.submissionId).to.be.a(\"string\");",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
                   "});",
                   "",
                   "// Automatically propagate submissionId for subsequent draft updates and finalisation",
-                  "pm.collectionVariables.set(\"submissionId\", jsonData.submissionId);",
-                  "pm.environment.set(\"submissionId\", jsonData.submissionId);",
-                  "console.log(\"Saved submissionId to environment: \" + jsonData.submissionId);"
+                  "pm.collectionVariables.set(\"submissionId\", data.submissionId);",
+                  "pm.environment.set(\"submissionId\", data.submissionId);",
+                  "console.log(\"Saved submissionId to environment: \" + data.submissionId);"
                 ],
                 "type": "text/javascript"
               }
@@ -298,7 +1262,7 @@
           "response": []
         },
         {
-          "name": "2.2 Create Submission Session (Explicitly Pin Version 1)",
+          "name": "4.2 Create Submission Session (Explicitly Pin Version 1)",
           "event": [
             {
               "listen": "test",
@@ -309,13 +1273,14 @@
                   "});",
                   "",
                   "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
                   "pm.test(\"Pinned explicitly to Version 1\", function () {",
-                  "    pm.expect(jsonData.version).to.eql(1);",
+                  "    pm.expect(data.version).to.eql(1);",
                   "});",
                   "",
                   "// Update submissionId to use this newly created session",
-                  "pm.collectionVariables.set(\"submissionId\", jsonData.submissionId);",
-                  "pm.environment.set(\"submissionId\", jsonData.submissionId);"
+                  "pm.collectionVariables.set(\"submissionId\", data.submissionId);",
+                  "pm.environment.set(\"submissionId\", data.submissionId);"
                 ],
                 "type": "text/javascript"
               }
@@ -346,12 +1311,12 @@
                 }
               ]
             },
-            "description": "Creates a submission session explicitly pinned to Schema Version 1 regardless of current date schedule."
+            "description": "Creates a submission session explicitly pinned to Schema Version 1."
           },
           "response": []
         },
         {
-          "name": "2.3 Upload Draft 1 (Incomplete - Missing Address)",
+          "name": "4.3 Upload Draft 1 (Incomplete - Missing Address)",
           "event": [
             {
               "listen": "test",
@@ -362,11 +1327,10 @@
                   "});",
                   "",
                   "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
                   "pm.test(\"Reports missing required fields as pending errors\", function () {",
-                  "    pm.expect(jsonData.isSuccessful).to.be.true;",
-                  "    pm.expect(jsonData.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
-                  "    const hasAddressError = jsonData.pendingErrors.some(e => e.message && e.message.includes(\"school_address\"));",
-                  "    pm.expect(hasAddressError).to.be.true;",
+                  "    pm.expect(data.isSuccessful).to.be.false;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -405,7 +1369,7 @@
           "response": []
         },
         {
-          "name": "2.4 Upload Draft 2 (Invalid Data Type - URN is string)",
+          "name": "4.4 Upload Draft 2 (Invalid Data Type - URN is string)",
           "event": [
             {
               "listen": "test",
@@ -416,8 +1380,10 @@
                   "});",
                   "",
                   "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
                   "pm.test(\"Detects data type mismatch on URN\", function () {",
-                  "    pm.expect(jsonData.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(data.isSuccessful).to.be.false;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -456,7 +1422,52 @@
           "response": []
         },
         {
-          "name": "2.5 Upload Draft 3 (Complete & Valid)",
+          "name": "4.5 Attempt Finalise While Incomplete (422 Unprocessable Entity)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 422 Unprocessable Entity\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns RFC 7807 problem details with validation errors\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.successful).to.be.false;",
+                  "    pm.expect(jsonData.problem).to.be.an(\"object\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{submissionId}}/finalise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{submissionId}}",
+                "finalise"
+              ]
+            },
+            "description": "Verifies that attempting to finalise an incomplete or invalid draft returns 422 Unprocessable Entity and leaves the draft in the 'payloads' landing zone."
+          },
+          "response": []
+        },
+        {
+          "name": "4.6 Upload Draft 3 (Complete & Valid)",
           "event": [
             {
               "listen": "test",
@@ -467,9 +1478,10 @@
                   "});",
                   "",
                   "const jsonData = pm.response.json();",
-                  "pm.test(\"Payload conforms to schema with 0 pending errors\", function () {",
-                  "    pm.expect(jsonData.isSuccessful).to.be.true;",
-                  "    pm.expect(jsonData.pendingErrors).to.be.an(\"array\").that.is.empty;",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Payload conforms to schema and quality rules with 0 pending errors\", function () {",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.empty;",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -503,12 +1515,12 @@
                 "{{submissionId}}"
               ]
             },
-            "description": "Complete and valid survey payload satisfying all mandatory and optional properties of Schema Version 1."
+            "description": "Complete and valid survey payload satisfying all mandatory and optional properties of Schema Version 1 and companion quality rules."
           },
           "response": []
         },
         {
-          "name": "2.6 Finalise Submission (Success - Promote to Processed)",
+          "name": "4.7 Finalise Submission (Success - Promote to Processed)",
           "event": [
             {
               "listen": "test",
@@ -519,12 +1531,13 @@
                   "});",
                   "",
                   "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
                   "pm.test(\"Submission successfully finalised and promoted\", function () {",
-                  "    pm.expect(jsonData.submissionId).to.eql(pm.collectionVariables.get(\"submissionId\"));",
-                  "    pm.expect(jsonData.urn).to.eql(104521);",
-                  "    pm.expect(jsonData.status).to.eql(\"ReadyForCde\");",
-                  "    pm.expect(jsonData.processedBlobUri).to.be.a(\"string\");",
-                  "    pm.expect(jsonData.finalisedAtUtc).to.be.a(\"string\");",
+                  "    pm.expect(data.submissionId).to.eql(pm.variables.get(\"submissionId\"));",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
+                  "    pm.expect(data.status).to.eql(\"ReadyForCde\");",
+                  "    pm.expect(data.processedBlobUri).to.be.a(\"string\");",
+                  "    pm.expect(data.finalisedAtUtc).to.be.a(\"string\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -551,7 +1564,568 @@
                 "finalise"
               ]
             },
-            "description": "Validates the stored draft against the pinned schema version, stamps with SHA-256 integrity hash, moves payload from 'payloads' to 'processed' blob container, and marks status as ReadyForCde."
+            "description": "Validates the stored draft against the pinned schema version and quality rules, stamps with SHA-256 integrity hash, moves payload from 'payloads' to 'processed' blob container, and marks status as ReadyForCde."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. ODCS v3.2.0 Survey Sites Workflow (edc-survey-sites)",
+      "item": [
+        {
+          "name": "5.1 Create ODCS Survey Sites Submission Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Created session for edc-survey-sites v1\", function () {",
+                  "    pm.expect(data.submissionId).to.be.a(\"string\");",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"odcsSiteSchemaName\"));",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"odcsSubmissionId\", data.submissionId);",
+                  "pm.environment.set(\"odcsSubmissionId\", data.submissionId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{odcsSiteSchemaName}}?version=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{odcsSiteSchemaName}}"
+              ],
+              "query": [
+                {
+                  "key": "version",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Creates a submission session pinned to the ODCS v3.2.0 edc-survey-sites v1 contract."
+          },
+          "response": []
+        },
+        {
+          "name": "5.2 Upload Invalid ODCS Draft (Fails CDC-DQ1-JSONLogic: updated_at < created_at)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Reports CDC-DQ1-JSONLogic timestamp violation\", function () {",
+                  "    pm.expect(data.isSuccessful).to.be.false;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-1234-5678\",\n    \"survey_name\": \"CCD\",\n    \"participant_id\": \"abc-def-ghi\",\n    \"surveyor_email\": \"surveyor@supplier.com\",\n    \"is_complete\": true,\n    \"created_at\": \"2026-10-15T16:00:00Z\",\n    \"updated_at\": \"2026-10-15T10:00:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"123456\",\n    \"name\": \"Example School\",\n    \"local_authority\": \"Leeds\"\n  },\n  \"sites\": [\n    {\n      \"name\": \"EFA1\",\n      \"blocks\": [\n        {\n          \"name\": \"EFAA\",\n          \"type\": \"block\",\n          \"floors\": [\n            {\n              \"name\": \"EFAA-GF\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{odcsSubmissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{odcsSubmissionId}}"
+              ]
+            },
+            "description": "Passes Draft-07 structural validation but fails the ODCS quality rule CDC-DQ1-JSONLogic because survey.updated_at is earlier than survey.created_at."
+          },
+          "response": []
+        },
+        {
+          "name": "5.3 Upload Valid ODCS Draft (Conforms to Draft-07 Schema & CDC-DQ1-JSONLogic)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Valid ODCS payload has 0 pending errors\", function () {",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-1234-5678\",\n    \"survey_name\": \"CCD\",\n    \"participant_id\": \"abc-def-ghi\",\n    \"surveyor_email\": \"surveyor@supplier.com\",\n    \"is_complete\": true,\n    \"created_at\": \"2026-10-15T10:00:00Z\",\n    \"updated_at\": \"2026-10-15T14:30:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"123456\",\n    \"name\": \"Example School\",\n    \"local_authority\": \"Leeds\"\n  },\n  \"sites\": [\n    {\n      \"name\": \"EFA1\",\n      \"blocks\": [\n        {\n          \"name\": \"EFAA\",\n          \"type\": \"block\",\n          \"floors\": [\n            {\n              \"name\": \"EFAA-GF\"\n            },\n            {\n              \"name\": \"EFAA-1F\"\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{odcsSubmissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{odcsSubmissionId}}"
+              ]
+            },
+            "description": "Uploads a complete and valid ODCS survey sites payload."
+          },
+          "response": []
+        },
+        {
+          "name": "5.4 Finalise ODCS Survey Sites Submission",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"ODCS submission finalised and promoted to ReadyForCde\", function () {",
+                  "    pm.expect(data.submissionId).to.eql(pm.variables.get(\"odcsSubmissionId\"));",
+                  "    pm.expect(data.status).to.eql(\"ReadyForCde\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{odcsSubmissionId}}/finalise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{odcsSubmissionId}}",
+                "finalise"
+              ]
+            },
+            "description": "Finalises the ODCS survey sites submission and promotes it to the 'processed' container."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. CDC Survey Two-Step Validation Pipeline (10 Quality Rules)",
+      "item": [
+        {
+          "name": "6.1 Submit CDC Survey Schema v1 + 10 Quality Rules",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created or 409 Conflict if already registered\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\": \\\"https://json-schema.org/draft/2020-12/schema\\\", \\\"title\\\": \\\"CCDSurveySubmission\\\", \\\"type\\\": \\\"object\\\", \\\"additionalProperties\\\": false, \\\"required\\\": [\\\"survey\\\", \\\"school\\\", \\\"sites\\\", \\\"elements\\\", \\\"answers\\\", \\\"evidence\\\"], \\\"properties\\\": {\\\"survey\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"id\\\", \\\"survey_name\\\", \\\"participant_id\\\", \\\"is_complete\\\", \\\"created_at\\\", \\\"updated_at\\\"], \\\"properties\\\": {\\\"id\\\": {\\\"type\\\": \\\"string\\\", \\\"pattern\\\": \\\"^SURV-[A-Za-z0-9-]+$\\\"}, \\\"survey_name\\\": {\\\"type\\\": \\\"string\\\"}, \\\"participant_id\\\": {\\\"type\\\": \\\"string\\\"}, \\\"surveyor_email\\\": {\\\"type\\\": \\\"string\\\", \\\"format\\\": \\\"email\\\"}, \\\"is_complete\\\": {\\\"type\\\": \\\"boolean\\\"}, \\\"created_at\\\": {\\\"type\\\": \\\"string\\\", \\\"format\\\": \\\"date-time\\\"}, \\\"updated_at\\\": {\\\"type\\\": \\\"string\\\", \\\"format\\\": \\\"date-time\\\"}}, \\\"additionalProperties\\\": false}, \\\"school\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"urn\\\"], \\\"properties\\\": {\\\"urn\\\": {\\\"type\\\": \\\"string\\\"}, \\\"name\\\": {\\\"type\\\": \\\"string\\\"}}, \\\"additionalProperties\\\": false}, \\\"sites\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"$ref\\\": \\\"#/$defs/site\\\"}}, \\\"elements\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"$ref\\\": \\\"#/$defs/element\\\"}}, \\\"answers\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"$ref\\\": \\\"#/$defs/answer\\\"}}, \\\"evidence\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"$ref\\\": \\\"#/$defs/evidence\\\"}}}, \\\"$defs\\\": {\\\"site\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"name\\\", \\\"blocks\\\"], \\\"properties\\\": {\\\"name\\\": {\\\"type\\\": \\\"string\\\"}, \\\"blocks\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"$ref\\\": \\\"#/$defs/block\\\"}}}, \\\"additionalProperties\\\": false}, \\\"block\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"name\\\", \\\"type\\\"], \\\"properties\\\": {\\\"name\\\": {\\\"type\\\": \\\"string\\\"}, \\\"type\\\": {\\\"type\\\": \\\"string\\\", \\\"enum\\\": [\\\"block\\\"]}, \\\"floors\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"$ref\\\": \\\"#/$defs/floor\\\"}}}, \\\"additionalProperties\\\": false}, \\\"floor\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"name\\\"], \\\"properties\\\": {\\\"name\\\": {\\\"type\\\": \\\"string\\\"}}, \\\"additionalProperties\\\": false}, \\\"element\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"id\\\", \\\"NRM3_code\\\", \\\"description\\\", \\\"asset_id\\\", \\\"asset_type\\\"], \\\"properties\\\": {\\\"id\\\": {\\\"type\\\": \\\"string\\\", \\\"pattern\\\": \\\"^ELM-[0-9]+$\\\"}, \\\"NRM3_code\\\": {\\\"type\\\": \\\"string\\\"}, \\\"description\\\": {\\\"type\\\": \\\"string\\\"}, \\\"asset_id\\\": {\\\"type\\\": \\\"string\\\"}, \\\"asset_type\\\": {\\\"type\\\": \\\"string\\\", \\\"enum\\\": [\\\"site\\\", \\\"block\\\", \\\"floor\\\", \\\"space\\\"]}, \\\"occurrences\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"$ref\\\": \\\"#/$defs/occurrence\\\"}}}, \\\"additionalProperties\\\": false}, \\\"occurrence\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"id\\\", \\\"name\\\"], \\\"properties\\\": {\\\"id\\\": {\\\"type\\\": \\\"string\\\", \\\"pattern\\\": \\\"^OCC-[0-9]+$\\\"}, \\\"name\\\": {\\\"type\\\": \\\"string\\\"}, \\\"basis_of_assessment\\\": {\\\"type\\\": \\\"string\\\", \\\"enum\\\": [\\\"Seen\\\", \\\"Not Seen\\\", \\\"Assumed\\\"]}, \\\"condition_grade\\\": {\\\"type\\\": \\\"string\\\", \\\"enum\\\": [\\\"A\\\", \\\"B\\\", \\\"C\\\", \\\"D\\\"]}, \\\"condition_description\\\": {\\\"type\\\": \\\"string\\\"}, \\\"replacement\\\": {\\\"$ref\\\": \\\"#/$defs/replacement\\\"}, \\\"repairs\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"$ref\\\": \\\"#/$defs/repair\\\"}}}, \\\"additionalProperties\\\": false}, \\\"replacement\\\": {\\\"type\\\": \\\"object\\\", \\\"properties\\\": {\\\"rem_life\\\": {\\\"type\\\": \\\"integer\\\", \\\"minimum\\\": 0}, \\\"uom\\\": {\\\"type\\\": \\\"string\\\"}, \\\"replacement_quantity\\\": {\\\"type\\\": \\\"number\\\", \\\"minimum\\\": 0}, \\\"replacement_rate\\\": {\\\"type\\\": \\\"number\\\", \\\"minimum\\\": 0}}, \\\"additionalProperties\\\": false}, \\\"repair\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"id\\\"], \\\"properties\\\": {\\\"id\\\": {\\\"type\\\": \\\"string\\\", \\\"pattern\\\": \\\"^REP-[0-9]+$\\\"}, \\\"repair_description\\\": {\\\"type\\\": \\\"string\\\"}, \\\"repair_item\\\": {\\\"type\\\": \\\"string\\\"}, \\\"repair_classification\\\": {\\\"type\\\": \\\"string\\\", \\\"enum\\\": [\\\"X\\\", \\\"Y\\\", \\\"Z\\\"]}, \\\"uom\\\": {\\\"type\\\": \\\"string\\\"}, \\\"repair_quantity\\\": {\\\"type\\\": \\\"number\\\", \\\"minimum\\\": 0}, \\\"repair_rate\\\": {\\\"type\\\": \\\"number\\\", \\\"minimum\\\": 0}, \\\"estimated_cost\\\": {\\\"type\\\": \\\"number\\\", \\\"minimum\\\": 0}}, \\\"additionalProperties\\\": false}, \\\"answer\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"id\\\", \\\"question_id\\\", \\\"asset_id\\\", \\\"asset_type\\\", \\\"value\\\"], \\\"properties\\\": {\\\"id\\\": {\\\"type\\\": \\\"string\\\", \\\"pattern\\\": \\\"^ANS-[0-9]+$\\\"}, \\\"question_id\\\": {\\\"type\\\": \\\"string\\\"}, \\\"asset_id\\\": {\\\"type\\\": \\\"string\\\"}, \\\"asset_type\\\": {\\\"type\\\": \\\"string\\\", \\\"enum\\\": [\\\"site\\\", \\\"block\\\", \\\"floor\\\", \\\"space\\\", \\\"element\\\"]}, \\\"value\\\": {}, \\\"value_type\\\": {\\\"type\\\": \\\"string\\\", \\\"enum\\\": [\\\"text\\\", \\\"number\\\", \\\"boolean\\\", \\\"lookup_list\\\", \\\"date\\\"]}, \\\"created_at\\\": {\\\"type\\\": \\\"string\\\", \\\"format\\\": \\\"date-time\\\"}, \\\"updated_at\\\": {\\\"type\\\": \\\"string\\\", \\\"format\\\": \\\"date-time\\\"}, \\\"evidence\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"id\\\"], \\\"properties\\\": {}}}}}, \\\"evidence\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"id\\\"], \\\"properties\\\": {\\\"id\\\": {\\\"type\\\": \\\"string\\\", \\\"pattern\\\": \\\"^EVD-[0-9]+$\\\"}, \\\"asset_id\\\": {\\\"type\\\": \\\"string\\\"}, \\\"asset_type\\\": {\\\"type\\\": \\\"string\\\"}, \\\"description\\\": {\\\"type\\\": \\\"string\\\"}, \\\"mime_type\\\": {\\\"type\\\": \\\"string\\\"}, \\\"blob_key\\\": {\\\"type\\\": \\\"string\\\"}, \\\"file_origin\\\": {\\\"type\\\": \\\"string\\\"}, \\\"created_at\\\": {\\\"type\\\": \\\"string\\\", \\\"format\\\": \\\"date-time\\\"}, \\\"updated_at\\\": {\\\"type\\\": \\\"string\\\", \\\"format\\\": \\\"date-time\\\"}}, \\\"additionalProperties\\\": false}}}\",\n  \"rulesJson\": \"[{\\\"id\\\": \\\"RULE-CONDITION-GRADE-D\\\", \\\"description\\\": \\\"Condition Grade D elements must have at least one repair identified.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"elements[].occurrences[].repairs\\\", \\\"message\\\": \\\"At least one repair must be provided when condition grade is D.\\\", \\\"assert\\\": {\\\"or\\\": [{\\\"!=\\\": [{\\\"var\\\": \\\"condition_grade\\\"}, \\\"D\\\"]}, {\\\">\\\": [{\\\"var\\\": \\\"repairs.length\\\"}, 0]}]}}, {\\\"id\\\": \\\"RULE-REPLACEMENT-LIFE\\\", \\\"description\\\": \\\"Grade D elements should have a replacement life specified.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"elements[].occurrences[].replacement.rem_life\\\", \\\"message\\\": \\\"Replacement remaining life is required when condition grade is D.\\\", \\\"assert\\\": {\\\"or\\\": [{\\\"!=\\\": [{\\\"var\\\": \\\"condition_grade\\\"}, \\\"D\\\"]}, {\\\"!=\\\": [{\\\"var\\\": \\\"replacement.rem_life\\\"}, null]}]}}, {\\\"id\\\": \\\"RULE-REPAIR-COST-CALCULATION\\\", \\\"description\\\": \\\"Repair cost must equal quantity multiplied by rate.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"elements[].occurrences[].repairs[].estimated_cost\\\", \\\"message\\\": \\\"Estimated cost must equal repair quantity \\\\u00d7 repair rate.\\\", \\\"assert\\\": {\\\"==\\\": [{\\\"var\\\": \\\"estimated_cost\\\"}, {\\\"*\\\": [{\\\"var\\\": \\\"repair_quantity\\\"}, {\\\"var\\\": \\\"repair_rate\\\"}]}]}}, {\\\"id\\\": \\\"RULE-REPLACEMENT-COST-REQUIRED\\\", \\\"description\\\": \\\"Assets nearing end of life must have a replacement quantity and rate.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"elements[].occurrences[].replacement\\\", \\\"message\\\": \\\"Replacement quantity and rate are required when remaining life is less than or equal to 5 years.\\\", \\\"assert\\\": {\\\"or\\\": [{\\\">\\\": [{\\\"var\\\": \\\"replacement.rem_life\\\"}, 5]}, {\\\"and\\\": [{\\\">\\\": [{\\\"var\\\": \\\"replacement.replacement_quantity\\\"}, 0]}, {\\\">\\\": [{\\\"var\\\": \\\"replacement.replacement_rate\\\"}, 0]}]}]}}, {\\\"id\\\": \\\"RULE-EVIDENCE-REQUIRED\\\", \\\"description\\\": \\\"Poor or critical conditions must have supporting evidence.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"answers[].evidence\\\", \\\"message\\\": \\\"Evidence is required for condition grades C and D.\\\", \\\"assert\\\": {\\\"or\\\": [{\\\"!in\\\": [{\\\"var\\\": \\\"condition_grade\\\"}, [\\\"C\\\", \\\"D\\\"]]}, {\\\">\\\": [{\\\"var\\\": \\\"evidence.length\\\"}, 0]}]}}, {\\\"id\\\": \\\"RULE-SITE-ANSWER-VALIDATION\\\", \\\"description\\\": \\\"Site level answers must reference a valid site asset.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"answers[].asset_id\\\", \\\"message\\\": \\\"Site answers must reference an existing site.\\\", \\\"assert\\\": {\\\"or\\\": [{\\\"!=\\\": [{\\\"var\\\": \\\"asset_type\\\"}, \\\"site\\\"]}, {\\\"in\\\": [{\\\"var\\\": \\\"asset_id\\\"}, {\\\"var\\\": \\\"valid_site_ids\\\"}]}]}}, {\\\"id\\\": \\\"RULE-BLOCK-ANSWER-VALIDATION\\\", \\\"description\\\": \\\"Block level answers must reference a valid block.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"answers[].asset_id\\\", \\\"message\\\": \\\"Block answers must reference an existing block.\\\", \\\"assert\\\": {\\\"or\\\": [{\\\"!=\\\": [{\\\"var\\\": \\\"asset_type\\\"}, \\\"block\\\"]}, {\\\"in\\\": [{\\\"var\\\": \\\"asset_id\\\"}, {\\\"var\\\": \\\"valid_block_ids\\\"}]}]}}, {\\\"id\\\": \\\"RULE-EVIDENCE-REFERENCE\\\", \\\"description\\\": \\\"Evidence references must exist in the submission evidence collection.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"answers[].evidence[].id\\\", \\\"message\\\": \\\"Evidence reference does not exist.\\\", \\\"assert\\\": {\\\"in\\\": [{\\\"var\\\": \\\"id\\\"}, {\\\"var\\\": \\\"valid_evidence_ids\\\"}]}}, {\\\"id\\\": \\\"RULE-ANSWER-VALUE-TYPE\\\", \\\"description\\\": \\\"Answer value must match declared value type.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"answers[].value\\\", \\\"message\\\": \\\"Answer value does not match configured value type.\\\", \\\"assert\\\": {\\\"or\\\": [{\\\"and\\\": [{\\\"==\\\": [{\\\"var\\\": \\\"value_type\\\"}, \\\"number\\\"]}, {\\\"==\\\": [{\\\"var\\\": \\\"value_is_numeric\\\"}, true]}]}, {\\\"and\\\": [{\\\"==\\\": [{\\\"var\\\": \\\"value_type\\\"}, \\\"boolean\\\"]}, {\\\"==\\\": [{\\\"var\\\": \\\"value_is_boolean\\\"}, true]}]}, {\\\"==\\\": [{\\\"var\\\": \\\"value_type\\\"}, \\\"text\\\"]}, {\\\"==\\\": [{\\\"var\\\": \\\"value_type\\\"}, \\\"lookup_list\\\"]}]}}, {\\\"id\\\": \\\"RULE-QUESTION-ASSET-TYPE\\\", \\\"description\\\": \\\"Question must be answered against the correct hierarchy level.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"answers[].asset_type\\\", \\\"message\\\": \\\"Question cannot be answered at this asset level.\\\", \\\"assert\\\": {\\\"==\\\": [{\\\"var\\\": \\\"asset_type\\\"}, {\\\"var\\\": \\\"question.expected_asset_type\\\"}]}}]\"\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{cdcSchemaName}}/versions/1",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{cdcSchemaName}}",
+                "versions",
+                "1"
+              ]
+            },
+            "description": "Submits the full CCDSurveySubmission JSON Schema and its 10 JsonLogic business rules."
+          },
+          "response": []
+        },
+        {
+          "name": "6.2 Schedule / Activate CDC Survey Schema v1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"effectiveFromUtc\": \"2026-01-01T00:00:00Z\",\n  \"effectiveToUtc\": \"2027-12-31T23:59:59Z\",\n  \"lifecycleAction\": \"Schedule\"\n}"
+            },
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{cdcSchemaName}}/versions/1/schedule",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{cdcSchemaName}}",
+                "versions",
+                "1",
+                "schedule"
+              ]
+            },
+            "description": "Activates CDC Survey Schema v1."
+          },
+          "response": []
+        },
+        {
+          "name": "6.3 Create CDC Survey Submission Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.collectionVariables.set(\"cdcSubmissionId\", data.submissionId);",
+                  "pm.environment.set(\"cdcSubmissionId\", data.submissionId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{cdcSchemaName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{cdcSchemaName}}"
+              ]
+            },
+            "description": "Creates a CDC Survey submission session and stores cdcSubmissionId."
+          },
+          "response": []
+        },
+        {
+          "name": "6.4 Upload CDC Draft 1 (Fails Step 1 JSON Schema)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Reports Step 1 structural errors\", function () {",
+                  "    pm.expect(data.isSuccessful).to.be.false;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-2026-001\",\n    \"survey_name\": \"Condition Survey 2026\",\n    \"participant_id\": \"PART-001\",\n    \"is_complete\": false,\n    \"created_at\": \"2026-10-28T10:00:00Z\",\n    \"updated_at\": \"2026-10-28T10:00:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"104521\",\n    \"name\": \"St Mary's High School\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{cdcSubmissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{cdcSubmissionId}}"
+              ]
+            },
+            "description": "Uploads an incomplete CDC survey draft missing required sections (sites, elements, answers, evidence)."
+          },
+          "response": []
+        },
+        {
+          "name": "6.5 Upload CDC Draft 2 (Passes Step 1, Fails Step 2 RULE-CONDITION-GRADE-D)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Triggers RULE-CONDITION-GRADE-D\", function () {",
+                  "    pm.expect(data.isSuccessful).to.be.false;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-1234-5678\",\n    \"survey_name\": \"CCD\",\n    \"participant_id\": \"abc-def-ghi\",\n    \"surveyor_email\": \"surveyor@supplier.com\",\n    \"is_complete\": true,\n    \"created_at\": \"2026-10-15T10:00:00Z\",\n    \"updated_at\": \"2026-10-15T14:30:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"123456\",\n    \"name\": \"Example School\"\n  },\n  \"sites\": [\n    {\n      \"name\": \"EFA1\",\n      \"blocks\": [\n        {\n          \"name\": \"EFAA\",\n          \"type\": \"block\",\n          \"floors\": [\n            { \"name\": \"EFAA-GF\" },\n            { \"name\": \"EFAA-1F\" }\n          ]\n        }\n      ]\n    }\n  ],\n  \"elements\": [\n    {\n      \"id\": \"ELM-001\",\n      \"NRM3_code\": \"25.10.10\",\n      \"description\": \"Windows\",\n      \"asset_id\": \"EFA1\",\n      \"asset_type\": \"site\",\n      \"occurrences\": [\n        {\n          \"id\": \"OCC-001\",\n          \"name\": \"Main Building Windows\",\n          \"basis_of_assessment\": \"Seen\",\n          \"condition_grade\": \"D\",\n          \"condition_description\": \"Defective glazed units and ironmongery\",\n          \"replacement\": {\n            \"rem_life\": 7,\n            \"uom\": \"m2\",\n            \"replacement_quantity\": 400,\n            \"replacement_rate\": 1000.0\n          },\n          \"repairs\": []\n        }\n      ]\n    }\n  ],\n  \"answers\": [\n    {\n      \"id\": \"ANS-001\",\n      \"question_id\": \"Q-101\",\n      \"asset_id\": \"EFA1\",\n      \"asset_type\": \"site\",\n      \"value\": \"Yes\",\n      \"value_type\": \"lookup_list\",\n      \"created_at\": \"2026-10-15T11:00:00Z\",\n      \"updated_at\": \"2026-10-15T11:00:00Z\",\n      \"evidence\": [ { \"id\": \"EVD-001\" } ]\n    },\n    {\n      \"id\": \"ANS-002\",\n      \"question_id\": \"Q-102\",\n      \"asset_id\": \"EFAA\",\n      \"asset_type\": \"block\",\n      \"value\": \"Critical\",\n      \"value_type\": \"lookup_list\",\n      \"created_at\": \"2026-10-15T11:00:00Z\",\n      \"updated_at\": \"2026-10-15T11:00:00Z\",\n      \"evidence\": [ { \"id\": \"EVD-001\" } ]\n    }\n  ],\n  \"evidence\": [\n    {\n      \"id\": \"EVD-001\",\n      \"asset_id\": \"ELM-001\",\n      \"asset_type\": \"element\",\n      \"description\": \"Photograph showing rust on the main boiler casing\",\n      \"mime_type\": \"image/jpeg\",\n      \"blob_key\": \"s3://dfe-surveys/evidence/EVD-001.jpg\",\n      \"file_origin\": \"iPad Camera\",\n      \"created_at\": \"2026-10-15T11:02:00Z\",\n      \"updated_at\": \"2026-10-15T11:02:00Z\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{cdcSubmissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{cdcSubmissionId}}"
+              ]
+            },
+            "description": "Triggers RULE-CONDITION-GRADE-D because condition_grade is 'D' with an empty repairs array."
+          },
+          "response": []
+        },
+        {
+          "name": "6.6 Upload Complete & Valid CDC Survey Payload",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Valid CDC survey has 0 pending errors\", function () {",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-1234-5678\",\n    \"survey_name\": \"CCD\",\n    \"participant_id\": \"abc-def-ghi\",\n    \"surveyor_email\": \"surveyor@supplier.com\",\n    \"is_complete\": true,\n    \"created_at\": \"2026-10-15T10:00:00Z\",\n    \"updated_at\": \"2026-10-15T14:30:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"123456\",\n    \"name\": \"Example School\"\n  },\n  \"sites\": [\n    {\n      \"name\": \"EFA1\",\n      \"blocks\": [\n        {\n          \"name\": \"EFAA\",\n          \"type\": \"block\",\n          \"floors\": [\n            { \"name\": \"EFAA-GF\" },\n            { \"name\": \"EFAA-1F\" }\n          ]\n        },\n        {\n          \"name\": \"EFAB\",\n          \"type\": \"block\",\n          \"floors\": [\n            { \"name\": \"EFAB-GF\" }\n          ]\n        },\n        {\n          \"name\": \"EFAC\",\n          \"type\": \"block\",\n          \"floors\": []\n        }\n      ]\n    }\n  ],\n  \"elements\": [\n    {\n      \"id\": \"ELM-001\",\n      \"NRM3_code\": \"25.10.10\",\n      \"description\": \"Windows\",\n      \"asset_id\": \"EFA1\",\n      \"asset_type\": \"site\",\n      \"occurrences\": [\n        {\n          \"id\": \"OCC-001\",\n          \"name\": \"Main Building Windows\",\n          \"basis_of_assessment\": \"Seen\",\n          \"condition_grade\": \"C\",\n          \"condition_description\": \"Defective glazed units and ironmongery\",\n          \"replacement\": {\n            \"rem_life\": 7,\n            \"uom\": \"m2\",\n            \"replacement_quantity\": 400,\n            \"replacement_rate\": 1000.0\n          },\n          \"repairs\": [\n            {\n              \"id\": \"REP-001\",\n              \"repair_description\": \"(1) Replace 20no. Defective Double Glazed Units\",\n              \"repair_item\": \"Double Glazed Unit Replacement\",\n              \"repair_classification\": \"Y\",\n              \"uom\": \"No.\",\n              \"repair_quantity\": 20,\n              \"repair_rate\": 400.0,\n              \"estimated_cost\": 8000.0\n            },\n            {\n              \"id\": \"REP-002\",\n              \"repair_description\": \"(2) Replace Defective Ironmongery: 2no GF Windows and 5no 1st Floor Windows\",\n              \"repair_item\": \"Aluminium Window Handle Replacement\",\n              \"repair_classification\": \"X\",\n              \"uom\": \"No.\",\n              \"repair_quantity\": 7,\n              \"repair_rate\": 100.0,\n              \"estimated_cost\": 700.0\n            }\n          ]\n        }\n      ]\n    }\n  ],\n  \"answers\": [\n    {\n      \"id\": \"ANS-001\",\n      \"question_id\": \"Q-101\",\n      \"asset_id\": \"EFA1\",\n      \"asset_type\": \"site\",\n      \"value\": \"Yes\",\n      \"value_type\": \"lookup_list\",\n      \"created_at\": \"2026-10-15T11:00:00Z\",\n      \"updated_at\": \"2026-10-15T11:00:00Z\",\n      \"evidence\": [ { \"id\": \"EVD-001\" } ]\n    },\n    {\n      \"id\": \"ANS-002\",\n      \"question_id\": \"Q-102\",\n      \"asset_id\": \"EFAA\",\n      \"asset_type\": \"block\",\n      \"value\": \"Critical\",\n      \"value_type\": \"lookup_list\",\n      \"created_at\": \"2026-10-15T11:00:00Z\",\n      \"updated_at\": \"2026-10-15T11:00:00Z\",\n      \"evidence\": [ { \"id\": \"EVD-001\" } ]\n    }\n  ],\n  \"evidence\": [\n    {\n      \"id\": \"EVD-001\",\n      \"asset_id\": \"ELM-001\",\n      \"asset_type\": \"element\",\n      \"description\": \"Photograph showing rust on the main boiler casing\",\n      \"mime_type\": \"image/jpeg\",\n      \"blob_key\": \"s3://dfe-surveys/evidence/EVD-001.jpg\",\n      \"file_origin\": \"iPad Camera\",\n      \"created_at\": \"2026-10-15T11:02:00Z\",\n      \"updated_at\": \"2026-10-15T11:02:00Z\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{cdcSubmissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{cdcSubmissionId}}"
+              ]
+            },
+            "description": "Uploads a complete CDC survey payload satisfying all JSON Schema and JsonLogic requirements."
+          },
+          "response": []
+        },
+        {
+          "name": "6.7 Finalise CDC Survey Submission",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"CDC survey finalised and promoted to ReadyForCde\", function () {",
+                  "    pm.expect(data.submissionId).to.eql(pm.variables.get(\"cdcSubmissionId\"));",
+                  "    pm.expect(data.status).to.eql(\"ReadyForCde\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{cdcSubmissionId}}/finalise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{cdcSubmissionId}}",
+                "finalise"
+              ]
+            },
+            "description": "Finalises the CDC survey submission and promotes it to the 'processed' container."
           },
           "response": []
         }

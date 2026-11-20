@@ -49,6 +49,8 @@ jobs:
           | **Passed** | `${{ steps.build.outputs.tests-passed }}` |
           | **Failed** | `${{ steps.build.outputs.tests-failed }}` |
           | **Duration** | `${{ steps.build.outputs.tests-duration }}` |
+          | **Public Artifact** | `${{ steps.build.outputs.public-package-path }}` |
+          | **Admin Artifact** | `${{ steps.build.outputs.admin-package-path }}` |
           | **Packaging** | `.NET 10 Self-Contained Linux x64 Verified` |
           EOF
 
@@ -75,7 +77,8 @@ jobs:
             | **CalVer Preview** | \`${calver}\` (\`${sha}\`) |
             | **Test Suite** | **${passed} / ${total} passed** (${failed} failed) |
             | **Duration** | ${duration} |
-            | **Artifact** | \`edc-functions-linux-x64.zip\` (.NET 10 Self-Contained) |
+            | **Public Artifact** | \`edc-functions-public-linux-x64.zip\` (.NET 10 Self-Contained) |
+            | **Admin Artifact** | \`edc-functions-admin-linux-x64.zip\` (.NET 10 Self-Contained) |
             
             > *This check only validates quality. Automated promotion begins once merged to \`main\`.*
             

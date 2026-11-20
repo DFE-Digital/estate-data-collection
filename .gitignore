@@ -29,6 +29,12 @@ publish-out/
 *.nupkg
 *.snupkg
 
+# Node / TypeScript Compiled Assets
+node_modules/
+src/EstateDataCollection.Admin.UI/wwwroot/js/*.js
+src/EstateDataCollection.Admin.UI/wwwroot/js/*.js.map
+!src/EstateDataCollection.Admin.UI/wwwroot/js/govuk-frontend.min.js
+
 # MSBuild Binary and Structured Log
 *.binlog
 
@@ -80,3 +86,6 @@ Icon?
 # AI Assistants & Local Tooling
 .agents/
 .gemini/
+
+# Local External Contract Payloads / Working Copies
+cde-data-contracts/

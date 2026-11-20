@@ -11,5 +11,7 @@
     <ProjectReference Include="..\EstateDataCollection.Tests.Common\EstateDataCollection.Tests.Common.csproj" />
     <ProjectReference Include="..\..\src\EstateDataCollection.Application\EstateDataCollection.Application.csproj" />
     <ProjectReference Include="..\..\src\EstateDataCollection.Infrastructure\EstateDataCollection.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\EstateDataCollection.Admin.UI\EstateDataCollection.Admin.UI.csproj" />
+    <ProjectReference Include="..\..\src\EstateDataCollection.AzureFunctions.Admin\EstateDataCollection.AzureFunctions.Admin.csproj" />
   </ItemGroup>
 </Project>

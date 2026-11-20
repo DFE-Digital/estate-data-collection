@@ -1,5 +1,5 @@
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Contracts;
+using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Tests.Common.Fixtures;
@@ -25,6 +25,7 @@ public class VerifySchemaUseCaseTests
         // Arrange
         _registry.VerifyCanditateSchemaAsync(
             JsonSchemaFixtures.ValidV1Schema,
+            null,
             Arg.Any<IReadOnlyList<string>>(),
             Arg.Any<IReadOnlyList<string>>(),
             Arg.Any<CancellationToken>())
@@ -48,6 +49,7 @@ public class VerifySchemaUseCaseTests
     {
         // Arrange
         _registry.VerifyCanditateSchemaAsync(
+            Arg.Any<string>(),
             Arg.Any<string>(),
             Arg.Any<IReadOnlyList<string>>(),
             Arg.Any<IReadOnlyList<string>>(),
