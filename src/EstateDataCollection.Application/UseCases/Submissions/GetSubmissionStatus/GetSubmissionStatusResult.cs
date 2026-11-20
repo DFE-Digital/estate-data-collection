@@ -14,4 +14,8 @@ public sealed record GetSubmissionStatusResult(
     IReadOnlyList<ValidationError> PendingErrors,
     int? Urn = null,
     string? Identifier = null,
-    string? IdentifierType = null);
+    string? IdentifierType = null,
+    int DraftCount = 0,
+    DateTimeOffset? LastDraftAtUtc = null,
+    IReadOnlyList<string>? NextSteps = null,
+    string? Summary = null);

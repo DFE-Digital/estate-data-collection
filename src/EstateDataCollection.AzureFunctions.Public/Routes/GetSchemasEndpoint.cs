@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -23,7 +24,7 @@ public sealed class GetSchemasEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Get),
-            Route = "schemas")]
+            Route = AppRoutes.PublicApi.Templates.Schemas)]
         HttpRequest http,
         CancellationToken cancellationToken)
     {

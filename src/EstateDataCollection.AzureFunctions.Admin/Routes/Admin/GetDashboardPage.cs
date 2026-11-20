@@ -5,6 +5,7 @@ using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +23,7 @@ public sealed class GetDashboardPage(
 
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get), Route = "manage")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get), Route = AppRoutes.AdminUi.Templates.Dashboard)]
         HttpRequest http,
         CancellationToken cancellationToken)
     {

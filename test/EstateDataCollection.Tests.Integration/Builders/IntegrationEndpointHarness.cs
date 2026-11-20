@@ -34,11 +34,30 @@ public class IntegrationEndpointHarness : IDisposable, IAsyncDisposable
     private readonly IServiceScope _scope;
 
     public AzuriteFixture Fixture { get; }
-    public BlobServiceClient BlobClient => Fixture.Client;
-    public string SchemasContainerName => Fixture.SchemasContainerName;
-    public string DraftSchemasContainerName => Fixture.DraftSchemasContainerName;
-    public string PayloadsContainerName => Fixture.PayloadsContainerName;
-    public string ProcessedContainerName => Fixture.ProcessedContainerName;
+    public BlobServiceClient BlobClient
+    {
+        get { return Fixture.Client; }
+    }
+
+    public string SchemasContainerName
+    {
+        get { return Fixture.SchemasContainerName; }
+    }
+
+    public string DraftSchemasContainerName
+    {
+        get { return Fixture.DraftSchemasContainerName; }
+    }
+
+    public string PayloadsContainerName
+    {
+        get { return Fixture.PayloadsContainerName; }
+    }
+
+    public string ProcessedContainerName
+    {
+        get { return Fixture.ProcessedContainerName; }
+    }
 
     public IntegrationEndpointHarness(
         AzuriteFixture fixture,
@@ -91,7 +110,10 @@ public class IntegrationEndpointHarness : IDisposable, IAsyncDisposable
         _scope = _rootProvider.CreateScope();
     }
 
-    public T Get<T>() where T : notnull => _scope.ServiceProvider.GetRequiredService<T>();
+    public T Get<T>() where T : notnull
+    {
+        return _scope.ServiceProvider.GetRequiredService<T>();
+    }
 
     public static string UniqueName(string prefix)
     {
@@ -170,5 +192,8 @@ public sealed class IntegrationEndpointHarness<TEndpoint>(
     : IntegrationEndpointHarness(fixture, configureServices, configurationOverrides)
     where TEndpoint : class
 {
-    public TEndpoint Endpoint => Get<TEndpoint>();
+    public TEndpoint Endpoint
+    {
+        get { return Get<TEndpoint>(); }
+    }
 }

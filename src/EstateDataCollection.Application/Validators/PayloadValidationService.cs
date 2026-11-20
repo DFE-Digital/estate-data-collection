@@ -192,8 +192,10 @@ public sealed class PayloadValidationService(
         return new PayloadValidationReport(errors, processes);
     }
 
-    private static string NormalizePointerForDedupe(string? path) =>
-        string.IsNullOrWhiteSpace(path)
+    private static string NormalizePointerForDedupe(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path)
             ? string.Empty
             : path.Trim().TrimStart('#').TrimEnd('/');
+    }
 }

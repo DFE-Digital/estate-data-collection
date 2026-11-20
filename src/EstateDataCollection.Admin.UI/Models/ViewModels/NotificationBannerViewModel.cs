@@ -7,7 +7,10 @@ public sealed record NotificationBannerViewModel(
     string Message,
     string? Detail = null)
 {
-    public bool HasDetail => !string.IsNullOrWhiteSpace(Detail);
+    public bool HasDetail
+    {
+        get { return !string.IsNullOrWhiteSpace(Detail); }
+    }
 
     public static NotificationBannerViewModel? From(
         string variant,
@@ -40,12 +43,16 @@ public sealed record NotificationBannerViewModel(
     public static NotificationBannerViewModel? Success(
         string? message,
         string? title = null,
-        string? detail = null) =>
-        From("success", message, title, detail);
+        string? detail = null)
+    {
+        return From("success", message, title, detail);
+    }
 
     public static NotificationBannerViewModel? Info(
         string? message,
         string? title = null,
-        string? detail = null) =>
-        From("info", message, title, detail);
+        string? detail = null)
+    {
+        return From("info", message, title, detail);
+    }
 }

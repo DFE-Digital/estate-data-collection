@@ -16,9 +16,15 @@ public readonly record struct SubmissionIdentifier
     public string Type { get; }
     public string Value { get; }
 
-    public int? AsPositiveInt => int.TryParse(Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
-        ? parsed
-        : null;
+    public int? AsPositiveInt
+    {
+        get
+        {
+            return int.TryParse(Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+                ? parsed
+                : null;
+        }
+    }
 
     private SubmissionIdentifier(string type, string value)
     {
@@ -168,10 +174,12 @@ public readonly record struct SubmissionIdentifier
             : Error.Validation(ErrorCodes.PayloadInvalidIdentifier, new { Message = message });
     }
 
-    private static string? TryFormatPointer(string? rawPath) =>
-        SchemaIdentifierConfig.TryParsePointerSegments(rawPath, out var segments)
+    private static string? TryFormatPointer(string? rawPath)
+    {
+        return SchemaIdentifierConfig.TryParsePointerSegments(rawPath, out var segments)
             ? SchemaIdentifierConfig.ToJsonPointer(segments)
             : rawPath;
+    }
 
     private static bool TryNavigateSegments(JsonElement root, IReadOnlyList<string> segments, out JsonElement element)
     {
@@ -211,5 +219,8 @@ public readonly record struct SubmissionIdentifier
         return true;
     }
 
-    public override string ToString() => Value;
+    public override string ToString()
+    {
+        return Value;
+    }
 }

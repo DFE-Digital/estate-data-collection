@@ -7,6 +7,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -25,7 +26,7 @@ public sealed class GetScheduleSchemaPage(
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get),
-            Route = "manage/schemas/{schemaName}/{version:int}/schedule")]
+            Route = AppRoutes.AdminUi.Templates.SchemaSchedule)]
         HttpRequest http,
         string schemaName,
         int version,

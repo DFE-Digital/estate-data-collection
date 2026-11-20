@@ -17,18 +17,39 @@ public sealed partial class AzuriteFixture : IAsyncLifetime
 
     private readonly string _runId = Guid.NewGuid().ToString("N")[..12];
 
-    public string SchemasContainerName => $"test-{_runId}-schemas";
-    public string DraftSchemasContainerName => $"test-{_runId}-draft-schemas";
-    public string PayloadsContainerName => $"test-{_runId}-payloads";
-    public string ProcessedContainerName => $"test-{_runId}-processed";
+    public string SchemasContainerName
+    {
+        get { return $"test-{_runId}-schemas"; }
+    }
 
-    public IReadOnlyList<string> ContainerNames =>
-    [
-        SchemasContainerName,
-        DraftSchemasContainerName,
-        PayloadsContainerName,
-        ProcessedContainerName
-    ];
+    public string DraftSchemasContainerName
+    {
+        get { return $"test-{_runId}-draft-schemas"; }
+    }
+
+    public string PayloadsContainerName
+    {
+        get { return $"test-{_runId}-payloads"; }
+    }
+
+    public string ProcessedContainerName
+    {
+        get { return $"test-{_runId}-processed"; }
+    }
+
+    public IReadOnlyList<string> ContainerNames
+    {
+        get
+        {
+            return
+            [
+                SchemasContainerName,
+                DraftSchemasContainerName,
+                PayloadsContainerName,
+                ProcessedContainerName
+            ];
+        }
+    }
 
     public string ConnectionString { get; private set; } = DefaultConnectionString;
     public BlobServiceClient Client { get; private set; } = null!;

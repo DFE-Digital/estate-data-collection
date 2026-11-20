@@ -13,8 +13,10 @@ namespace EstateDataCollection.Tests.Unit.AdminUi;
 
 public sealed class ViewModelPresentationTests
 {
-    private static AdminPageMeta CreateMeta(string activeNav = "schemas") =>
-        new("Test Title", activeNav, "user@education.gov.uk", "2026.11.1");
+    private static AdminPageMeta CreateMeta(string activeNav = "schemas")
+    {
+        return new AdminPageMeta("Test Title", activeNav, "user@education.gov.uk", "2026.11.1");
+    }
 
     [Fact]
     public void SchemaTestsViewModel_Should_Project_Field_Errors_SoftWarnings_And_Invalid_Fixture_Cards()

@@ -15,12 +15,12 @@
         </div>
         <div class="govuk-grid-column-one-third" style="text-align: right;">
             <div class="dfe-actions-inline" style="justify-content: flex-end;">
-                <form method="post" action="/manage/tests/run" style="display: inline-block; margin: 0;">
+                <form method="post" action="@AppRoutes.AdminUi.RunAllTests" style="display: inline-block; margin: 0;">
                     <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">
                         Run All Schema Tests
                     </button>
                 </form>
-                <a href="/manage/workbench" class="govuk-button" data-module="govuk-button">
+                <a href="@AppRoutes.AdminUi.Workbench" class="govuk-button" data-module="govuk-button">
                     Upload or Verify Contract
                 </a>
             </div>
@@ -114,7 +114,7 @@
     @if (Model.NoSchemas)
     {
         <div class="govuk-inset-text">
-            No schemas are currently registered in blob storage. Use the <a href="/manage/workbench" class="govuk-link">Contract Workbench</a> or drop an <code class="dfe-code-badge">.odcs.yaml</code> contract into <code class="dfe-code-badge">draft-schemas</code>.
+            No schemas are currently registered in blob storage. Use the <a href="@AppRoutes.AdminUi.Workbench" class="govuk-link">Contract Workbench</a> or drop an <code class="dfe-code-badge">.odcs.yaml</code> contract into <code class="dfe-code-badge">draft-schemas</code>.
         </div>
     }
     else

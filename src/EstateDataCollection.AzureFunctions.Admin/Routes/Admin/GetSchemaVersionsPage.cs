@@ -4,6 +4,7 @@ using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +23,7 @@ public sealed class GetSchemaVersionsPage(
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get),
-            Route = "manage/schemas/{schemaName}/")]
+            Route = AppRoutes.AdminUi.Templates.SchemaVersions)]
         HttpRequest http,
         string schemaName,
         CancellationToken cancellationToken)

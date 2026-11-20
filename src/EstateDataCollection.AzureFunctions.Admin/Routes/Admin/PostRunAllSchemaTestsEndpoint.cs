@@ -6,6 +6,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -25,7 +26,7 @@ public sealed class PostRunAllSchemaTestsEndpoint(
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post),
-            Route = "manage/tests/run")]
+            Route = AppRoutes.AdminUi.Templates.RunAllTests)]
         HttpRequest http,
         CancellationToken cancellationToken)
     {

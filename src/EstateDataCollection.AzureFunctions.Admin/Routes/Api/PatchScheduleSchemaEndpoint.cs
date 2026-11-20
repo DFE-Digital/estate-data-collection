@@ -2,6 +2,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -24,7 +25,7 @@ public sealed class PatchScheduleSchemaEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Patch),
-            Route = "api/schemas/{schemaName}/versions/{version:int}/schedule")]
+            Route = AppRoutes.AdminApi.Templates.ScheduleSchema)]
         HttpRequest http,
         string schemaName,
         int version,

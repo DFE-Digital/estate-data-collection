@@ -8,15 +8,30 @@ public sealed record SchemaVersionsViewModel(
     SchemaCatalogueEntry? Schema,
     Error? PageError = null)
 {
-    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);
+    public ErrorSummaryViewModel? ErrorSummary
+    {
+        get { return ErrorSummaryViewModel.From(PageError); }
+    }
 
-    public bool HasSchema => Schema is not null;
+    public bool HasSchema
+    {
+        get { return Schema is not null; }
+    }
 
-    public string SchemaName => Schema?.SchemaName ?? string.Empty;
+    public string SchemaName
+    {
+        get { return Schema?.SchemaName ?? string.Empty; }
+    }
 
-    public SchemaSectionCardViewModel? SchemaCard =>
-        Schema is null
-            ? null
-            : (_schemaCard ??= SchemaSectionCardViewModel.From(Schema, enrichedView: true));
+    public SchemaSectionCardViewModel? SchemaCard
+    {
+        get
+        {
+            return Schema is null
+                ? null
+                : (_schemaCard ??= SchemaSectionCardViewModel.From(Schema, enrichedView: true));
+        }
+    }
+
     private SchemaSectionCardViewModel? _schemaCard;
 }

@@ -3,6 +3,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -25,7 +26,7 @@ public sealed class PostVerifyLogicEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
-            Route = "api/logic/verify")]
+            Route = AppRoutes.AdminApi.Templates.VerifyLogic)]
         HttpRequest http,
         CancellationToken cancellationToken)
     {

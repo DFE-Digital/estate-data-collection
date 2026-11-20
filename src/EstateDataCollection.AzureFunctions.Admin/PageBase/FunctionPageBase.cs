@@ -63,24 +63,6 @@ public abstract class FunctionPageBase(
         };
     }
 
-    protected async Task<IActionResult> RenderPartialAsync<TComponent>(
-        string endpointName,
-        IDictionary<string, object?>? parameters = null,
-        int statusCode = StatusCodes.Status200OK)
-        where TComponent : IComponent
-    {
-        var html = await renderer.RenderComponentAsync<TComponent>(parameters);
-
-        _instrumentation.EndpointCompleted(endpointName, statusCode);
-
-        return new ContentResult
-        {
-            Content = html,
-            ContentType = "text/html; charset=utf-8",
-            StatusCode = statusCode
-        };
-    }
-
     protected static int MapErrorToStatusCode(Error error)
     {
         return error.Type switch

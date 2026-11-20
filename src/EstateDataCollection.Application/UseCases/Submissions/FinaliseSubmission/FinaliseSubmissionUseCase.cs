@@ -32,7 +32,7 @@ public class FinaliseSubmissionUseCase(
     {
         _instrumentation.FinalisingSubmission(request.SubmissionId);
 
-        var processes = new List<SubmissionProcessExecution>(7);
+        var processes = new List<SubmissionProcessExecution>(8);
         var sessionSw = Stopwatch.StartNew();
         var session = await infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken);
         sessionSw.Stop();
@@ -74,6 +74,11 @@ public class FinaliseSubmissionUseCase(
             return alreadyErr;
         }
 
+        var draftItemsResult = await infrastructure.GetDraftItemsAsync(request.SubmissionId, cancellationToken);
+        var draftChunkCount = draftItemsResult is { IsSuccess: true, Value: not null }
+            ? draftItemsResult.Value.Count
+            : 0;
+
         var draftSw = Stopwatch.StartNew();
         var draftPayload = await infrastructure.GetDraftPayloadAsync(request.SubmissionId, cancellationToken);
         draftSw.Stop();
@@ -107,14 +112,30 @@ public class FinaliseSubmissionUseCase(
             return draftPayload.Error;
         }
 
-        processes.Add(new SubmissionProcessExecution
+        if (draftChunkCount > 1)
         {
-            ProcessName = "BlobStorage:GetDraftPayload",
-            Engine = "azure-blob",
-            Outcome = "Succeeded",
-            DurationMs = draftSw.ElapsedMilliseconds,
-            Summary = $"Loaded {draftPayload.Value.Length} char draft JSON"
-        });
+            processes.Add(new SubmissionProcessExecution
+            {
+                ProcessName = "DraftPayloadMerger",
+                Engine = "rfc7396-json-merge",
+                Outcome = "Succeeded",
+                DurationMs = draftSw.ElapsedMilliseconds,
+                ItemCount = draftChunkCount,
+                Summary = $"Merged {draftChunkCount} timestamped draft chunk(s) into final candidate"
+            });
+        }
+        else
+        {
+            processes.Add(new SubmissionProcessExecution
+            {
+                ProcessName = "BlobStorage:GetDraftPayload",
+                Engine = "azure-blob",
+                Outcome = "Succeeded",
+                DurationMs = draftSw.ElapsedMilliseconds,
+                ItemCount = Math.Max(1, draftChunkCount),
+                Summary = $"Loaded {draftPayload.Value.Length} char draft JSON"
+            });
+        }
 
         var schemaSw = Stopwatch.StartNew();
         var schema = await registry.GetExplicitSchemaAsync(
@@ -353,7 +374,7 @@ public class FinaliseSubmissionUseCase(
             Engine = "azure-blob",
             Outcome = "Succeeded",
             DurationMs = promoSw.ElapsedMilliseconds,
-            Summary = "Promoted draft payload to processed container"
+            Summary = "Promoted merged draft payload to processed container"
         });
 
         await SubmissionAuditRecorder.SafeAppendAsync(
@@ -393,8 +414,10 @@ public class FinaliseSubmissionUseCase(
         );
     }
 
-    private static SubmissionAuditIdentifier? BuildIdentifier(string? type, string? value, int? urn) =>
-        type is null && value is null && urn is null
+    private static SubmissionAuditIdentifier? BuildIdentifier(string? type, string? value, int? urn)
+    {
+        return type is null && value is null && urn is null
             ? null
             : new SubmissionAuditIdentifier(type, value, urn);
+    }
 }

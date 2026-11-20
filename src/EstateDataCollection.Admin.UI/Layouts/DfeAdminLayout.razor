@@ -7,10 +7,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#003a69" />
     <title>@Meta.DocumentTitle</title>
-    <link rel="icon" sizes="48x48" href="/assets/images/favicon.ico" />
-    <link rel="icon" sizes="any" href="/assets/images/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/assets/css/govuk-frontend.min.css" />
-    <link rel="stylesheet" href="/assets/css/dfe-branding.css" />
+    <link rel="icon" sizes="48x48" href="@AppRoutes.Assets.FaviconIco" />
+    <link rel="icon" sizes="any" href="@AppRoutes.Assets.FaviconSvg" type="image/svg+xml" />
+    <link rel="stylesheet" href="@AppRoutes.Assets.GovUkCss" />
+    <link rel="stylesheet" href="@AppRoutes.Assets.DfeBrandingCss" />
 </head>
 <body class="govuk-template__body">
     <script>document.body.className += ' js-enabled' + ('no-touch' in document.documentElement ? ' no-touch' : ' touch');</script>
@@ -18,7 +18,7 @@
 
     <header class="dfe-header" role="banner">
         <div class="govuk-width-container dfe-header__container dfe-width-container">
-            <a href="/manage" class="dfe-header__brand">
+            <a href="@AppRoutes.AdminUi.Dashboard" class="dfe-header__brand">
                 <span class="dfe-header__logo-text">Department for Education</span>
                 <span class="dfe-header__divider" aria-hidden="true"></span>
                 <span class="dfe-header__service-name">Estate Data Collection</span>
@@ -37,13 +37,23 @@
         <div class="govuk-width-container dfe-width-container">
             <ul class="dfe-service-nav__list">
                 <li>
-                    <a href="/manage" class="@Meta.SchemasNavLinkCssClass">
+                    <a href="@AppRoutes.AdminUi.Dashboard" class="@Meta.SchemasNavLinkCssClass">
                         Schemas &amp; Lifecycle
                     </a>
                 </li>
                 <li>
-                    <a href="/manage/workbench" class="@Meta.WorkbenchNavLinkCssClass">
+                    <a href="@AppRoutes.AdminUi.Workbench" class="@Meta.WorkbenchNavLinkCssClass">
                         Contract Workbench
+                    </a>
+                </li>
+                <li>
+                    <a href="@AppRoutes.AdminUi.Statistics" class="@Meta.StatisticsNavLinkCssClass">
+                        Submission Statistics
+                    </a>
+                </li>
+                <li>
+                    <a href="@AppRoutes.AdminUi.Submissions" class="@Meta.SubmissionsNavLinkCssClass">
+                        Submissions
                     </a>
                 </li>
             </ul>
@@ -81,12 +91,12 @@
         </div>
     </footer>
 
-    <script type="module" src="/assets/js/govuk-frontend.min.js"></script>
+    <script type="module" src="@AppRoutes.Assets.GovUkJs"></script>
     <script type="module">
-        import { initAll } from '/assets/js/govuk-frontend.min.js';
+        import { initAll } from '@AppRoutes.Assets.GovUkJs';
         initAll();
     </script>
-    <script src="/assets/js/workbench.js"></script>
+    <script src="@AppRoutes.Assets.WorkbenchJs"></script>
 </body>
 </html>
 

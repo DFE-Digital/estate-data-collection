@@ -1,5 +1,6 @@
 using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -19,7 +20,7 @@ public sealed class GetVersionAboutEndpoint(
 
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "about")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = AppRoutes.PublicApi.Templates.About)]
         HttpRequest req,
         CancellationToken cancellationToken = default)
     {

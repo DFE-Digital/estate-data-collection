@@ -42,25 +42,51 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
     }
 
     [Fact]
-    public void StaticAssetEndpoint_Should_Serve_Embedded_Assets_And_Return_404_For_Missing()
+    public void StaticAssetEndpoint_Should_Serve_Embedded_Assets_Emit_Versioned_ETag_Support_304_And_Control_Cache_Span()
     {
         var staticAssetEndpoint = _harness.Get<GetStaticAssetEndpoint>();
 
-        var cssResult = staticAssetEndpoint.Handle(HttpRequestBuilder.Empty(), "css/dfe-branding.css");
+        var cssReq = HttpRequestBuilder.Empty();
+        var cssResult = staticAssetEndpoint.Handle(cssReq, "css/dfe-branding.css");
         var cssFile = cssResult.Should().BeOfType<FileContentResult>().Subject;
         cssFile.ContentType.Should().Be("text/css; charset=utf-8");
         cssFile.FileContents.Length.Should().BeGreaterThan(0);
 
-        var imgResult = staticAssetEndpoint.Handle(HttpRequestBuilder.Empty(), "images/govuk-crest.svg");
-        var imgFile = imgResult.Should().BeOfType<FileContentResult>().Subject;
-        imgFile.ContentType.Should().Be("image/svg+xml");
+        var jsReq = HttpRequestBuilder.Empty();
+        var jsResult = staticAssetEndpoint.Handle(jsReq, "js/workbench.js");
+        var jsFile = jsResult.Should().BeOfType<FileContentResult>().Subject;
+        jsFile.ContentType.Should().Be("application/javascript; charset=utf-8");
+        jsFile.FileContents.Length.Should().BeGreaterThan(0);
+        jsReq.HttpContext.Response.Headers.CacheControl.ToString()
+            .Should().Be("public, max-age=3600, must-revalidate");
+
+        var etag = jsReq.HttpContext.Response.Headers.ETag.ToString();
+        etag.Should().NotBeNullOrWhiteSpace();
+        etag.Should().StartWith("\"").And.EndWith("\"");
+
+        // Revalidation with matching ETag returns 304 Not Modified
+        var cachedReq = new HttpRequestBuilder()
+            .WithHeader("If-None-Match", etag)
+            .Build();
+        var notModifiedResult = staticAssetEndpoint.Handle(cachedReq, "js/workbench.js");
+        var statusResult = notModifiedResult.Should().BeOfType<StatusCodeResult>().Subject;
+        statusResult.StatusCode.Should().Be(StatusCodes.Status304NotModified);
+
+        // Configurable cache span on endpoint instance
+        var customSpanEndpoint = new GetStaticAssetEndpoint(cacheDuration: TimeSpan.FromMinutes(15));
+        var customReq = HttpRequestBuilder.Empty();
+        customSpanEndpoint.Handle(customReq, "images/govuk-crest.svg")
+            .Should().BeOfType<FileContentResult>()
+            .Which.ContentType.Should().Be("image/svg+xml");
+        customReq.HttpContext.Response.Headers.CacheControl.ToString()
+            .Should().Be("public, max-age=900, must-revalidate");
 
         var missing = staticAssetEndpoint.Handle(HttpRequestBuilder.Empty(), "css/does-not-exist.css");
         missing.Should().BeOfType<NotFoundResult>();
     }
 
     [Fact]
-    public async Task WorkbenchVerifyEndpoint_Should_Verify_Odcs_Yaml_For_Both_Fetch_Partial_And_Full_Page()
+    public async Task WorkbenchVerifyEndpoint_Should_Verify_Odcs_Yaml_And_Render_Full_Page()
     {
         var workbenchVerify = _harness.Get<PostWorkbenchVerifyEndpoint>();
         var odcsYaml = new OdcsContractYamlBuilder()
@@ -77,41 +103,25 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
             ["invalidFixtureJson"] = """{"school":{}}"""
         };
 
-        var fetchReq = await CreateFormRequestAsync(
-            fields,
-            headers: new Dictionary<string, string>
-            {
-                ["X-Requested-With"] = "fetch"
-            });
-
-        var partialResult = await workbenchVerify.HandleAsync(fetchReq, CancellationToken.None);
-        var partialHtml = partialResult.Should().BeOfType<ContentResult>().Subject;
-        partialHtml.StatusCode.Should().Be(StatusCodes.Status200OK);
-        partialHtml.ContentType.Should().Be("text/html; charset=utf-8");
-        partialHtml.Content.Should().Contain("Verification passed");
-        partialHtml.Content.Should().NotContain("<!DOCTYPE html>");
-
         var fullPageReq = await CreateFormRequestAsync(fields);
         var fullPageResult = await workbenchVerify.HandleAsync(fullPageReq, CancellationToken.None);
         var fullPageHtml = fullPageResult.Should().BeOfType<ContentResult>().Subject;
         fullPageHtml.StatusCode.Should().Be(StatusCodes.Status200OK);
+        fullPageHtml.ContentType.Should().Be("text/html; charset=utf-8");
         fullPageHtml.Content.Should().Contain("<!DOCTYPE html>");
         fullPageHtml.Content.Should().Contain("Verification passed");
 
-        var badFetchReq = await CreateFormRequestAsync(
+        var badReq = await CreateFormRequestAsync(
             new Dictionary<string, string?>
             {
                 ["inputMode"] = "json",
                 ["schemaJson"] = "{broken-json"
-            },
-            headers: new Dictionary<string, string>
-            {
-                ["X-Requested-With"] = "fetch"
             });
 
-        var errorPartial = await workbenchVerify.HandleAsync(badFetchReq, CancellationToken.None);
-        var errorContent = errorPartial.Should().BeOfType<ContentResult>().Subject;
+        var errorPage = await workbenchVerify.HandleAsync(badReq, CancellationToken.None);
+        var errorContent = errorPage.Should().BeOfType<ContentResult>().Subject;
         errorContent.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        errorContent.Content.Should().Contain("<!DOCTYPE html>");
         errorContent.Content.Should().Contain("govuk-error-summary");
     }
 
@@ -145,8 +155,7 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
                 ["identifierProperty"] = "/establishment/laestab",
                 ["validFixtureJson"] = """{"establishment":{"laestab":"201-3614"}}""",
                 ["invalidFixtureJson"] = """{"establishment":{}}"""
-            },
-            headers: new Dictionary<string, string> { ["X-Requested-With"] = "fetch" });
+            });
 
         var okRes = await workbenchVerify.HandleAsync(okReq, CancellationToken.None);
         var okHtml = okRes.Should().BeOfType<ContentResult>().Subject;
@@ -163,8 +172,7 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
                 ["identifierMode"] = "enabled",
                 ["identifierProperty"] = "__custom__",
                 ["identifierPointer"] = ""
-            },
-            headers: new Dictionary<string, string> { ["X-Requested-With"] = "fetch" });
+            });
 
         var emptyRes = await workbenchVerify.HandleAsync(emptyPointerReq, CancellationToken.None);
         var emptyHtml = emptyRes.Should().BeOfType<ContentResult>().Subject;
@@ -180,8 +188,7 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
                 ["identifierMode"] = "enabled",
                 ["identifierProperty"] = "__custom__",
                 ["identifierPointer"] = "/does/not/exist"
-            },
-            headers: new Dictionary<string, string> { ["X-Requested-With"] = "fetch" });
+            });
 
         var badRes = await workbenchVerify.HandleAsync(badPointerReq, CancellationToken.None);
         var badHtml = badRes.Should().BeOfType<ContentResult>().Subject;

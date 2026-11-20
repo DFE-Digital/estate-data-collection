@@ -2,7 +2,7 @@
 @namespace EstateDataCollection.Admin.UI.Pages
 
 <DfeAdminLayout Meta="Model.Page">
-    <a href="/manage" class="govuk-back-link">Back to Schema Catalogue</a>
+    <a href="@AppRoutes.AdminUi.Dashboard" class="govuk-back-link">Back to Schema Catalogue</a>
 
     <div class="govuk-grid-row">
         <div class="govuk-grid-column-full">
@@ -15,11 +15,9 @@
 
     <ErrorSummary Model="Model.ErrorSummary" />
 
-    <div id="workbench-verify-result">
-        <VerifyResultPanel Model="Model.Verification" />
-    </div>
+    <VerifyResultPanel Model="Model.Verification" />
 
-    <form id="workbench-form" method="post" action="/manage/workbench/submit">
+    <form id="workbench-form" method="post" action="@AppRoutes.AdminUi.WorkbenchSubmit">
         <div class="govuk-grid-row">
             <div class="govuk-grid-column-two-thirds">
                 <div class="govuk-form-group">
@@ -133,8 +131,7 @@
 
                 <div class="govuk-button-group">
                     <button type="submit"
-                            formaction="/manage/workbench/verify"
-                            data-verify-button="true"
+                            formaction="@AppRoutes.AdminUi.WorkbenchVerify"
                             class="govuk-button govuk-button--secondary"
                             data-module="govuk-button">
                         Dry-Run Verify

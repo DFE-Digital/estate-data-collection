@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
+using EstateDataCollection.Common.Routing;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
@@ -72,7 +73,7 @@ public sealed record DashboardTestRunSummaryViewModel(
 
                 return new DashboardTestRunItemViewModel(
                     SchemaDisplayName: $"{item.SchemaName} v{item.Version}",
-                    TestsUrl: $"/manage/schemas/{Uri.EscapeDataString(item.SchemaName)}/{item.Version}/tests",
+                    TestsUrl: AppRoutes.AdminUi.SchemaTests(item.SchemaName, item.Version),
                     StateTag: LifecycleTagViewModel.From(item.State),
                     CountsSummary: $"{item.ValidFixtureCount} valid, {item.InvalidFixtureCount} invalid, {item.BusinessRuleCount} rule(s)",
                     ResultTagText: resultTagText,

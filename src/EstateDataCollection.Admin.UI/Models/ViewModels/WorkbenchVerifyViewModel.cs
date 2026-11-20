@@ -8,45 +8,91 @@ public sealed record WorkbenchVerifyViewModel(
     VerifySchemaResult? Result = null,
     Error? Error = null)
 {
-    public bool ShowPanel => HasRun;
+    public bool ShowPanel
+    {
+        get { return HasRun; }
+    }
 
-    public bool HasError => HasRun && Error is not null;
+    public bool HasError
+    {
+        get { return HasRun && Error is not null; }
+    }
 
-    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(Error);
+    public ErrorSummaryViewModel? ErrorSummary
+    {
+        get { return ErrorSummaryViewModel.From(Error); }
+    }
 
-    public bool HasResult => HasRun && Error is null && Result is not null;
+    public bool HasResult
+    {
+        get { return HasRun && Error is null && Result is not null; }
+    }
 
-    public NotificationBannerViewModel? SuccessBanner =>
-        Result is null
-            ? null
-            : NotificationBannerViewModel.Success(
-                message: Result.Message,
-                title: "Verification passed",
-                detail: "Contract syntax, identifier alignment, quality rules, and any provided sample fixtures passed dry-run verification.");
+    public NotificationBannerViewModel? SuccessBanner
+    {
+        get
+        {
+            return Result is null
+                ? null
+                : NotificationBannerViewModel.Success(
+                    message: Result.Message,
+                    title: "Verification passed",
+                    detail:
+                    "Contract syntax, identifier alignment, quality rules, and any provided sample fixtures passed dry-run verification.");
+        }
+    }
 
-    public bool HasWarnings => Result?.Warnings is { Count: > 0 };
+    public bool HasWarnings
+    {
+        get { return Result?.Warnings is { Count: > 0 }; }
+    }
 
-    public int WarningCount => Result?.Warnings?.Count ?? 0;
+    public int WarningCount
+    {
+        get { return Result?.Warnings?.Count ?? 0; }
+    }
 
-    public bool HasInvalidFixtureOutcomes => Result?.InvalidFixtureOutcomes is { Count: > 0 };
+    public bool HasInvalidFixtureOutcomes
+    {
+        get { return Result?.InvalidFixtureOutcomes is { Count: > 0 }; }
+    }
 
-    public IReadOnlyList<VerifyInvalidOutcomeViewModel> InvalidFixtureOutcomes =>
-        _invalidFixtureOutcomes ??= BuildInvalidFixtureOutcomes();
+    public IReadOnlyList<VerifyInvalidOutcomeViewModel> InvalidFixtureOutcomes
+    {
+        get { return _invalidFixtureOutcomes ??= BuildInvalidFixtureOutcomes(); }
+    }
 
     private IReadOnlyList<VerifyInvalidOutcomeViewModel>? _invalidFixtureOutcomes;
 
-    public bool HasResolvedIdentifierConfig => Result?.ResolvedIdentifierConfig is not null;
+    public bool HasResolvedIdentifierConfig
+    {
+        get { return Result?.ResolvedIdentifierConfig is not null; }
+    }
 
-    public bool IsIdentifierDisabled => Result?.ResolvedIdentifierConfig?.IsDisabled == true;
+    public bool IsIdentifierDisabled
+    {
+        get { return Result?.ResolvedIdentifierConfig?.IsDisabled == true; }
+    }
 
-    public bool IsIdentifierEnabled => Result?.ResolvedIdentifierConfig is { IsDisabled: false };
+    public bool IsIdentifierEnabled
+    {
+        get { return Result?.ResolvedIdentifierConfig is { IsDisabled: false }; }
+    }
 
-    public string IdentifierType => Result?.ResolvedIdentifierConfig?.Type ?? string.Empty;
+    public string IdentifierType
+    {
+        get { return Result?.ResolvedIdentifierConfig?.Type ?? string.Empty; }
+    }
 
-    public string IdentifierPointerDisplay => Result?.ResolvedIdentifierConfig?.JsonPointer ?? "default";
+    public string IdentifierPointerDisplay
+    {
+        get { return Result?.ResolvedIdentifierConfig?.JsonPointer ?? "default"; }
+    }
 
-    public string IdentifierRequiredDisplay =>
-        Result?.ResolvedIdentifierConfig?.Required == true ? "Yes" : "No";
+    public string IdentifierRequiredDisplay
+    {
+        get { return Result?.ResolvedIdentifierConfig?.Required == true ? "Yes" : "No"; }
+    }
 
     private IReadOnlyList<VerifyInvalidOutcomeViewModel> BuildInvalidFixtureOutcomes()
     {

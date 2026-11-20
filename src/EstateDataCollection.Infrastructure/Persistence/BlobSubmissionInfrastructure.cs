@@ -110,7 +110,7 @@ public class BlobSubmissionInfrastructure(
                 _instrumentation.SessionNotFound(submissionId);
                 return Error.NotFound(ErrorCodes.SubmissionNotFound, new { submissionId });
             }
-            
+
             var response = await client.DownloadContentAsync(cancellationToken);
             var session = JsonSerializer.Deserialize<SubmissionSession>(response.Value.Content.ToString());
 
@@ -135,13 +135,13 @@ public class BlobSubmissionInfrastructure(
         var container = blobServiceClient.GetBlobContainerClient(options.Value.PayloadContainerName);
         var payloadBlob =
             container.GetBlobClient(options.Value.PayloadBlobNameFormat.FormatWith(new { submissionId }));
-        var sessionBlob =
-            container.GetBlobClient(options.Value.SessionBlobNameFormat.FormatWith(new { submissionId }));
 
         string? previousDraftJson = null;
         int? previousDraftUrn = null;
         var hadExistingDraft = false;
         Response<BlobContentInfo>? draftUpload = null;
+        BlobClient? newChunkBlob = null;
+        var chunkUploaded = false;
 
         try
         {
@@ -167,7 +167,36 @@ public class BlobSubmissionInfrastructure(
                 }
             }
 
-            draftUpload = await UploadDraftPayloadBlobAsync(payloadBlob, submissionId, urn, rawPayloadJson, cancellationToken);
+            var existingChunks = await GetDraftChunkItemsSafeAsync(container, submissionId, cancellationToken);
+
+            // Preserve any legacy draft.json as chunk #0 when transitioning to timestamped chunks
+            if (existingChunks.Count == 0 && hadExistingDraft && !string.IsNullOrWhiteSpace(previousDraftJson))
+            {
+                var legacyTimestamp = DateTimeOffset.UtcNow.AddTicks(-1);
+                var legacyChunkName = BuildTimestampedDraftBlobName(submissionId, legacyTimestamp, Guid.CreateVersion7());
+                var legacyChunkBlob = container.GetBlobClient(legacyChunkName);
+                await UploadTimestampedDraftChunkAsync(legacyChunkBlob, submissionId, legacyTimestamp, previousDraftUrn, previousDraftJson, cancellationToken);
+                existingChunks =
+                [
+                    new SubmissionDraftItem(legacyChunkName, legacyTimestamp, previousDraftJson, Encoding.UTF8.GetByteCount(previousDraftJson))
+                ];
+            }
+
+            var chunkTimestamp = DateTimeOffset.UtcNow;
+            var chunkBlobName = BuildTimestampedDraftBlobName(submissionId, chunkTimestamp, Guid.CreateVersion7());
+            newChunkBlob = container.GetBlobClient(chunkBlobName);
+            await UploadTimestampedDraftChunkAsync(newChunkBlob, submissionId, chunkTimestamp, urn, rawPayloadJson, cancellationToken);
+            chunkUploaded = true;
+
+            var allPayloads = existingChunks
+                .Select(c => c.PayloadJson)
+                .Append(rawPayloadJson)
+                .ToList();
+
+            var mergedResult = DraftPayloadMerger.MergeJsonPayloads(allPayloads);
+            var snapshotJson = mergedResult.IsSuccess ? mergedResult.Value : rawPayloadJson;
+
+            draftUpload = await UploadDraftPayloadBlobAsync(payloadBlob, submissionId, urn, snapshotJson, cancellationToken);
 
             if (sessionToUpdate is not null)
             {
@@ -175,6 +204,10 @@ public class BlobSubmissionInfrastructure(
                 var updateSessionResult = await CreateSessionAsync(sessionToUpdate, cancellationToken);
                 if (updateSessionResult.IsFailure)
                 {
+                    if (chunkUploaded && newChunkBlob is not null)
+                    {
+                        await SafeDeleteIfExistsAsync(newChunkBlob);
+                    }
                     await RollbackDraftPayloadAsync(payloadBlob, submissionId, hadExistingDraft, previousDraftJson, previousDraftUrn);
                     return updateSessionResult.Error;
                 }
@@ -185,6 +218,11 @@ public class BlobSubmissionInfrastructure(
         }
         catch (Exception ex)
         {
+            if (chunkUploaded && newChunkBlob is not null)
+            {
+                await SafeDeleteIfExistsAsync(newChunkBlob);
+            }
+
             if (draftUpload?.HasValue == true)
             {
                 await RollbackDraftPayloadAsync(payloadBlob, submissionId, hadExistingDraft, previousDraftJson, previousDraftUrn);
@@ -208,6 +246,17 @@ public class BlobSubmissionInfrastructure(
                 return Error.Failure(ErrorCodes.SubmissionNotFound, new { submissionId });
             }
 
+            var chunks = await GetDraftChunkItemsSafeAsync(container, submissionId, cancellationToken);
+            if (chunks.Count > 0)
+            {
+                var merged = DraftPayloadMerger.Merge(chunks);
+                if (merged.IsSuccess)
+                {
+                    _instrumentation.DraftPayloadRetrieved(submissionId);
+                    return merged.Value;
+                }
+            }
+
             var response = await client.DownloadContentAsync(cancellationToken);
             _instrumentation.DraftPayloadRetrieved(submissionId);
             return response.Value.Content.ToString();
@@ -215,6 +264,50 @@ public class BlobSubmissionInfrastructure(
         catch (Exception ex)
         {
             _instrumentation.StorageOperationFailed(nameof(GetDraftPayloadAsync), ex.Message);
+            return Error.Failure(ErrorCodes.StorageReadFailed, new { ex.Message });
+        }
+    }
+
+    public async Task<Result<IReadOnlyList<SubmissionDraftItem>>> GetDraftItemsAsync(
+        Guid submissionId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var container = blobServiceClient.GetBlobContainerClient(options.Value.PayloadContainerName);
+            var exists = await container.ExistsAsync(cancellationToken);
+            if (exists is null || !exists.Value)
+            {
+                return Array.Empty<SubmissionDraftItem>();
+            }
+
+            var chunks = await GetDraftChunkItemsSafeAsync(container, submissionId, cancellationToken);
+            if (chunks.Count > 0)
+            {
+                return chunks;
+            }
+
+            var legacyBlobName = options.Value.PayloadBlobNameFormat.FormatWith(new { submissionId });
+            var legacyBlob = container.GetBlobClient(legacyBlobName);
+            if ((await legacyBlob.ExistsAsync(cancellationToken))?.Value == true)
+            {
+                var props = await legacyBlob.GetPropertiesAsync(cancellationToken: cancellationToken);
+                var download = await legacyBlob.DownloadContentAsync(cancellationToken);
+                var content = download.Value.Content.ToString();
+                var timestamp = TryReadTimestampFromMetadata(props.Value.Metadata, "last_saved_at_utc")
+                                ?? props.Value.LastModified;
+
+                return new SubmissionDraftItem[]
+                {
+                    new(legacyBlobName, timestamp, content, Encoding.UTF8.GetByteCount(content))
+                };
+            }
+
+            return Array.Empty<SubmissionDraftItem>();
+        }
+        catch (Exception ex)
+        {
+            _instrumentation.StorageOperationFailed(nameof(GetDraftItemsAsync), ex.Message);
             return Error.Failure(ErrorCodes.StorageReadFailed, new { ex.Message });
         }
     }
@@ -276,8 +369,21 @@ public class BlobSubmissionInfrastructure(
                 _instrumentation.DraftPayloadNotFound(submissionId);
                 return Error.Failure(ErrorCodes.PayloadEmpty, new { submissionId });
             }
-            
-            var draftContent = (await draftBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
+
+            var chunks = await GetDraftChunkItemsSafeAsync(payloadContainer, submissionId, cancellationToken);
+            string draftContent;
+            if (chunks.Count > 0)
+            {
+                var merged = DraftPayloadMerger.Merge(chunks);
+                draftContent = merged.IsSuccess
+                    ? merged.Value
+                    : (await draftBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
+            }
+            else
+            {
+                draftContent = (await draftBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
+            }
+
             var sha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(draftContent)));
 
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(draftContent));
@@ -290,6 +396,11 @@ public class BlobSubmissionInfrastructure(
                 ["status"] = "ReadyForCde",
                 ["finalized_at_utc"] = DateTimeOffset.UtcNow.ToString("O")
             };
+
+            if (chunks.Count > 0)
+            {
+                metadata["draft_chunk_count"] = chunks.Count.ToString(CultureInfo.InvariantCulture);
+            }
 
             if (!string.IsNullOrWhiteSpace(identifierValue))
             {
@@ -312,7 +423,7 @@ public class BlobSubmissionInfrastructure(
             };
 
             processedUpload = await processedBlob.UploadAsync(stream, uploadOptions, cancellationToken);
-            
+
             var sessionResult = await GetSessionAsync(submissionId, cancellationToken);
             if (sessionResult.IsSuccess)
             {
@@ -341,7 +452,7 @@ public class BlobSubmissionInfrastructure(
                 sessionUpdated = true;
             }
 
-            // Best-effort cleanup of the source draft payload now that processedBlob and session.json are committed
+            // Best-effort cleanup of the working draft.json snapshot; timestamped chunks under drafts/ remain for Admin inspection
             await SafeDeleteIfExistsAsync(draftBlob);
 
             _instrumentation.PayloadPromotedToProcessed(submissionId, legacyUrn, processedBlob.Uri.ToString());
@@ -369,6 +480,77 @@ public class BlobSubmissionInfrastructure(
             _instrumentation.StorageOperationFailed(nameof(PromoteToProcessedAsync), ex.Message);
             return Error.Failure(ErrorCodes.StoragePromotionFailed, new { ex.Message });
         }
+    }
+
+    private async Task<List<SubmissionDraftItem>> GetDraftChunkItemsSafeAsync(
+        BlobContainerClient container,
+        Guid submissionId,
+        CancellationToken cancellationToken)
+    {
+        var prefix = ResolveDraftPrefix(submissionId);
+        var blobs = container.GetBlobsAsync(traits: BlobTraits.Metadata, prefix: prefix, cancellationToken: cancellationToken);
+        if (blobs is null)
+        {
+            return [];
+        }
+
+        var items = new List<SubmissionDraftItem>();
+        await foreach (var blobItem in blobs)
+        {
+            if (!blobItem.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var blobClient = container.GetBlobClient(blobItem.Name);
+            var download = await blobClient.DownloadContentAsync(cancellationToken);
+            var content = download.Value.Content.ToString();
+            var createdAt = TryReadTimestampFromMetadata(blobItem.Metadata, "created_at_utc")
+                            ?? blobItem.Properties.CreatedOn
+                            ?? blobItem.Properties.LastModified
+                            ?? DateTimeOffset.UtcNow;
+
+            items.Add(new SubmissionDraftItem(
+                BlobName: blobItem.Name,
+                CreatedAtUtc: createdAt,
+                PayloadJson: content,
+                SizeBytes: blobItem.Properties.ContentLength ?? Encoding.UTF8.GetByteCount(content)));
+        }
+
+        return items
+            .OrderBy(i => i.BlobName, StringComparer.Ordinal)
+            .ThenBy(i => i.CreatedAtUtc)
+            .ToList();
+    }
+
+    private string ResolveDraftPrefix(Guid submissionId)
+    {
+        var prefix = options.Value.DraftBlobPrefixFormat
+            .FormatWith(new { submissionId })
+            .TrimStart('/');
+
+        return prefix.EndsWith('/') ? prefix : $"{prefix}/";
+    }
+
+    private string BuildTimestampedDraftBlobName(Guid submissionId, DateTimeOffset timestampUtc, Guid chunkId)
+    {
+        var prefix = ResolveDraftPrefix(submissionId);
+        var formattedTs = timestampUtc.ToUniversalTime().ToString("yyyyMMddTHHmmssfffffffZ", CultureInfo.InvariantCulture);
+        return $"{prefix}{formattedTs}_{chunkId:N}.json";
+    }
+
+    private static DateTimeOffset? TryReadTimestampFromMetadata(
+        IDictionary<string, string>? metadata,
+        string key)
+    {
+        if (metadata is null || !metadata.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        return DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+            ? parsed
+            : null;
     }
 
     private string ResolveProcessedBlobName(
@@ -423,11 +605,13 @@ public class BlobSubmissionInfrastructure(
         });
     }
 
-    private static string SanitizeBlobPathSegment(string value) =>
-        value.Trim()
+    private static string SanitizeBlobPathSegment(string value)
+    {
+        return value.Trim()
             .Replace('/', '-')
             .Replace('\\', '-')
             .Replace("..", "_", StringComparison.Ordinal);
+    }
 
     private static async Task<Response<BlobContentInfo>> UploadSessionBlobAsync(
         BlobClient blobClient,
@@ -471,6 +655,36 @@ public class BlobSubmissionInfrastructure(
         };
 
         return await payloadBlob.UploadAsync(stream, uploadOptions, cancellationToken);
+    }
+
+    private static async Task<Response<BlobContentInfo>> UploadTimestampedDraftChunkAsync(
+        BlobClient chunkBlob,
+        Guid submissionId,
+        DateTimeOffset createdAtUtc,
+        int? urn,
+        string rawPayloadJson,
+        CancellationToken cancellationToken)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(rawPayloadJson));
+        var metadata = new Dictionary<string, string>
+        {
+            ["submission_id"] = submissionId.ToString(),
+            ["created_at_utc"] = createdAtUtc.ToUniversalTime().ToString("O")
+        };
+
+        if (urn.HasValue && urn.Value > 0)
+        {
+            metadata["urn"] = urn.Value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var uploadOptions = new BlobUploadOptions
+        {
+            HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" },
+            Metadata = metadata,
+            Conditions = new BlobRequestConditions { IfNoneMatch = ETag.All }
+        };
+
+        return await chunkBlob.UploadAsync(stream, uploadOptions, cancellationToken);
     }
 
     private static async Task RollbackDraftPayloadAsync(

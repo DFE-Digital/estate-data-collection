@@ -11,13 +11,74 @@
     </div>
 
     <div class="govuk-form-group govuk-!-margin-bottom-4">
-        <div class="govuk-radios govuk-radios--inline" data-module="govuk-radios">
+        <div class="govuk-radios" data-module="govuk-radios">
             <div class="govuk-radios__item">
                 <input class="govuk-radios__input" id="identifierMode-enabled" name="identifierMode" type="radio" value="enabled"
+                       data-aria-controls="identifier-config-panel"
                        checked="@Model.IsEnabled" />
                 <label class="govuk-label govuk-radios__label" for="identifierMode-enabled">
                     Use identifier property
                 </label>
+            </div>
+            <div class="govuk-radios__conditional @(Model.IsNone ? "govuk-radios__conditional--hidden" : string.Empty)"
+                 id="identifier-config-panel">
+                <div class="govuk-form-group" id="identifier-property-group">
+                    <label class="govuk-label govuk-label--s" for="identifierProperty">
+                        Identifier property
+                    </label>
+                    <div class="govuk-hint">
+                        Select a scalar property from the schema or enter a JSON Pointer path manually.
+                    </div>
+                    <select class="govuk-select" id="identifierProperty" name="identifierProperty" data-identifier-property="true">
+                        <option value="@Model.CustomOptionValue"
+                                data-custom="true"
+                                selected="@Model.IsCustomPath">
+                            Enter JSON Pointer manually
+                        </option>
+                        @foreach (var prop in Model.Options)
+                        {
+                            <option value="@prop.Pointer"
+                                    data-pointer="@prop.Pointer"
+                                    data-derived-label="@prop.DerivedType"
+                                    data-required="@prop.RequiredAttributeValue"
+                                    selected="@prop.IsSelected">
+                                @prop.DisplayText
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <div class="govuk-form-group" id="identifier-pointer-group" hidden="@Model.HidePointerGroup">
+                    <label class="govuk-label govuk-label--s" for="identifierPointer">
+                        JSON Pointer path
+                    </label>
+                    <div class="govuk-hint">
+                        Examples: <code class="dfe-code-badge">/urn</code>, <code class="dfe-code-badge">/school/urn</code>, <code class="dfe-code-badge">/establishment/laestab</code>.
+                    </div>
+                    <input class="govuk-input govuk-input--width-20" id="identifierPointer" name="identifierPointer"
+                           type="text" value="@Model.ActivePointer" />
+                </div>
+
+                <details class="govuk-details govuk-!-margin-bottom-0" data-module="govuk-details" open="@Model.HasExplicitOverride">
+                    <summary class="govuk-details__summary">
+                        <span class="govuk-details__summary-text">
+                            Override storage partition label (optional)
+                        </span>
+                    </summary>
+                    <div class="govuk-details__text">
+                        <div class="govuk-form-group govuk-!-margin-bottom-0">
+                            <label class="govuk-label govuk-label--s" for="identifierLabel">
+                                Partition label
+                            </label>
+                            <div class="govuk-hint">
+                                Leave blank to auto-derive from the property name (for example <code class="dfe-code-badge">/establishment/laestab</code> &rarr; <code class="dfe-code-badge">LAEstab</code>).
+                            </div>
+                            <input class="govuk-input govuk-input--width-20" id="identifierLabel" name="identifierLabel"
+                                   type="text" value="@Model.LabelInputValue"
+                                   placeholder="@Model.LabelPlaceholder" />
+                        </div>
+                    </div>
+                </details>
             </div>
             <div class="govuk-radios__item">
                 <input class="govuk-radios__input" id="identifierMode-none" name="identifierMode" type="radio" value="none"
@@ -27,66 +88,6 @@
                 </label>
             </div>
         </div>
-    </div>
-
-    <div id="identifier-config-panel" hidden="@Model.IsNone">
-        <div class="govuk-form-group" id="identifier-property-group">
-            <label class="govuk-label govuk-label--s" for="identifierProperty">
-                Identifier property
-            </label>
-            <div class="govuk-hint">
-                Select a scalar property from the schema or enter a JSON Pointer path manually.
-            </div>
-            <select class="govuk-select" id="identifierProperty" name="identifierProperty" data-identifier-property="true">
-                <option value="@Model.CustomOptionValue"
-                        data-custom="true"
-                        selected="@Model.IsCustomPath">
-                    Enter JSON Pointer manually
-                </option>
-                @foreach (var prop in Model.Options)
-                {
-                    <option value="@prop.Pointer"
-                            data-pointer="@prop.Pointer"
-                            data-derived-label="@prop.DerivedType"
-                            data-required="@prop.RequiredAttributeValue"
-                            selected="@prop.IsSelected">
-                        @prop.DisplayText
-                    </option>
-                }
-            </select>
-        </div>
-
-        <div class="govuk-form-group" id="identifier-pointer-group" hidden="@Model.HidePointerGroup">
-            <label class="govuk-label govuk-label--s" for="identifierPointer">
-                JSON Pointer path
-            </label>
-            <div class="govuk-hint">
-                Examples: <code class="dfe-code-badge">/urn</code>, <code class="dfe-code-badge">/school/urn</code>, <code class="dfe-code-badge">/establishment/laestab</code>.
-            </div>
-            <input class="govuk-input govuk-input--width-20" id="identifierPointer" name="identifierPointer"
-                   type="text" value="@Model.ActivePointer" />
-        </div>
-
-        <details class="govuk-details govuk-!-margin-bottom-3" data-module="govuk-details" open="@Model.HasExplicitOverride">
-            <summary class="govuk-details__summary">
-                <span class="govuk-details__summary-text">
-                    Override storage partition label (optional)
-                </span>
-            </summary>
-            <div class="govuk-details__text">
-                <div class="govuk-form-group govuk-!-margin-bottom-0">
-                    <label class="govuk-label govuk-label--s" for="identifierLabel">
-                        Partition label
-                    </label>
-                    <div class="govuk-hint">
-                        Leave blank to auto-derive from the property name (for example <code class="dfe-code-badge">/establishment/laestab</code> &rarr; <code class="dfe-code-badge">LAEstab</code>).
-                    </div>
-                    <input class="govuk-input govuk-input--width-20" id="identifierLabel" name="identifierLabel"
-                           type="text" value="@Model.LabelInputValue"
-                           placeholder="@Model.LabelPlaceholder" />
-                </div>
-            </div>
-        </details>
     </div>
 
     <div class="govuk-inset-text govuk-body-s govuk-!-margin-top-2 govuk-!-margin-bottom-0" id="identifier-summary-inset">

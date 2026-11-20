@@ -8,6 +8,7 @@ using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -27,7 +28,7 @@ public sealed class PostUpdateSchemaVersionTestsEndpoint(
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post),
-            Route = "manage/schemas/{schemaName}/{version:int}/tests")]
+            Route = AppRoutes.AdminUi.Templates.SchemaTests)]
         HttpRequest http,
         string schemaName,
         int version,
@@ -75,7 +76,7 @@ public sealed class PostUpdateSchemaVersionTestsEndpoint(
 
         InstrumentCompleted(EndpointName, StatusCodes.Status302Found);
         return new RedirectResult(
-            $"/manage/schemas/{Uri.EscapeDataString(schemaName)}/{version}/tests?notice=updated",
+            AppRoutes.AdminUi.SchemaTests(schemaName, version, notice: "updated"),
             permanent: false);
 
         async Task<IActionResult> RenderFailureAsync(Error error, int statusCode)

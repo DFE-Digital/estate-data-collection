@@ -19,6 +19,9 @@ public class BlobSubmissionRepositoryOptions : Common.Markers.IOption<BlobSubmis
     public string PayloadBlobNameFormat { get; init; } = "{submissionId}/draft.json";
 
     [Required, MinLength(1)]
+    public string DraftBlobPrefixFormat { get; init; } = "{submissionId}/drafts/";
+
+    [Required, MinLength(1)]
     public string AuditBlobPrefixFormat { get; init; } = "{submissionId}/audit/";
 
     [Required, MinLength(1)]

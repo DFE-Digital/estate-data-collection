@@ -31,7 +31,7 @@ public class UpdateSubmissionUseCase(
     {
         _instrumentation.UpdatingDraftPayload(request.SubmissionId);
 
-        var processes = new List<SubmissionProcessExecution>(6);
+        var processes = new List<SubmissionProcessExecution>(7);
         var sessionSw = Stopwatch.StartNew();
         var session = await infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken);
         sessionSw.Stop();
@@ -116,11 +116,71 @@ public class UpdateSubmissionUseCase(
             Summary = $"{schema.Value.Metadata.Name} v{schema.Value.Metadata.Version}"
         });
 
+        var draftItemsResult = await infrastructure.GetDraftItemsAsync(request.SubmissionId, cancellationToken);
+        var existingItems = draftItemsResult is { IsSuccess: true, Value: not null }
+            ? draftItemsResult.Value
+            : [];
+
+        var draftCountAfterSave = existingItems.Count + 1;
+        string payloadToValidate;
+
+        if (existingItems.Count > 0)
+        {
+            var mergeSw = Stopwatch.StartNew();
+            var payloadsToMerge = existingItems.Select(i => i.PayloadJson).Append(request.Payload).ToList();
+            var mergeResult = DraftPayloadMerger.MergeJsonPayloads(payloadsToMerge);
+            mergeSw.Stop();
+
+            if (mergeResult.IsFailure)
+            {
+                processes.Add(new SubmissionProcessExecution
+                {
+                    ProcessName = "DraftPayloadMerger",
+                    Engine = "rfc7396-json-merge",
+                    Outcome = "Failed",
+                    DurationMs = mergeSw.ElapsedMilliseconds,
+                    ItemCount = payloadsToMerge.Count,
+                    Summary = mergeResult.Error.Description ?? mergeResult.Error.Code
+                });
+
+                await SubmissionAuditRecorder.SafeAppendAsync(
+                    auditStore,
+                    session.Value.SubmissionId,
+                    "UpdateSubmission",
+                    session.Value.SchemaName,
+                    session.Value.SchemaVersion,
+                    "Rejected",
+                    SubmissionAuditRecorder.MapHttpStatus(mergeResult.Error.Type),
+                    processes,
+                    errorCode: mergeResult.Error.Code,
+                    message: mergeResult.Error.Description,
+                    cancellationToken: cancellationToken);
+
+                return mergeResult.Error;
+            }
+
+            processes.Add(new SubmissionProcessExecution
+            {
+                ProcessName = "DraftPayloadMerger",
+                Engine = "rfc7396-json-merge",
+                Outcome = "Succeeded",
+                DurationMs = mergeSw.ElapsedMilliseconds,
+                ItemCount = payloadsToMerge.Count,
+                Summary = $"Merged incoming patch with {existingItems.Count} prior draft chunk(s)"
+            });
+
+            payloadToValidate = mergeResult.Value;
+        }
+        else
+        {
+            payloadToValidate = request.Payload;
+        }
+
         IReadOnlyList<ValidationError> errors;
         if (validationService is not null)
         {
             var combinedResult = await validationService.ValidatePayloadWithTraceAsync(
-                request.Payload,
+                payloadToValidate,
                 schema.Value,
                 isDraftUpdate: true,
                 cancellationToken);
@@ -157,7 +217,7 @@ public class UpdateSubmissionUseCase(
         else
         {
             var valSw = Stopwatch.StartNew();
-            var validation = await validator.ValidateAsync(request.Payload, schema.Value.Schema, cancellationToken);
+            var validation = await validator.ValidateAsync(payloadToValidate, schema.Value.Schema, cancellationToken);
             valSw.Stop();
 
             if (validation.IsFailure)
@@ -199,7 +259,7 @@ public class UpdateSubmissionUseCase(
             });
         }
 
-        var idEval = PayloadIdentifierExtractor.Evaluate(request.Payload, schema.Value, _options);
+        var idEval = PayloadIdentifierExtractor.Evaluate(payloadToValidate, schema.Value, _options);
         var auditIdentifier = idEval.Identifier is { } extracted
             ? new SubmissionAuditIdentifier(extracted.Type, extracted.Value, extracted.AsPositiveInt)
             : BuildIdentifier(session.Value.IdentifierType, session.Value.IdentifierValue, session.Value.Urn);
@@ -245,7 +305,8 @@ public class UpdateSubmissionUseCase(
             Engine = "azure-blob",
             Outcome = "Succeeded",
             DurationMs = saveSw.ElapsedMilliseconds,
-            Summary = $"Saved {request.Payload.Length} char draft JSON"
+            ItemCount = draftCountAfterSave,
+            Summary = $"Saved timestamped draft chunk #{draftCountAfterSave} ({request.Payload.Length} chars)"
         });
 
         var isValid = errors.Count == 0;
@@ -254,6 +315,14 @@ public class UpdateSubmissionUseCase(
         {
             _instrumentation.DraftValidationFailed(request.SubmissionId, errors.Count);
         }
+
+        var guidance = SubmissionNextStepsBuilder.Build(
+            session.Value.SubmissionId,
+            isFinalised: false,
+            finalisedAtUtc: null,
+            hasDraftPayload: true,
+            draftCount: draftCountAfterSave,
+            pendingErrors: errors);
 
         await SubmissionAuditRecorder.SafeAppendAsync(
             auditStore,
@@ -265,8 +334,8 @@ public class UpdateSubmissionUseCase(
             200,
             processes,
             message: isValid
-                ? "Draft payload saved with no validation errors"
-                : $"Draft payload saved with {errors.Count} pending validation error(s)",
+                ? $"Draft payload saved (chunk #{draftCountAfterSave}) with no validation errors"
+                : $"Draft payload saved (chunk #{draftCountAfterSave}) with {errors.Count} pending validation error(s)",
             validationErrors: errors,
             identifier: auditIdentifier,
             cancellationToken: cancellationToken);
@@ -277,12 +346,17 @@ public class UpdateSubmissionUseCase(
             SubmissionId: request.SubmissionId,
             IsSuccessful: isValid,
             PendingErrors: errors,
-            SavedAtUtc: DateTimeOffset.UtcNow
+            SavedAtUtc: DateTimeOffset.UtcNow,
+            DraftCount: draftCountAfterSave,
+            NextSteps: guidance.NextSteps,
+            Summary: guidance.Summary
         );
     }
 
-    private static SubmissionAuditIdentifier? BuildIdentifier(string? type, string? value, int? urn) =>
-        type is null && value is null && urn is null
+    private static SubmissionAuditIdentifier? BuildIdentifier(string? type, string? value, int? urn)
+    {
+        return type is null && value is null && urn is null
             ? null
             : new SubmissionAuditIdentifier(type, value, urn);
+    }
 }

@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -28,7 +29,7 @@ public sealed class PostRunSchemaTestsEndpoint(
 
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
-        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post), Route = "api/schemas/tests/run")]
+        [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post), Route = AppRoutes.AdminApi.Templates.RunSchemaTests)]
         HttpRequest http,
         CancellationToken cancellationToken)
     {

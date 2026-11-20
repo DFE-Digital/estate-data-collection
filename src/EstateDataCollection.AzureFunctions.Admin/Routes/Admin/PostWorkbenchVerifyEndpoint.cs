@@ -1,4 +1,3 @@
-using EstateDataCollection.Admin.UI.Components;
 using EstateDataCollection.Admin.UI.Models.ViewModels;
 using EstateDataCollection.Admin.UI.Pages;
 using EstateDataCollection.Admin.UI.Rendering;
@@ -6,6 +5,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -23,28 +23,19 @@ public sealed class PostWorkbenchVerifyEndpoint(
 
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post), Route = "manage/workbench/verify")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post), Route = AppRoutes.AdminUi.Templates.WorkbenchVerify)]
         HttpRequest http,
         CancellationToken cancellationToken)
     {
         InstrumentInvoked(EndpointName, "verify");
 
         var form = await ReadFormSafeAsync(http, cancellationToken);
-        var isFetch = string.Equals(http.Headers["X-Requested-With"], "fetch", StringComparison.OrdinalIgnoreCase);
         var meta = CreatePageMeta(http, "Contract Workbench", activeNav: "workbench");
 
         var parseResult = WorkbenchFormParser.Parse(form, requireSchemaIdentity: false);
         if (parseResult.IsFailure)
         {
             var verifyErrorModel = new WorkbenchVerifyViewModel(HasRun: true, Error: parseResult.Error);
-            if (isFetch)
-            {
-                return await RenderPartialAsync<VerifyResultPanel>(
-                    EndpointName,
-                    new Dictionary<string, object?> { ["Model"] = verifyErrorModel },
-                    StatusCodes.Status422UnprocessableEntity);
-            }
-
             var lenient = WorkbenchFormParser.ParseLenientForRedisplay(form);
             return await RenderPageAsync<WorkbenchPage, WorkbenchViewModel>(
                 EndpointName,
@@ -71,14 +62,6 @@ public sealed class PostWorkbenchVerifyEndpoint(
         var statusCode = verifyResult.IsSuccess
             ? StatusCodes.Status200OK
             : MapErrorToStatusCode(verifyResult.Error);
-
-        if (isFetch)
-        {
-            return await RenderPartialAsync<VerifyResultPanel>(
-                EndpointName,
-                new Dictionary<string, object?> { ["Model"] = verifyViewModel },
-                statusCode);
-        }
 
         return await RenderPageAsync<WorkbenchPage, WorkbenchViewModel>(
             EndpointName,

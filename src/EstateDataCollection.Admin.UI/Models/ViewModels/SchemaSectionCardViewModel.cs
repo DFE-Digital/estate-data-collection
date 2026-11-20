@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Routing;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
@@ -13,7 +14,6 @@ public sealed record SchemaSectionCardViewModel(
 {
     public static SchemaSectionCardViewModel From(SchemaCatalogueEntry entry, bool enrichedView = false)
     {
-        var escapedSchema = Uri.EscapeDataString(entry.SchemaName);
         var versions = entry.Versions
             .OrderBy(x => x.Version)
             .Select(v =>
@@ -22,7 +22,6 @@ public sealed record SchemaSectionCardViewModel(
                 var isIdDisabled = hasIdConfig &&
                     string.Equals(v.IdentifierConfig!.Type, "None", StringComparison.OrdinalIgnoreCase);
                 var hasCustomId = hasIdConfig && !isIdDisabled;
-                var escapedVersionSchema = Uri.EscapeDataString(v.SchemaName);
 
                 var (testStatusTagText, testStatusTagCssClass) = ResolveTestStatus(v);
                 var hasTimestamp = v.LastTestRunAtUtc.HasValue;
@@ -45,9 +44,9 @@ public sealed record SchemaSectionCardViewModel(
                     IdentifierType: v.IdentifierConfig?.Type ?? string.Empty,
                     IdentifierPointer: v.IdentifierConfig?.JsonPointer ?? string.Empty,
                     ShortSha256Hash: v.Sha256Hash.Length > 10 ? v.Sha256Hash[..10] : v.Sha256Hash,
-                    DetailsUrl: $"/manage/schemas/{escapedVersionSchema}/{v.Version}/details",
-                    TestsUrl: $"/manage/schemas/{escapedVersionSchema}/{v.Version}/tests",
-                    ScheduleUrl: $"/manage/schemas/{escapedVersionSchema}/{v.Version}/schedule",
+                    DetailsUrl: AppRoutes.AdminUi.SchemaDetail(v.SchemaName, v.Version),
+                    TestsUrl: AppRoutes.AdminUi.SchemaTests(v.SchemaName, v.Version),
+                    ScheduleUrl: AppRoutes.AdminUi.SchemaSchedule(v.SchemaName, v.Version),
                     CanModifyLifecycle: !string.Equals(v.State.Name, "Retired", StringComparison.OrdinalIgnoreCase));
             })
             .ToList();
@@ -57,7 +56,7 @@ public sealed record SchemaSectionCardViewModel(
             HasActiveVersion: entry.ActiveVersion.HasValue,
             NoActiveVersion: !entry.ActiveVersion.HasValue,
             ActiveVersionDisplay: entry.ActiveVersion.HasValue ? $"v{entry.ActiveVersion}" : string.Empty,
-            ManageUrl: $"/manage/schemas/{escapedSchema}/",
+            ManageUrl: AppRoutes.AdminUi.SchemaVersions(entry.SchemaName),
             EnrichedView: enrichedView,
             Versions: versions);
     }

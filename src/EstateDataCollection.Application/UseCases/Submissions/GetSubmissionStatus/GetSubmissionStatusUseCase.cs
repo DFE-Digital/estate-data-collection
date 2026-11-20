@@ -31,9 +31,13 @@ public class GetSubmissionStatusUseCase(
         GetSubmissionStatusRequest request,
         CancellationToken cancellationToken = default)
     {
+        var actionName = string.IsNullOrWhiteSpace(request.ActionName)
+            ? "CheckSubmissionStatus"
+            : request.ActionName;
+
         _instrumentation.CheckingSubmissionStatus(request.SubmissionId);
 
-        var processes = new List<SubmissionProcessExecution>(6);
+        var processes = new List<SubmissionProcessExecution>(7);
         var sessionSw = Stopwatch.StartNew();
         var sessionResult = await infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken);
         sessionSw.Stop();
@@ -54,18 +58,35 @@ public class GetSubmissionStatusUseCase(
             Summary = session.IsFinalised ? "Session finalised" : "Draft session loaded"
         });
 
+        var draftItemsResult = await infrastructure.GetDraftItemsAsync(request.SubmissionId, cancellationToken);
+        var draftItems = draftItemsResult is { IsSuccess: true, Value: not null }
+            ? draftItemsResult.Value
+            : [];
+        var draftCount = draftItems.Count;
+        DateTimeOffset? lastDraftAtUtc = draftItems.Count > 0
+            ? draftItems.Max(d => d.CreatedAtUtc)
+            : null;
+
         if (session.IsFinalised)
         {
+            var finalisedGuidance = SubmissionNextStepsBuilder.Build(
+                session.SubmissionId,
+                isFinalised: true,
+                finalisedAtUtc: session.FinalisedAtUtc,
+                hasDraftPayload: false,
+                draftCount: draftCount,
+                pendingErrors: []);
+
             await SubmissionAuditRecorder.SafeAppendAsync(
                 auditStore,
                 session.SubmissionId,
-                "CheckSubmissionStatus",
+                actionName,
                 session.SchemaName,
                 session.SchemaVersion,
                 "Finalised",
                 200,
                 processes,
-                message: "Submission is already finalised",
+                message: finalisedGuidance.Summary,
                 identifier: new SubmissionAuditIdentifier(session.IdentifierType, session.IdentifierValue, session.Urn),
                 cancellationToken: cancellationToken);
 
@@ -87,7 +108,11 @@ public class GetSubmissionStatusUseCase(
                 PendingErrors: [],
                 Urn: session.Urn,
                 Identifier: session.IdentifierValue,
-                IdentifierType: session.IdentifierType);
+                IdentifierType: session.IdentifierType,
+                DraftCount: draftCount,
+                LastDraftAtUtc: lastDraftAtUtc,
+                NextSteps: finalisedGuidance.NextSteps,
+                Summary: finalisedGuidance.Summary);
         }
 
         var draftSw = Stopwatch.StartNew();
@@ -103,25 +128,33 @@ public class GetSubmissionStatusUseCase(
                     new ValidationError("$", "No draft payload has been uploaded yet.")
                 ];
 
+                var emptyGuidance = SubmissionNextStepsBuilder.Build(
+                    session.SubmissionId,
+                    isFinalised: false,
+                    finalisedAtUtc: null,
+                    hasDraftPayload: false,
+                    draftCount: 0,
+                    pendingErrors: missingDraftErrors);
+
                 processes.Add(new SubmissionProcessExecution
                 {
                     ProcessName = "BlobStorage:GetDraftPayload",
                     Engine = "azure-blob",
                     Outcome = "Missing",
                     DurationMs = draftSw.ElapsedMilliseconds,
-                    Summary = "No draft.json uploaded yet"
+                    Summary = "No draft payload uploaded yet"
                 });
 
                 await SubmissionAuditRecorder.SafeAppendAsync(
                     auditStore,
                     session.SubmissionId,
-                    "CheckSubmissionStatus",
+                    actionName,
                     session.SchemaName,
                     session.SchemaVersion,
                     "DraftAwaitingPayload",
                     200,
                     processes,
-                    message: "No draft payload uploaded yet",
+                    message: emptyGuidance.Summary,
                     validationErrors: missingDraftErrors,
                     cancellationToken: cancellationToken);
 
@@ -143,7 +176,11 @@ public class GetSubmissionStatusUseCase(
                     PendingErrors: missingDraftErrors,
                     Urn: session.Urn,
                     Identifier: session.IdentifierValue,
-                    IdentifierType: session.IdentifierType);
+                    IdentifierType: session.IdentifierType,
+                    DraftCount: 0,
+                    LastDraftAtUtc: null,
+                    NextSteps: emptyGuidance.NextSteps,
+                    Summary: emptyGuidance.Summary);
             }
 
             processes.Add(new SubmissionProcessExecution
@@ -158,7 +195,7 @@ public class GetSubmissionStatusUseCase(
             await SubmissionAuditRecorder.SafeAppendAsync(
                 auditStore,
                 session.SubmissionId,
-                "CheckSubmissionStatus",
+                actionName,
                 session.SchemaName,
                 session.SchemaVersion,
                 "Failed",
@@ -171,14 +208,32 @@ public class GetSubmissionStatusUseCase(
             return draftPayload.Error;
         }
 
-        processes.Add(new SubmissionProcessExecution
+        if (draftCount > 1)
         {
-            ProcessName = "BlobStorage:GetDraftPayload",
-            Engine = "azure-blob",
-            Outcome = "Succeeded",
-            DurationMs = draftSw.ElapsedMilliseconds,
-            Summary = $"Loaded {draftPayload.Value.Length} char draft JSON"
-        });
+            processes.Add(new SubmissionProcessExecution
+            {
+                ProcessName = "DraftPayloadMerger",
+                Engine = "rfc7396-json-merge",
+                Outcome = "Succeeded",
+                DurationMs = draftSw.ElapsedMilliseconds,
+                ItemCount = draftCount,
+                Summary = $"Merged {draftCount} timestamped draft submission(s)"
+            });
+        }
+        else
+        {
+            processes.Add(new SubmissionProcessExecution
+            {
+                ProcessName = "BlobStorage:GetDraftPayload",
+                Engine = "azure-blob",
+                Outcome = "Succeeded",
+                DurationMs = draftSw.ElapsedMilliseconds,
+                ItemCount = Math.Max(1, draftCount),
+                Summary = $"Loaded {draftPayload.Value.Length} char draft JSON"
+            });
+        }
+
+        var effectiveDraftCount = Math.Max(1, draftCount);
 
         var schemaSw = Stopwatch.StartNew();
         var schemaResult = await registry.GetExplicitSchemaAsync(
@@ -201,7 +256,7 @@ public class GetSubmissionStatusUseCase(
             await SubmissionAuditRecorder.SafeAppendAsync(
                 auditStore,
                 session.SubmissionId,
-                "CheckSubmissionStatus",
+                actionName,
                 session.SchemaName,
                 session.SchemaVersion,
                 "Failed",
@@ -245,7 +300,7 @@ public class GetSubmissionStatusUseCase(
                 await SubmissionAuditRecorder.SafeAppendAsync(
                     auditStore,
                     session.SubmissionId,
-                    "CheckSubmissionStatus",
+                    actionName,
                     session.SchemaName,
                     session.SchemaVersion,
                     "Failed",
@@ -284,7 +339,7 @@ public class GetSubmissionStatusUseCase(
                 await SubmissionAuditRecorder.SafeAppendAsync(
                     auditStore,
                     session.SubmissionId,
-                    "CheckSubmissionStatus",
+                    actionName,
                     session.SchemaName,
                     session.SchemaVersion,
                     "Failed",
@@ -322,18 +377,24 @@ public class GetSubmissionStatusUseCase(
         var resolvedIdentifierType = identifierEval.Identifier?.Type ?? session.IdentifierType;
         var resolvedUrn = identifierEval.Identifier?.AsPositiveInt ?? session.Urn;
 
+        var draftGuidance = SubmissionNextStepsBuilder.Build(
+            session.SubmissionId,
+            isFinalised: false,
+            finalisedAtUtc: null,
+            hasDraftPayload: true,
+            draftCount: effectiveDraftCount,
+            pendingErrors: pendingErrors);
+
         await SubmissionAuditRecorder.SafeAppendAsync(
             auditStore,
             session.SubmissionId,
-            "CheckSubmissionStatus",
+            actionName,
             session.SchemaName,
             session.SchemaVersion,
             isReadyToFinalise ? "ReadyToFinalise" : "DraftPendingErrors",
             200,
             processes,
-            message: isReadyToFinalise
-                ? "Draft passes all checks and is ready to finalise"
-                : $"Draft has {pendingErrors.Count} pending error(s)",
+            message: draftGuidance.Summary,
             validationErrors: pendingErrors,
             identifier: resolvedIdentifierType is not null || resolvedIdentifier is not null || resolvedUrn is not null
                 ? new SubmissionAuditIdentifier(resolvedIdentifierType, resolvedIdentifier, resolvedUrn)
@@ -358,11 +419,17 @@ public class GetSubmissionStatusUseCase(
             PendingErrors: pendingErrors,
             Urn: resolvedUrn,
             Identifier: resolvedIdentifier,
-            IdentifierType: resolvedIdentifierType);
+            IdentifierType: resolvedIdentifierType,
+            DraftCount: effectiveDraftCount,
+            LastDraftAtUtc: lastDraftAtUtc,
+            NextSteps: draftGuidance.NextSteps,
+            Summary: draftGuidance.Summary);
     }
 
-    private static bool IsMissingDraftError(Error error) =>
-        string.Equals(error.Code, ErrorCodes.SubmissionNotFound.GetName(), StringComparison.Ordinal) ||
-        string.Equals(error.Code, ErrorCodes.PayloadNotFound.GetName(), StringComparison.Ordinal) ||
-        string.Equals(error.Code, ErrorCodes.PayloadEmpty.GetName(), StringComparison.Ordinal);
+    private static bool IsMissingDraftError(Error error)
+    {
+        return string.Equals(error.Code, ErrorCodes.SubmissionNotFound.GetName(), StringComparison.Ordinal) ||
+               string.Equals(error.Code, ErrorCodes.PayloadNotFound.GetName(), StringComparison.Ordinal) ||
+               string.Equals(error.Code, ErrorCodes.PayloadEmpty.GetName(), StringComparison.Ordinal);
+    }
 }

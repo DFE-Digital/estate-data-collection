@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Security.Cryptography;
+using EstateDataCollection.Common;
 
 namespace EstateDataCollection.Admin.UI.Assets;
 
@@ -19,9 +21,17 @@ public static class EmbeddedUiAssetProvider
     };
 
     public static bool TryReadAsset(string? relativePath, out byte[] bytes, out string contentType)
+        => TryReadAsset(relativePath, out bytes, out contentType, out _);
+
+    public static bool TryReadAsset(
+        string? relativePath,
+        out byte[] bytes,
+        out string contentType,
+        out string etag)
     {
         bytes = [];
         contentType = "application/octet-stream";
+        etag = string.Empty;
 
         if (string.IsNullOrWhiteSpace(relativePath))
         {
@@ -54,6 +64,10 @@ public static class EmbeddedUiAssetProvider
         {
             contentType = mapped;
         }
+
+        var hashHex = Convert.ToHexStringLower(SHA256.HashData(bytes))[..16];
+        var version = AppVersionProvider.Version;
+        etag = $"\"{version}-{hashHex}\"";
 
         return true;
     }

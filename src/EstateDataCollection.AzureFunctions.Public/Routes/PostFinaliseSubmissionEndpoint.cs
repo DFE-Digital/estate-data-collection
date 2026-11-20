@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +23,7 @@ public sealed class PostFinaliseSubmissionEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
-            Route = "submissions/{submissionId:guid}/finalise")]
+            Route = AppRoutes.PublicApi.Templates.FinaliseSubmission)]
         HttpRequest http,
         Guid submissionId,
         CancellationToken cancellationToken)

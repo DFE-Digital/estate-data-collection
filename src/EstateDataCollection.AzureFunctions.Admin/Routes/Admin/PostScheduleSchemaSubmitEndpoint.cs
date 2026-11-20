@@ -10,6 +10,7 @@ using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -29,7 +30,7 @@ public sealed class PostScheduleSchemaSubmitEndpoint(
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post),
-            Route = "manage/schemas/{schemaName}/{version:int}/schedule")]
+            Route = AppRoutes.AdminUi.Templates.SchemaSchedule)]
         HttpRequest http,
         string schemaName,
         int version,
@@ -115,7 +116,7 @@ public sealed class PostScheduleSchemaSubmitEndpoint(
 
         InstrumentCompleted(EndpointName, StatusCodes.Status302Found);
         return new RedirectResult(
-            $"/manage/schemas/{Uri.EscapeDataString(schemaName)}/{version}/details?notice=scheduled",
+            AppRoutes.AdminUi.SchemaDetail(schemaName, version, notice: "scheduled"),
             permanent: false);
 
         async Task<IActionResult> RenderFailureAsync(Error error, int statusCode)

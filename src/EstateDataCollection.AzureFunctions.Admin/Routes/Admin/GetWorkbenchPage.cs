@@ -2,6 +2,7 @@ using EstateDataCollection.Admin.UI.Models.ViewModels;
 using EstateDataCollection.Admin.UI.Pages;
 using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -18,7 +19,7 @@ public sealed class GetWorkbenchPage(
 
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get), Route = "manage/workbench")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Get), Route = AppRoutes.AdminUi.Templates.Workbench)]
         HttpRequest http)
     {
         InstrumentInvoked(EndpointName, "workbench");

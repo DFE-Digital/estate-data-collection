@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
@@ -9,105 +10,212 @@ public sealed record SchemaDetailViewModel(
     string? SuccessBanner = null,
     Error? PageError = null)
 {
-    public NotificationBannerViewModel? SuccessBannerModel =>
-        NotificationBannerViewModel.Success(SuccessBanner);
+    public NotificationBannerViewModel? SuccessBannerModel
+    {
+        get { return NotificationBannerViewModel.Success(SuccessBanner); }
+    }
 
-    public ErrorSummaryViewModel? ErrorSummary =>
-        ErrorSummaryViewModel.From(PageError);
+    public ErrorSummaryViewModel? ErrorSummary
+    {
+        get { return ErrorSummaryViewModel.From(PageError); }
+    }
 
-    public bool HasDetail => Detail is not null;
+    public bool HasDetail
+    {
+        get { return Detail is not null; }
+    }
 
-    public string SchemaName => Detail?.SchemaName ?? string.Empty;
+    public string SchemaName
+    {
+        get { return Detail?.SchemaName ?? string.Empty; }
+    }
 
-    public string VersionDisplay => Detail is null ? string.Empty : $"v{Detail.Version}";
+    public string VersionDisplay
+    {
+        get { return Detail is null ? string.Empty : $"v{Detail.Version}"; }
+    }
 
-    public string BackToSchemaUrl =>
-        Detail is null ? "/manage" : $"/manage/schemas/{Uri.EscapeDataString(Detail.SchemaName)}";
-
-    public bool CanModifyLifecycle =>
-        Detail is not null &&
-        !string.Equals(Detail.State.Name, "Retired", StringComparison.OrdinalIgnoreCase);
-
-    public string ScheduleUrl =>
-        Detail is null
-            ? string.Empty
-            : $"/manage/schemas/{Uri.EscapeDataString(Detail.SchemaName)}/{Detail.Version}/schedule";
-
-    public string TestsUrl =>
-        Detail is null
-            ? string.Empty
-            : $"/manage/schemas/{Uri.EscapeDataString(Detail.SchemaName)}/{Detail.Version}/tests";
-
-    public string RunTestsActionUrl =>
-        Detail is null
-            ? string.Empty
-            : $"/manage/schemas/{Uri.EscapeDataString(Detail.SchemaName)}/{Detail.Version}/tests/run";
-
-    public int ValidFixturesCount => Detail?.ValidFixtures?.Count ?? 0;
-
-    public int InvalidFixturesCount => Detail?.InvalidFixtures?.Count ?? 0;
-
-    public int StoredTestsCount => ValidFixturesCount + InvalidFixturesCount;
-
-    public LifecycleTagViewModel? StateTag =>
-        Detail is null ? null : LifecycleTagViewModel.From(Detail.State.Name);
-
-    public string AcceptsTrafficDisplay =>
-        Detail?.CanAcceptTraffic == true
-            ? "Yes (public submissions permitted)"
-            : "No";
-
-    public string EffectiveFromDisplay =>
-        Detail?.EffectiveFromUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Unscheduled";
-
-    public string EffectiveToDisplay =>
-        Detail?.EffectiveToUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Open-ended";
-
-    public bool HasIdentifierConfig => Detail?.IdentifierConfig is not null;
-
-    public bool NoIdentifierConfig => !HasIdentifierConfig;
-
-    public string IdentifierType => Detail?.IdentifierConfig?.Type ?? string.Empty;
-
-    public string IdentifierPointerDisplay => Detail?.IdentifierConfig?.JsonPointer ?? "none";
-
-    public string IdentifierRequiredDisplay =>
-        Detail?.IdentifierConfig?.Required switch
+    public string BackToSchemaUrl
+    {
+        get
         {
-            true => "Yes",
-            false => "No",
-            null => "Default"
-        };
+            return Detail is null ? AppRoutes.AdminUi.Dashboard : AppRoutes.AdminUi.SchemaVersions(Detail.SchemaName);
+        }
+    }
 
-    public bool HasLastTestRun => Detail?.LastTestRunAtUtc.HasValue == true;
+    public bool CanModifyLifecycle
+    {
+        get
+        {
+            return Detail is not null &&
+                   !string.Equals(Detail.State.Name, "Retired", StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
-    public string LastTestRunTagText =>
-        Detail?.LastTestRunPassed == true ? "Passed" : "Failed";
+    public string ScheduleUrl
+    {
+        get
+        {
+            return Detail is null
+                ? string.Empty
+                : AppRoutes.AdminUi.SchemaSchedule(Detail.SchemaName, Detail.Version);
+        }
+    }
 
-    public string LastTestRunTagCssClass =>
-        Detail?.LastTestRunPassed == true
-            ? "govuk-tag govuk-tag--green"
-            : "govuk-tag govuk-tag--red";
+    public string TestsUrl
+    {
+        get
+        {
+            return Detail is null
+                ? string.Empty
+                : AppRoutes.AdminUi.SchemaTests(Detail.SchemaName, Detail.Version);
+        }
+    }
 
-    public string LastTestRunTimestampDisplay =>
-        Detail?.LastTestRunAtUtc is { } atUtc
-            ? $"({atUtc:yyyy-MM-dd HH:mm} UTC)"
-            : string.Empty;
+    public string RunTestsActionUrl
+    {
+        get
+        {
+            return Detail is null
+                ? string.Empty
+                : AppRoutes.AdminUi.SchemaTestsRun(Detail.SchemaName, Detail.Version);
+        }
+    }
 
-    public string Sha256Hash => Detail?.Sha256Hash ?? string.Empty;
+    public int ValidFixturesCount
+    {
+        get { return Detail?.ValidFixtures?.Count ?? 0; }
+    }
 
-    public string CreatedAtDisplay =>
-        Detail?.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? string.Empty;
+    public int InvalidFixturesCount
+    {
+        get { return Detail?.InvalidFixtures?.Count ?? 0; }
+    }
 
-    public FieldsViewerViewModel FieldsViewer =>
-        _fieldsViewer ??= FieldsViewerViewModel.From(Detail?.Fields);
+    public int StoredTestsCount
+    {
+        get { return ValidFixturesCount + InvalidFixturesCount; }
+    }
+
+    public LifecycleTagViewModel? StateTag
+    {
+        get { return Detail is null ? null : LifecycleTagViewModel.From(Detail.State.Name); }
+    }
+
+    public string AcceptsTrafficDisplay
+    {
+        get
+        {
+            return Detail?.CanAcceptTraffic == true
+                ? "Yes (public submissions permitted)"
+                : "No";
+        }
+    }
+
+    public string EffectiveFromDisplay
+    {
+        get { return Detail?.EffectiveFromUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Unscheduled"; }
+    }
+
+    public string EffectiveToDisplay
+    {
+        get { return Detail?.EffectiveToUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Open-ended"; }
+    }
+
+    public bool HasIdentifierConfig
+    {
+        get { return Detail?.IdentifierConfig is not null; }
+    }
+
+    public bool NoIdentifierConfig
+    {
+        get { return !HasIdentifierConfig; }
+    }
+
+    public string IdentifierType
+    {
+        get { return Detail?.IdentifierConfig?.Type ?? string.Empty; }
+    }
+
+    public string IdentifierPointerDisplay
+    {
+        get { return Detail?.IdentifierConfig?.JsonPointer ?? "none"; }
+    }
+
+    public string IdentifierRequiredDisplay
+    {
+        get
+        {
+            return Detail?.IdentifierConfig?.Required switch
+            {
+                true => "Yes",
+                false => "No",
+                null => "Default"
+            };
+        }
+    }
+
+    public bool HasLastTestRun
+    {
+        get { return Detail?.LastTestRunAtUtc.HasValue == true; }
+    }
+
+    public string LastTestRunTagText
+    {
+        get { return Detail?.LastTestRunPassed == true ? "Passed" : "Failed"; }
+    }
+
+    public string LastTestRunTagCssClass
+    {
+        get
+        {
+            return Detail?.LastTestRunPassed == true
+                ? "govuk-tag govuk-tag--green"
+                : "govuk-tag govuk-tag--red";
+        }
+    }
+
+    public string LastTestRunTimestampDisplay
+    {
+        get
+        {
+            return Detail?.LastTestRunAtUtc is { } atUtc
+                ? $"({atUtc:yyyy-MM-dd HH:mm} UTC)"
+                : string.Empty;
+        }
+    }
+
+    public string Sha256Hash
+    {
+        get { return Detail?.Sha256Hash ?? string.Empty; }
+    }
+
+    public string CreatedAtDisplay
+    {
+        get { return Detail?.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? string.Empty; }
+    }
+
+    public FieldsViewerViewModel FieldsViewer
+    {
+        get { return _fieldsViewer ??= FieldsViewerViewModel.From(Detail?.Fields); }
+    }
+
     private FieldsViewerViewModel? _fieldsViewer;
 
-    public QualityRulesViewerViewModel QualityRulesViewer =>
-        _qualityRulesViewer ??= QualityRulesViewerViewModel.From(Detail?.QualityRules);
+    public QualityRulesViewerViewModel QualityRulesViewer
+    {
+        get { return _qualityRulesViewer ??= QualityRulesViewerViewModel.From(Detail?.QualityRules); }
+    }
+
     private QualityRulesViewerViewModel? _qualityRulesViewer;
 
-    public bool HasRawJsonSchema => !string.IsNullOrWhiteSpace(Detail?.RawJsonSchema);
+    public bool HasRawJsonSchema
+    {
+        get { return !string.IsNullOrWhiteSpace(Detail?.RawJsonSchema); }
+    }
 
-    public string RawJsonSchema => Detail?.RawJsonSchema ?? string.Empty;
+    public string RawJsonSchema
+    {
+        get { return Detail?.RawJsonSchema ?? string.Empty; }
+    }
 }

@@ -110,8 +110,10 @@ public static class PayloadIdentifierExtractor
             ValidationError: new ValidationError($"#{pointer}", message));
     }
 
-    private static string FormatPointer(string? rawPath) =>
-        SchemaIdentifierConfig.TryParsePointerSegments(rawPath, out var segments)
+    private static string FormatPointer(string? rawPath)
+    {
+        return SchemaIdentifierConfig.TryParsePointerSegments(rawPath, out var segments)
             ? SchemaIdentifierConfig.ToJsonPointer(segments)
             : "/urn";
+    }
 }

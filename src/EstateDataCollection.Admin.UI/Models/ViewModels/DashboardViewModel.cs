@@ -11,41 +11,81 @@ public sealed record DashboardViewModel(
     Error? PageError = null,
     RunSchemaTestsResult? TestRunResult = null)
 {
-    public int TotalSchemas => Schemas.Count;
+    public int TotalSchemas
+    {
+        get { return Schemas.Count; }
+    }
 
-    public int TotalVersions => Schemas.Sum(s => s.Versions.Count);
+    public int TotalVersions
+    {
+        get { return Schemas.Sum(s => s.Versions.Count); }
+    }
 
-    public int ActiveVersions => Schemas.Count(s => s.ActiveVersion.HasValue);
+    public int ActiveVersions
+    {
+        get { return Schemas.Count(s => s.ActiveVersion.HasValue); }
+    }
 
-    public int ValidatedUnscheduledCount =>
-        Schemas
-            .SelectMany(s => s.Versions)
-            .Count(v => string.Equals(v.State.Name, "Validated", StringComparison.OrdinalIgnoreCase));
+    public int ValidatedUnscheduledCount
+    {
+        get
+        {
+            return Schemas
+                .SelectMany(s => s.Versions)
+                .Count(v => string.Equals(v.State.Name, "Validated", StringComparison.OrdinalIgnoreCase));
+        }
+    }
 
-    public NotificationBannerViewModel? SuccessBannerModel =>
-        NotificationBannerViewModel.Success(SuccessBanner);
+    public NotificationBannerViewModel? SuccessBannerModel
+    {
+        get { return NotificationBannerViewModel.Success(SuccessBanner); }
+    }
 
-    public NotificationBannerViewModel? ValidatedUnscheduledBannerModel =>
-        ValidatedUnscheduledCount > 0
-            ? NotificationBannerViewModel.Info(
-                message: $"{ValidatedUnscheduledCount} validated schema version(s) are currently unscheduled.",
-                title: "New version(s) ready to schedule",
-                detail: "Contracts promoted from draft-schemas or submitted via the workbench remain in Validated state until you configure an effective window or activate them.")
-            : null;
+    public NotificationBannerViewModel? ValidatedUnscheduledBannerModel
+    {
+        get
+        {
+            return ValidatedUnscheduledCount > 0
+                ? NotificationBannerViewModel.Info(
+                    message: $"{ValidatedUnscheduledCount} validated schema version(s) are currently unscheduled.",
+                    title: "New version(s) ready to schedule",
+                    detail:
+                    "Contracts promoted from draft-schemas or submitted via the workbench remain in Validated state until you configure an effective window or activate them.")
+                : null;
+        }
+    }
 
-    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);
+    public ErrorSummaryViewModel? ErrorSummary
+    {
+        get { return ErrorSummaryViewModel.From(PageError); }
+    }
 
-    public bool HasTestRunResult => TestRunResult is not null;
+    public bool HasTestRunResult
+    {
+        get { return TestRunResult is not null; }
+    }
 
-    public DashboardTestRunSummaryViewModel? TestRunSummary =>
-        _testRunSummary ??= DashboardTestRunSummaryViewModel.From(TestRunResult);
+    public DashboardTestRunSummaryViewModel? TestRunSummary
+    {
+        get { return _testRunSummary ??= DashboardTestRunSummaryViewModel.From(TestRunResult); }
+    }
+
     private DashboardTestRunSummaryViewModel? _testRunSummary;
 
-    public bool HasSchemas => Schemas.Count > 0;
+    public bool HasSchemas
+    {
+        get { return Schemas.Count > 0; }
+    }
 
-    public bool NoSchemas => Schemas.Count == 0;
+    public bool NoSchemas
+    {
+        get { return Schemas.Count == 0; }
+    }
 
-    public IReadOnlyList<SchemaSectionCardViewModel> SchemaCards =>
-        _schemaCards ??= Schemas.Select(s => SchemaSectionCardViewModel.From(s)).ToList();
+    public IReadOnlyList<SchemaSectionCardViewModel> SchemaCards
+    {
+        get { return _schemaCards ??= Schemas.Select(s => SchemaSectionCardViewModel.From(s)).ToList(); }
+    }
+
     private IReadOnlyList<SchemaSectionCardViewModel>? _schemaCards;
 }

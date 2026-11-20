@@ -2,6 +2,7 @@ using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -24,7 +25,7 @@ public sealed class GetAdminSchemaVersionDetailEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Get),
-            Route = "api/schemas/{schemaName}/versions/{version:int}")]
+            Route = AppRoutes.AdminApi.Templates.SchemaVersionDetail)]
         HttpRequest http,
         string schemaName,
         int version,

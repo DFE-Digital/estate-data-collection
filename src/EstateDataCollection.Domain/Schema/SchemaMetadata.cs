@@ -79,34 +79,55 @@ public class SchemaMetadata
     /// <summary>
     /// Can this schema accept any traffic? (Active versions and Deprecated versions in grace period)
     /// </summary>
-    public bool CanAcceptTraffic => State is SchemaLifecycleState.Active or SchemaLifecycleState.Deprecated;
+    public bool CanAcceptTraffic
+    {
+        get { return State is SchemaLifecycleState.Active or SchemaLifecycleState.Deprecated; }
+    }
 
     /// <summary>
     /// Is this schema version visible in the public discovery API?
     /// </summary>
-    public bool IsPubliclyVisible => State is SchemaLifecycleState.Active
-        or SchemaLifecycleState.Scheduled
-        or SchemaLifecycleState.Deprecated;
+    public bool IsPubliclyVisible
+    {
+        get
+        {
+            return State is SchemaLifecycleState.Active
+                or SchemaLifecycleState.Scheduled
+                or SchemaLifecycleState.Deprecated;
+        }
+    }
 
     /// <summary>
     /// Is this eligible to be the default version when no explicit version is requested?
     /// </summary>
-    public bool CanBeDefault => State is SchemaLifecycleState.Active;
+    public bool CanBeDefault
+    {
+        get { return State is SchemaLifecycleState.Active; }
+    }
 
     /// <summary>
     /// Can the schema definition still be edited or overwritten?
     /// </summary>
-    public bool IsMutable => State is SchemaLifecycleState.Draft;
+    public bool IsMutable
+    {
+        get { return State is SchemaLifecycleState.Draft; }
+    }
 
     /// <summary>
     /// Can dry-run test payloads be executed against this schema?
     /// </summary>
-    public bool AllowsDryRun => State is SchemaLifecycleState.Draft or SchemaLifecycleState.Validated;
+    public bool AllowsDryRun
+    {
+        get { return State is SchemaLifecycleState.Draft or SchemaLifecycleState.Validated; }
+    }
 
     /// <summary>
     /// Can the schema be used
     /// </summary>
-    public bool IsRetired => State is SchemaLifecycleState.Retired;
+    public bool IsRetired
+    {
+        get { return State is SchemaLifecycleState.Retired; }
+    }
 
     #endregion
 
@@ -129,17 +150,21 @@ public class SchemaMetadata
     /// Determines whether this schema version can accept new submissions at the specified timestamp
     /// (either currently within its active window or in Deprecated grace period).
     /// </summary>
-    public bool CanAcceptTrafficAt(DateTimeOffset timestamp) =>
-        IsActiveAt(timestamp) || State == SchemaLifecycleState.Deprecated;
+    public bool CanAcceptTrafficAt(DateTimeOffset timestamp)
+    {
+        return IsActiveAt(timestamp) || State == SchemaLifecycleState.Deprecated;
+    }
 
     /// <summary>
     /// Resolves the effective lifecycle state at the given timestamp
     /// (transitions a Scheduled schema whose EffectiveFromUtc has arrived into Active).
     /// </summary>
-    public SchemaLifecycleState GetEffectiveStateAt(DateTimeOffset timestamp) =>
-        State == SchemaLifecycleState.Scheduled && IsActiveAt(timestamp)
+    public SchemaLifecycleState GetEffectiveStateAt(DateTimeOffset timestamp)
+    {
+        return State == SchemaLifecycleState.Scheduled && IsActiveAt(timestamp)
             ? SchemaLifecycleState.Active
             : State;
+    }
 
     /// <summary>
     /// Marks the schema as structurally validated and promoted to the schemas registry,

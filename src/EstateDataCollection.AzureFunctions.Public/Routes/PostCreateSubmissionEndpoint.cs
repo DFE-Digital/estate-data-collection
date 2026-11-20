@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Submissions.CreateSubmission;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -23,7 +24,7 @@ public sealed class PostCreateSubmissionEndpoint(
     [Function(EndpointName)]
     public Task<IActionResult> HandleAsync(
         [HttpTrigger(AuthorizationLevel.Function, nameof(HttpMethods.Post),
-            Route = "submissions/{schemeName}")]
+            Route = AppRoutes.PublicApi.Templates.CreateSubmission)]
         HttpRequest http,
         string schemeName,
         CancellationToken cancellationToken)

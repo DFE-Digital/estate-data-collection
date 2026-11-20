@@ -7,15 +7,18 @@ namespace EstateDataCollection.Application.UseCases.Submissions.Audit;
 
 internal static class SubmissionAuditRecorder
 {
-    public static int MapHttpStatus(ErrorType errorType) => errorType switch
+    public static int MapHttpStatus(ErrorType errorType)
     {
-        ErrorType.Validation => 422,
-        ErrorType.NotFound => 404,
-        ErrorType.Conflict => 409,
-        ErrorType.Unauthorized => 401,
-        ErrorType.Forbidden => 403,
-        _ => 500
-    };
+        return errorType switch
+        {
+            ErrorType.Validation => 422,
+            ErrorType.NotFound => 404,
+            ErrorType.Conflict => 409,
+            ErrorType.Unauthorized => 401,
+            ErrorType.Forbidden => 403,
+            _ => 500
+        };
+    }
 
     public static async Task SafeAppendAsync(
         ISubmissionAuditStore? auditStore,

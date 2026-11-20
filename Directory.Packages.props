@@ -37,6 +37,8 @@
     <PackageVersion Include="JsonLogic" Version="5.3.0" />
     <PackageVersion Include="Celly" Version="1.2.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
+    <!-- Admin UI Build Tooling -->
+    <PackageVersion Include="Microsoft.TypeScript.MSBuild" Version="7.0.1" />
     <!-- Testing & Assertions -->
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
     <PackageVersion Include="Bogus" Version="35.6.5" />

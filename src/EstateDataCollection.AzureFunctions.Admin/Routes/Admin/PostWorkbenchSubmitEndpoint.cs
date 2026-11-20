@@ -5,6 +5,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +23,7 @@ public sealed class PostWorkbenchSubmitEndpoint(
 
     [Function(EndpointName)]
     public async Task<IActionResult> HandleAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post), Route = "manage/workbench/submit")]
+        [HttpTrigger(AuthorizationLevel.Anonymous, nameof(HttpMethods.Post), Route = AppRoutes.AdminUi.Templates.WorkbenchSubmit)]
         HttpRequest http,
         CancellationToken cancellationToken)
     {
@@ -65,7 +66,10 @@ public sealed class PostWorkbenchSubmitEndpoint(
 
         InstrumentCompleted(EndpointName, StatusCodes.Status302Found);
         return new RedirectResult(
-            $"/manage/schemas/{Uri.EscapeDataString(submitResult.Value.SchemaName)}/{submitResult.Value.Version}/details?notice=submitted",
+            AppRoutes.AdminUi.SchemaDetail(
+                submitResult.Value.SchemaName,
+                submitResult.Value.Version,
+                notice: "submitted"),
             permanent: false);
     }
 }

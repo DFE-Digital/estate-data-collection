@@ -438,13 +438,15 @@ public sealed partial class BlobSchemaRegistry(
         IReadOnlyList<string> sampleValidPayloads,
         IReadOnlyList<string> sampleInvalidPayloads,
         CancellationToken cancellationToken = default)
-        => VerifyCandidateSchemaCoreAsync(
+    {
+        return VerifyCandidateSchemaCoreAsync(
             rawSchemaJson,
             rawRulesJson,
             sampleValidPayloads,
             sampleInvalidPayloads,
             identifierConfig: null,
             cancellationToken);
+    }
 
     public Task<Result<SchemaVerificationResult>> VerifyCanditateSchemaAsync(
         string? rawSchemaJson,
@@ -453,13 +455,15 @@ public sealed partial class BlobSchemaRegistry(
         IReadOnlyList<string> sampleInvalidPayloads,
         SchemaIdentifierConfig? identifierConfig,
         CancellationToken cancellationToken = default)
-        => VerifyCandidateSchemaCoreAsync(
+    {
+        return VerifyCandidateSchemaCoreAsync(
             rawSchemaJson,
             rawRulesJson,
             sampleValidPayloads,
             sampleInvalidPayloads,
             identifierConfig,
             cancellationToken);
+    }
 
     private async Task<Result<SchemaVerificationResult>> VerifyCandidateSchemaCoreAsync(
         string? rawSchemaJson,

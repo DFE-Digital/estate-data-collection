@@ -6,6 +6,7 @@ using EstateDataCollection.Application;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
 using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.AzureFunctions.Public.Routes;
+using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Events;
@@ -155,19 +156,63 @@ public class FunctionEndpointAndEventArchitectureTests
         foreach (var trigger in triggers)
         {
             var route = trigger.Route ?? string.Empty;
-            if (route.StartsWith("api/", StringComparison.Ordinal))
+            if (route.StartsWith($"{AppRoutes.AdminApi.Prefix}/", StringComparison.Ordinal))
             {
                 trigger.AuthLevel.Should().Be(AuthorizationLevel.Function, $"API route '{route}' should require Function auth level.");
             }
-            else if (route.StartsWith("manage", StringComparison.Ordinal) || route.StartsWith("assets/", StringComparison.Ordinal))
+            else if (route.StartsWith(AppRoutes.AdminUi.Prefix, StringComparison.Ordinal) ||
+                     route.StartsWith($"{AppRoutes.Assets.Prefix}/", StringComparison.Ordinal))
             {
                 trigger.AuthLevel.Should().Be(AuthorizationLevel.Anonymous, $"UI route '{route}' should allow browser navigation.");
             }
             else
             {
-                Assert.Fail($"Unexpected Admin host route '{route}'. Expected 'api/...', 'manage...', or 'assets/...'.");
+                Assert.Fail($"Unexpected Admin host route '{route}'. Expected '{AppRoutes.AdminApi.Prefix}/...', '{AppRoutes.AdminUi.Prefix}...', or '{AppRoutes.Assets.Prefix}/...'.");
             }
         }
+    }
+
+    [Fact]
+    public void Every_HttpTrigger_Route_Should_Be_Declared_In_AppRoutes_Templates()
+    {
+        var adminTemplates = GetTemplateConstants(
+            typeof(AppRoutes.AdminUi.Templates),
+            typeof(AppRoutes.AdminApi.Templates),
+            typeof(AppRoutes.Assets.Templates));
+        var publicTemplates = GetTemplateConstants(typeof(AppRoutes.PublicApi.Templates));
+
+        foreach (var (endpointType, trigger) in GetTriggers(typeof(GetAdminSchemasEndpoint).Assembly))
+        {
+            trigger.Route.Should().NotBeNullOrWhiteSpace($"{endpointType.Name} must declare a non-empty route.");
+            adminTemplates.Should().Contain(trigger.Route!, $"{endpointType.Name} route must come from AppRoutes.");
+        }
+
+        foreach (var (endpointType, trigger) in GetTriggers(typeof(GetSchemasEndpoint).Assembly))
+        {
+            trigger.Route.Should().NotBeNullOrWhiteSpace($"{endpointType.Name} must declare a non-empty route.");
+            publicTemplates.Should().Contain(trigger.Route!, $"{endpointType.Name} route must come from AppRoutes.PublicApi.Templates.");
+        }
+    }
+
+    private static HashSet<string> GetTemplateConstants(params Type[] templateTypes)
+    {
+        return templateTypes
+            .SelectMany(t => t.GetFields(BindingFlags.Public | BindingFlags.Static))
+            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+            .Select(f => (string)f.GetRawConstantValue()!)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static List<(Type EndpointType, HttpTriggerAttribute Trigger)> GetTriggers(Assembly hostAssembly)
+    {
+        return hostAssembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(IFunctionEndpoint).IsAssignableFrom(t))
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .SelectMany(m => m.GetParameters())
+                .Select(p => p.GetCustomAttribute<HttpTriggerAttribute>())
+                .Where(a => a is not null)
+                .Select(a => (t, a!)))
+            .ToList();
     }
 
     private static IConfiguration BuildBaseConfiguration()
