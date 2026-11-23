@@ -16,15 +16,15 @@ The EDC platform operates on **Azure Functions v4 (Isolated Worker Model)** targ
 │ GitHub Actions / Azure CLI                                             │
 │   │                                                                    │
 │   ├──> Run 227 automated tests (Unit + isolated Azurite Integration)   │
-│   ├──> dotnet publish -c Release -r linux-x64 --self-contained true     │
+│   ├──> dotnet publish -c Release -r linux-x64 --self-contained true    │
 │   ├──> Exclude local.settings.json, *.http, *.pdb                      │
-│   └──> Package Public & Admin Linux x64 zips      │
+│   └──> Package Public & Admin Linux x64 zips                           │
 │                                                                        │
 │ Azure Cloud (Flex Consumption / Linux)                                 │
 │   │                                                                    │
 │   ├──> Azure App Service Zip Deploy (az functionapp deployment source) │
 │   ├──> Entra ID OIDC CI/CD + Easy Auth for Admin Portal (/manage/*)    │
-│   └──> Managed Identity accessing schemas, draft-schemas, payloads,     │
+│   └──> Managed Identity accessing schemas, draft-schemas, payloads,    │
 │        and processed Blob Storage containers                           │
 └────────────────────────────────────────────────────────────────────────┘
 ```
@@ -44,13 +44,11 @@ The EDC platform operates on **Azure Functions v4 (Isolated Worker Model)** targ
 
 The platform is partitioned into three distinct Azure environments (plus optional `uat` in SHA dispatches):
 
-| Environment | Purpose | Azure Resource Group | Function App Variables | Deployment Gate |
-| :--- | :--- | :--- | :--- | :--- |
-| **Development** | Integration testing & active development | `rg-edc-dev-uksouth` | `AZURE_PUBLIC_FUNCTION_APP_NAME`<br/>`AZURE_ADMIN_FUNCTION_APP_NAME` | Automated on merge to `main` |
-| **Test** | QA, automated integration, stakeholder sign-off | `rg-edc-test-uksouth` | `AZURE_PUBLIC_FUNCTION_APP_NAME`<br/>`AZURE_ADMIN_FUNCTION_APP_NAME` | Automated promotion after Dev verification |
-| **Production** | Live operational workload | `rg-edc-prod-uksouth` | `AZURE_PUBLIC_FUNCTION_APP_NAME`<br/>`AZURE_ADMIN_FUNCTION_APP_NAME` | **Manual Review Required** (GitHub Environment Gate) |
-
-*(Note: `cd-main.yml` and `deploy-by-sha.yml` fall back to `AZURE_FUNCTION_APP_NAME` if `AZURE_PUBLIC_FUNCTION_APP_NAME` is not set.)*
+| Environment | Purpose | Deployment Gate |
+| :--- | :--- | :--- 
+| **Development** | Integration testing & active development | Automated on merge to `main` |
+| **Test** | QA, automated integration, stakeholder sign-off |  Automated promotion after Dev verification |
+| **Production** | Live operational workload | **Manual Review Required** (GitHub Environment Gate) |
 
 ---
 
@@ -151,9 +149,9 @@ Deployments authenticate via **OpenID Connect (OIDC)** federated credentials—n
 | **Secret** | `AZURE_CLIENT_ID` | `00000000-0000-0000-0000-000000000000` | Entra ID App (Client) ID |
 | **Secret** | `AZURE_TENANT_ID` | `00000000-0000-0000-0000-000000000000` | Entra ID Tenant ID |
 | **Secret** | `AZURE_SUBSCRIPTION_ID` | `00000000-0000-0000-0000-000000000000` | Target Azure Subscription ID |
-| **Variable** | `AZURE_RESOURCE_GROUP` | `rg-edc-prod-uksouth` | Azure Resource Group name |
-| **Variable** | `AZURE_PUBLIC_FUNCTION_APP_NAME` | `func-edc-public-prod-uksouth` | Public Function App name |
-| **Variable** | `AZURE_ADMIN_FUNCTION_APP_NAME` | `func-edc-admin-prod-uksouth` | Admin Function App name |
+| **Variable** | `AZURE_RESOURCE_GROUP` | `rg-edc-prod` | Azure Resource Group name |
+| **Variable** | `AZURE_PUBLIC_FUNCTION_APP_NAME` | `func-edc-public-prod` | Public Function App name |
+| **Variable** | `AZURE_ADMIN_FUNCTION_APP_NAME` | `func-edc-admin-prod` | Admin Function App name |
 
 ### 3. Admin Portal Authentication (Microsoft Entra ID / Easy Auth)
 
@@ -170,8 +168,8 @@ Configure these settings on Azure Function Apps (double underscore `__` represen
 | Setting Name | Scope | Purpose | Example / Default |
 | :--- | :--- | :--- | :--- |
 | `ASPNETCORE_ENVIRONMENT` | All | Environment profile | `Development` / `Test` / `Production` |
-| `ConnectionStrings__BlobStorage` or `BlobStorageOptions__ServiceUri` | Public, Admin | Storage account connection string or Managed Identity blob endpoint | `https://stedc<env>uksouth.blob.core.windows.net` |
-| `AZURE_APPCONFIGURATION_ENDPOINT` | Public, Admin | Optional Azure App Configuration endpoint | `https://appcs-edc-<env>.azconfig.io` |
+| `ConnectionStrings__BlobStorage` or `BlobStorageOptions__ServiceUri` | Public, Admin | Storage account connection string or Managed Identity blob endpoint | `https://<resource>.blob.core.windows.net` |
+| `AZURE_APPCONFIGURATION_ENDPOINT` | Public, Admin | Optional Azure App Configuration endpoint | `https://<resource>.azconfig.io` |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | All | Azure Application Insights telemetry | `InstrumentationKey=...` |
 | `Blob__Schema__ContainerName` | Public, Admin | Registered contracts, rules, fixtures & metadata container | `schemas` |
 | `Blob__Schema__DraftContainerName` | Admin | Event Grid-watched draft dropzone container | `draft-schemas` |
