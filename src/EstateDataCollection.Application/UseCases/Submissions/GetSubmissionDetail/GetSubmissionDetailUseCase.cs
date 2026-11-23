@@ -96,6 +96,8 @@ public sealed class GetSubmissionDetailUseCase(
                 if (schemaResult.IsSuccess)
                 {
                     var errors = new List<ValidationError>();
+                    PayloadIdentifierExtractor.ExtractionEvaluation? idEval = null;
+
                     if (validationService is not null)
                     {
                         var combined = await validationService.ValidatePayloadWithTraceAsync(
@@ -107,6 +109,7 @@ public sealed class GetSubmissionDetailUseCase(
                         if (combined.IsSuccess)
                         {
                             errors.AddRange(combined.Value.Errors);
+                            idEval = combined.Value.IdentifierEvaluation;
                         }
                         else
                         {
@@ -125,7 +128,7 @@ public sealed class GetSubmissionDetailUseCase(
                         }
                     }
 
-                    var idEval = PayloadIdentifierExtractor.Evaluate(mergedDraftPayload, schemaResult.Value, _options);
+                    idEval ??= PayloadIdentifierExtractor.Evaluate(mergedDraftPayload, schemaResult.Value, _options);
                     if (!idEval.IsValid && idEval.ValidationError is not null &&
                         !errors.Any(e => string.Equals(e.PropertyPath, idEval.ValidationError.PropertyPath, StringComparison.OrdinalIgnoreCase)))
                     {

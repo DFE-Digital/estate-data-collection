@@ -1,11 +1,9 @@
 using AwesomeAssertions;
 using EstateDataCollection.Admin.UI.Models;
 using EstateDataCollection.Admin.UI.Models.ViewModels;
-using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionDetail;
-using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatistics;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissions;
-using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
+using EstateDataCollection.Tests.Common.Builders;
 using Xunit;
 
 namespace EstateDataCollection.Tests.Unit.AdminUi;
@@ -22,27 +20,33 @@ public sealed class SubmissionViewModelPresentationTests
     {
         var id = Guid.NewGuid();
         var now = new DateTimeOffset(2026, 11, 20, 10, 0, 0, TimeSpan.Zero);
-        var summary = new SubmissionSummary(
-            id, "cdc_survey", 2, now, null, now, false, "Draft", 104521, "URN", "104521",
-            true, 2, now, 3, "CheckSubmission", "ReadyToFinalise", 200, now);
+        var summary = new SubmissionSummaryBuilder()
+            .WithId(id)
+            .WithSchema("cdc_survey", 2)
+            .CreatedAt(now)
+            .LastActivityAt(now)
+            .WithUrn(104521)
+            .WithDrafts(count: 2, lastDraftAtUtc: now)
+            .WithLastAudit("CheckSubmission", "ReadyToFinalise", 200, now, totalEvents: 3)
+            .Build();
 
-        var statsResult = new GetSubmissionStatisticsResult(
-            TotalSubmissions: 1,
-            DraftSubmissions: 1,
-            DraftWithPayloadSubmissions: 1,
-            EmptyDraftSubmissions: 0,
-            FinalisedSubmissions: 0,
-            SubmissionsLast24Hours: 1,
-            SubmissionsLast7Days: 1,
-            TotalDraftChunks: 2,
-            TotalAuditEvents: 3,
-            FinalisationRatePercent: 0,
-            SchemaStatistics:
-            [
-                new("cdc_survey", 2, "Active", 1, 1, 1, 0, 0, 2, 3, 0, now)
-            ],
-            RecentSubmissions: [summary],
-            AvailableSchemaNames: ["cdc_survey"]);
+        var statsResult = new GetSubmissionStatisticsResultBuilder()
+            .WithSubmissionCounts(total: 1, draft: 1, draftWithPayload: 1, emptyDraft: 0, finalised: 0)
+            .WithRecentActivity(last24Hours: 1, last7Days: 1)
+            .WithArtifactTotals(totalDraftChunks: 2, totalAuditEvents: 3)
+            .WithSchemaStatistic(
+                "cdc_survey",
+                version: 2,
+                state: "Active",
+                totalSubmissions: 1,
+                draftSubmissions: 1,
+                draftWithPayloadSubmissions: 1,
+                totalDraftChunks: 2,
+                totalAuditEvents: 3,
+                lastActivityAtUtc: now)
+            .WithRecentSubmission(summary)
+            .WithAvailableSchemas("cdc_survey")
+            .Build();
 
         var statsVm = new StatisticsViewModel(CreateMeta("statistics"), statsResult);
         statsVm.Page.StatisticsNavLinkCssClass.Should().Contain("dfe-service-nav__link--active");
@@ -65,34 +69,22 @@ public sealed class SubmissionViewModelPresentationTests
         session.AssignUrn(123456);
         var now = DateTimeOffset.UtcNow;
 
-        var detail = new GetSubmissionDetailResult(
-            Session: session,
-            RawSessionJson: """{"submissionId":"1"}""",
-            DraftItems: [new SubmissionDraftItem($"{session.SubmissionId}/drafts/01.json", now, """{"urn":123456}""", 14)],
-            MergedDraftPayloadJson: """{"urn":123456}""",
-            ProcessedArtifact: null,
-            IsReadyToFinalise: false,
-            PendingErrors: [new ValidationError("#/school_name", "Required", "REQ-1")],
-            NextSteps: ["Resolve [REQ-1] #/school_name: Required"],
-            NextStepsSummary: "1 pending issue",
-            ResolvedIdentifierType: "URN",
-            ResolvedIdentifierValue: "123456",
-            ResolvedUrn: 123456,
-            AuditEntries:
-            [
-                new SubmissionAuditEntry
-                {
-                    EventId = Guid.CreateVersion7(),
-                    TimestampUtc = now,
-                    SubmissionId = session.SubmissionId,
-                    Action = "CheckSubmission",
-                    Outcome = new SubmissionAuditOutcome { Status = "DraftPendingErrors", HttpStatus = 200 },
-                    ProcessesConsumed =
-                    [
-                        new SubmissionProcessExecution { ProcessName = "DraftPayloadMerger", Engine = "rfc7396-json-merge", Outcome = "Succeeded", DurationMs = 2, ItemCount = 1, Summary = "Merged 1 chunk" }
-                    ]
-                }
-            ]);
+        var detail = new GetSubmissionDetailResultBuilder()
+            .WithSession(session)
+            .WithDraftItem($"{session.SubmissionId}/drafts/01.json", """{"urn":123456}""", now, sizeBytes: 14)
+            .WithMergedDraftPayload("""{"urn":123456}""")
+            .ReadyToFinalise(false)
+            .WithPendingError("#/school_name", "Required", "REQ-1")
+            .WithNextSteps("1 pending issue", "Resolve [REQ-1] #/school_name: Required")
+            .WithIdentifier("URN", "123456", urn: 123456)
+            .WithAuditEntry(entry => entry
+                .WithTimestamp(now)
+                .WithAction("CheckSubmission")
+                .WithOutcome("DraftPendingErrors", 200)
+                .WithProcess(
+                    SubmissionProcessCatalog.DraftPayloadMerger,
+                    p => p.WithDurationMs(2).WithItemCount(1).WithSummary("Merged 1 chunk")))
+            .Build();
 
         var vm = new SubmissionDetailViewModel(CreateMeta("submissions"), detail);
 

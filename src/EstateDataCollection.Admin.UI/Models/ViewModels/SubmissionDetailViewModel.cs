@@ -3,47 +3,9 @@ using System.Text.Json;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionDetail;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Domain.Submission;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
-
-public sealed record SubmissionDraftChunkViewModel(
-    int Index,
-    string BlobName,
-    string ShortBlobName,
-    string CreatedAtDisplay,
-    string SizeDisplay,
-    string FormattedJson);
-
-public sealed record AuditProcessRowViewModel(
-    string ProcessName,
-    string EngineDisplay,
-    string OutcomeText,
-    string OutcomeTagCssClass,
-    string DurationDisplay,
-    string ItemCountDisplay,
-    string SummaryDisplay);
-
-public sealed record SubmissionAuditItemViewModel(
-    Guid EventId,
-    int SequenceNumber,
-    string TimestampDisplay,
-    string Action,
-    string OutcomeStatusText,
-    string OutcomeTagCssClass,
-    string HttpStatusDisplay,
-    bool HasMessage,
-    string Message,
-    bool HasErrorCode,
-    string ErrorCode,
-    bool HasTraceId,
-    string TraceId,
-    bool HasIdentifier,
-    string IdentifierDisplay,
-    IReadOnlyList<AuditProcessRowViewModel> Processes,
-    bool HasProcesses,
-    IReadOnlyList<ValidationErrorItemViewModel> ValidationIssues,
-    bool HasValidationIssues,
-    string RawAuditJson);
 
 public sealed record SubmissionDetailViewModel(
     AdminPageMeta Page,
@@ -342,18 +304,20 @@ public sealed record SubmissionDetailViewModel(
                     var processes = entry.ProcessesConsumed
                         .Select(p =>
                         {
-                            var procCss = p.Outcome.ToLowerInvariant() switch
+                            var procCss = p.Outcome switch
                             {
-                                "succeeded" => "govuk-tag govuk-tag--green",
-                                "skipped" or "missing" or "validationerrorsfound" => "govuk-tag govuk-tag--yellow",
-                                "failed" => "govuk-tag govuk-tag--red",
+                                SubmissionProcessOutcome.Succeeded => "govuk-tag govuk-tag--green",
+                                SubmissionProcessOutcome.Skipped
+                                    or SubmissionProcessOutcome.Missing
+                                    or SubmissionProcessOutcome.ValidationErrorsFound => "govuk-tag govuk-tag--yellow",
+                                SubmissionProcessOutcome.Failed => "govuk-tag govuk-tag--red",
                                 _ => "govuk-tag govuk-tag--grey"
                             };
 
                             return new AuditProcessRowViewModel(
                                 ProcessName: p.ProcessName,
                                 EngineDisplay: string.IsNullOrWhiteSpace(p.Engine) ? "—" : p.Engine,
-                                OutcomeText: p.Outcome,
+                                OutcomeText: p.Outcome.ToString(),
                                 OutcomeTagCssClass: procCss,
                                 DurationDisplay: $"{p.DurationMs} ms",
                                 ItemCountDisplay: p.ItemCount?.ToString(CultureInfo.InvariantCulture) ?? "—",

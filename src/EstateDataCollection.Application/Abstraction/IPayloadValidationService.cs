@@ -1,13 +1,8 @@
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common.Markers;
 using EstateDataCollection.Common.Results;
-using EstateDataCollection.Domain.Submission;
 
 namespace EstateDataCollection.Application.Abstraction;
-
-public sealed record PayloadValidationReport(
-    IReadOnlyList<ValidationError> Errors,
-    IReadOnlyList<SubmissionProcessExecution> ProcessesExecuted);
 
 public interface IPayloadValidationService : IApplication
 {

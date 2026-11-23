@@ -92,7 +92,12 @@ public sealed class SubmissionAuditUseCaseTests
         List<ValidationError> errs = [new ValidationError("$.urn", "Missing URN", "RULE-URN")];
         List<SubmissionProcessExecution> processes =
         [
-            new SubmissionProcessExecution { ProcessName = "JsonSchemaValidator", Engine = "json-schema", Outcome = "ValidationErrorsFound", DurationMs = 2, ItemCount = 1 }
+            new SubmissionProcessExecutionBuilder()
+                .For(SubmissionProcessCatalog.JsonSchemaValidator)
+                .WithOutcome(SubmissionProcessOutcome.ValidationErrorsFound)
+                .WithDurationMs(2)
+                .WithItemCount(1)
+                .Build()
         ];
         _validationService.ValidatePayloadWithTraceAsync(
                 SurveyPayloadFixtures.MissingUrnJson,

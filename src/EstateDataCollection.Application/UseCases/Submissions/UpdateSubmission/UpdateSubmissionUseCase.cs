@@ -1,9 +1,7 @@
-using System.Diagnostics;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Application.Validators;
-using EstateDataCollection.Common.Extensions;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,7 +16,8 @@ public class UpdateSubmissionUseCase(
     UpdateSubmissionUseCaseInstrumentation? instrumentation = null,
     IPayloadValidationService? validationService = null,
     ISubmissionAuditStore? auditStore = null,
-    IOptions<ValidationOptions>? validationOptions = null
+    IOptions<ValidationOptions>? validationOptions = null,
+    ProcessExecutionInstrumentation? processInstrumentation = null
 ) : IUseCase<UpdateSubmissionResult, UpdateSubmissionRequest>
 {
     private readonly UpdateSubmissionUseCaseInstrumentation _instrumentation =
@@ -31,10 +30,18 @@ public class UpdateSubmissionUseCase(
     {
         _instrumentation.UpdatingDraftPayload(request.SubmissionId);
 
-        var processes = new List<SubmissionProcessExecution>(7);
-        var sessionSw = Stopwatch.StartNew();
-        var session = await infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken);
-        sessionSw.Stop();
+        using var scope = SubmissionExecutionScope.Start(
+            "UpdateSubmission",
+            request.SubmissionId,
+            processInstrumentation,
+            auditStore,
+            initialCapacity: 8);
+
+        var session = await scope.ExecuteAsync(
+            SubmissionProcessCatalog.GetSession,
+            () => infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken),
+            loaded => new ProcessStepDetails(
+                Summary: loaded.IsFinalised ? "Session already finalised" : "Draft session loaded"));
 
         if (session.IsFailure)
         {
@@ -42,81 +49,59 @@ public class UpdateSubmissionUseCase(
             return session.Error;
         }
 
-        processes.Add(new SubmissionProcessExecution
-        {
-            ProcessName = "BlobStorage:GetSession",
-            Engine = "azure-blob",
-            Outcome = "Succeeded",
-            DurationMs = sessionSw.ElapsedMilliseconds,
-            Summary = session.Value.IsFinalised ? "Session already finalised" : "Draft session loaded"
-        });
-
         if (session.Value.IsFinalised)
         {
             _instrumentation.SubmissionAlreadyFinalised(request.SubmissionId);
-
             var finalisedErr = Error.Forbidden(ErrorCodes.SubmissionAlreadyFinalised);
-            await SubmissionAuditRecorder.SafeAppendAsync(
-                auditStore,
-                session.Value.SubmissionId,
-                "UpdateSubmission",
+
+            await scope.RecordErrorAuditAsync(
                 session.Value.SchemaName,
                 session.Value.SchemaVersion,
-                "Rejected",
-                403,
-                processes,
-                errorCode: finalisedErr.Code,
-                message: finalisedErr.Description,
+                finalisedErr,
+                outcomeStatus: "Rejected",
                 identifier: BuildIdentifier(session.Value.IdentifierType, session.Value.IdentifierValue, session.Value.Urn),
                 cancellationToken: cancellationToken);
 
             return finalisedErr;
         }
 
-        var schemaSw = Stopwatch.StartNew();
-        var schema = await registry.GetExplicitSchemaAsync(
-            session.Value.SchemaName,
-            session.Value.SchemaVersion,
-            cancellationToken);
-        schemaSw.Stop();
+        var schema = await scope.ExecuteAsync(
+            SubmissionProcessCatalog.SchemaResolution,
+            () => registry.GetExplicitSchemaAsync(
+                session.Value.SchemaName,
+                session.Value.SchemaVersion,
+                cancellationToken),
+            resolved => new ProcessStepDetails(Summary: $"{resolved.Metadata.Name} v{resolved.Metadata.Version}"));
 
         if (schema.IsFailure)
         {
-            processes.Add(new SubmissionProcessExecution
-            {
-                ProcessName = "SchemaResolution",
-                Engine = "schema-registry",
-                Outcome = "Failed",
-                DurationMs = schemaSw.ElapsedMilliseconds,
-                Summary = schema.Error.Description ?? schema.Error.Code
-            });
-
-            await SubmissionAuditRecorder.SafeAppendAsync(
-                auditStore,
-                session.Value.SubmissionId,
-                "UpdateSubmission",
+            await scope.RecordErrorAuditAsync(
                 session.Value.SchemaName,
                 session.Value.SchemaVersion,
-                "Failed",
-                SubmissionAuditRecorder.MapHttpStatus(schema.Error.Type),
-                processes,
-                errorCode: schema.Error.Code,
-                message: schema.Error.Description,
+                schema.Error,
+                outcomeStatus: "Failed",
                 cancellationToken: cancellationToken);
 
             return schema.Error;
         }
 
-        processes.Add(new SubmissionProcessExecution
-        {
-            ProcessName = "SchemaResolution",
-            Engine = "schema-registry",
-            Outcome = "Succeeded",
-            DurationMs = schemaSw.ElapsedMilliseconds,
-            Summary = $"{schema.Value.Metadata.Name} v{schema.Value.Metadata.Version}"
-        });
+        var draftItemsResult = await scope.ExecuteAsync(
+            SubmissionProcessCatalog.GetDraftItems,
+            async () =>
+            {
+                var raw = await infrastructure.GetDraftItemsAsync(request.SubmissionId, cancellationToken);
+                return raw ?? Result<IReadOnlyList<SubmissionDraftItem>>.Success([]);
+            },
+            items => new ProcessStepDetails(
+                ItemCount: items.Count,
+                Summary: items.Count == 0
+                    ? "No prior draft chunks"
+                    : $"Loaded {items.Count} prior draft chunk(s)"),
+            err => new ProcessStepDetails(
+                SubmissionProcessOutcome.Missing,
+                ItemCount: 0,
+                Summary: err.Description ?? err.Code));
 
-        var draftItemsResult = await infrastructure.GetDraftItemsAsync(request.SubmissionId, cancellationToken);
         var existingItems = draftItemsResult is { IsSuccess: true, Value: not null }
             ? draftItemsResult.Value
             : [];
@@ -126,48 +111,29 @@ public class UpdateSubmissionUseCase(
 
         if (existingItems.Count > 0)
         {
-            var mergeSw = Stopwatch.StartNew();
             var payloadsToMerge = existingItems.Select(i => i.PayloadJson).Append(request.Payload).ToList();
-            var mergeResult = DraftPayloadMerger.MergeJsonPayloads(payloadsToMerge);
-            mergeSw.Stop();
+            var mergeResult = scope.ExecuteResultSync(
+                SubmissionProcessCatalog.DraftPayloadMerger,
+                () => DraftPayloadMerger.MergeJsonPayloads(payloadsToMerge),
+                _ => new ProcessStepDetails(
+                    ItemCount: payloadsToMerge.Count,
+                    Summary: $"Merged incoming patch with {existingItems.Count} prior draft chunk(s)"),
+                err => new ProcessStepDetails(
+                    SubmissionProcessOutcome.Failed,
+                    ItemCount: payloadsToMerge.Count,
+                    Summary: err.Description ?? err.Code));
 
             if (mergeResult.IsFailure)
             {
-                processes.Add(new SubmissionProcessExecution
-                {
-                    ProcessName = "DraftPayloadMerger",
-                    Engine = "rfc7396-json-merge",
-                    Outcome = "Failed",
-                    DurationMs = mergeSw.ElapsedMilliseconds,
-                    ItemCount = payloadsToMerge.Count,
-                    Summary = mergeResult.Error.Description ?? mergeResult.Error.Code
-                });
-
-                await SubmissionAuditRecorder.SafeAppendAsync(
-                    auditStore,
-                    session.Value.SubmissionId,
-                    "UpdateSubmission",
+                await scope.RecordErrorAuditAsync(
                     session.Value.SchemaName,
                     session.Value.SchemaVersion,
-                    "Rejected",
-                    SubmissionAuditRecorder.MapHttpStatus(mergeResult.Error.Type),
-                    processes,
-                    errorCode: mergeResult.Error.Code,
-                    message: mergeResult.Error.Description,
+                    mergeResult.Error,
+                    outcomeStatus: "Rejected",
                     cancellationToken: cancellationToken);
 
                 return mergeResult.Error;
             }
-
-            processes.Add(new SubmissionProcessExecution
-            {
-                ProcessName = "DraftPayloadMerger",
-                Engine = "rfc7396-json-merge",
-                Outcome = "Succeeded",
-                DurationMs = mergeSw.ElapsedMilliseconds,
-                ItemCount = payloadsToMerge.Count,
-                Summary = $"Merged incoming patch with {existingItems.Count} prior draft chunk(s)"
-            });
 
             payloadToValidate = mergeResult.Value;
         }
@@ -176,121 +142,48 @@ public class UpdateSubmissionUseCase(
             payloadToValidate = request.Payload;
         }
 
-        IReadOnlyList<ValidationError> errors;
-        if (validationService is not null)
+        var validationReport = await SubmissionValidationRunner.ValidateAsync(
+            scope,
+            validationService,
+            validator,
+            payloadToValidate,
+            schema.Value,
+            isDraftUpdate: true,
+            cancellationToken);
+
+        if (validationReport.IsFailure)
         {
-            var combinedResult = await validationService.ValidatePayloadWithTraceAsync(
-                payloadToValidate,
-                schema.Value,
-                isDraftUpdate: true,
-                cancellationToken);
+            await scope.RecordErrorAuditAsync(
+                session.Value.SchemaName,
+                session.Value.SchemaVersion,
+                validationReport.Error,
+                outcomeStatus: "Failed",
+                cancellationToken: cancellationToken);
 
-            if (combinedResult.IsFailure)
-            {
-                processes.Add(new SubmissionProcessExecution
-                {
-                    ProcessName = "PayloadValidationService",
-                    Engine = "validation-pipeline",
-                    Outcome = "Failed",
-                    Summary = combinedResult.Error.Description ?? combinedResult.Error.Code
-                });
-
-                await SubmissionAuditRecorder.SafeAppendAsync(
-                    auditStore,
-                    session.Value.SubmissionId,
-                    "UpdateSubmission",
-                    session.Value.SchemaName,
-                    session.Value.SchemaVersion,
-                    "Failed",
-                    SubmissionAuditRecorder.MapHttpStatus(combinedResult.Error.Type),
-                    processes,
-                    errorCode: combinedResult.Error.Code,
-                    message: combinedResult.Error.Description,
-                    cancellationToken: cancellationToken);
-
-                return combinedResult.Error;
-            }
-
-            errors = combinedResult.Value.Errors;
-            processes.AddRange(combinedResult.Value.ProcessesExecuted);
-        }
-        else
-        {
-            var valSw = Stopwatch.StartNew();
-            var validation = await validator.ValidateAsync(payloadToValidate, schema.Value.Schema, cancellationToken);
-            valSw.Stop();
-
-            if (validation.IsFailure)
-            {
-                processes.Add(new SubmissionProcessExecution
-                {
-                    ProcessName = "JsonSchemaValidator",
-                    Engine = "json-schema",
-                    Outcome = "Failed",
-                    DurationMs = valSw.ElapsedMilliseconds,
-                    Summary = validation.Error.Description ?? validation.Error.Code
-                });
-
-                await SubmissionAuditRecorder.SafeAppendAsync(
-                    auditStore,
-                    session.Value.SubmissionId,
-                    "UpdateSubmission",
-                    session.Value.SchemaName,
-                    session.Value.SchemaVersion,
-                    "Failed",
-                    SubmissionAuditRecorder.MapHttpStatus(validation.Error.Type),
-                    processes,
-                    errorCode: validation.Error.Code,
-                    message: validation.Error.Description,
-                    cancellationToken: cancellationToken);
-
-                return validation.Error;
-            }
-
-            errors = validation.Value.Errors ?? [];
-            processes.Add(new SubmissionProcessExecution
-            {
-                ProcessName = "JsonSchemaValidator",
-                Engine = "json-schema",
-                Outcome = errors.Count == 0 ? "Succeeded" : "ValidationErrorsFound",
-                DurationMs = valSw.ElapsedMilliseconds,
-                ItemCount = errors.Count,
-                Summary = errors.Count == 0 ? "Schema structure valid" : $"{errors.Count} schema error(s)"
-            });
+            return validationReport.Error;
         }
 
-        var idEval = PayloadIdentifierExtractor.Evaluate(payloadToValidate, schema.Value, _options);
+        var errors = validationReport.Value.Errors;
+        var idEval = validationReport.Value.IdentifierEvaluation
+            ?? PayloadIdentifierExtractor.Evaluate(payloadToValidate, schema.Value, _options);
         var auditIdentifier = idEval.Identifier is { } extracted
             ? new SubmissionAuditIdentifier(extracted.Type, extracted.Value, extracted.AsPositiveInt)
             : BuildIdentifier(session.Value.IdentifierType, session.Value.IdentifierValue, session.Value.Urn);
 
-        var saveSw = Stopwatch.StartNew();
-        var save = await infrastructure.SaveDraftPayloadAsync(request.SubmissionId, null, request.Payload,
-            cancellationToken);
-        saveSw.Stop();
+        var save = await scope.ExecuteAsync(
+            SubmissionProcessCatalog.SaveDraftPayload,
+            () => infrastructure.SaveDraftPayloadAsync(request.SubmissionId, null, request.Payload, cancellationToken),
+            () => new ProcessStepDetails(
+                ItemCount: draftCountAfterSave,
+                Summary: $"Saved timestamped draft chunk #{draftCountAfterSave} ({request.Payload.Length} chars)"));
 
         if (save.IsFailure)
         {
-            processes.Add(new SubmissionProcessExecution
-            {
-                ProcessName = "BlobStorage:SaveDraftPayload",
-                Engine = "azure-blob",
-                Outcome = "Failed",
-                DurationMs = saveSw.ElapsedMilliseconds,
-                Summary = save.Error.Description ?? save.Error.Code
-            });
-
-            await SubmissionAuditRecorder.SafeAppendAsync(
-                auditStore,
-                session.Value.SubmissionId,
-                "UpdateSubmission",
+            await scope.RecordErrorAuditAsync(
                 session.Value.SchemaName,
                 session.Value.SchemaVersion,
-                "Failed",
-                SubmissionAuditRecorder.MapHttpStatus(save.Error.Type),
-                processes,
-                errorCode: save.Error.Code,
-                message: save.Error.Description,
+                save.Error,
+                outcomeStatus: "Failed",
                 validationErrors: errors,
                 identifier: auditIdentifier,
                 cancellationToken: cancellationToken);
@@ -298,16 +191,6 @@ public class UpdateSubmissionUseCase(
             _instrumentation.DraftPayloadSaveFailed(request.SubmissionId, save.Error.Description ?? string.Empty);
             return save.Error;
         }
-
-        processes.Add(new SubmissionProcessExecution
-        {
-            ProcessName = "BlobStorage:SaveDraftPayload",
-            Engine = "azure-blob",
-            Outcome = "Succeeded",
-            DurationMs = saveSw.ElapsedMilliseconds,
-            ItemCount = draftCountAfterSave,
-            Summary = $"Saved timestamped draft chunk #{draftCountAfterSave} ({request.Payload.Length} chars)"
-        });
 
         var isValid = errors.Count == 0;
 
@@ -324,15 +207,11 @@ public class UpdateSubmissionUseCase(
             draftCount: draftCountAfterSave,
             pendingErrors: errors);
 
-        await SubmissionAuditRecorder.SafeAppendAsync(
-            auditStore,
-            session.Value.SubmissionId,
-            "UpdateSubmission",
+        await scope.RecordAuditAsync(
             session.Value.SchemaName,
             session.Value.SchemaVersion,
             isValid ? "Succeeded" : "SavedWithPendingErrors",
             200,
-            processes,
             message: isValid
                 ? $"Draft payload saved (chunk #{draftCountAfterSave}) with no validation errors"
                 : $"Draft payload saved (chunk #{draftCountAfterSave}) with {errors.Count} pending validation error(s)",

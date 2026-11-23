@@ -6,6 +6,7 @@ using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatus;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.AzureFunctions.Public.Routes;
+using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Integration.Builders;
@@ -168,7 +169,9 @@ public sealed class SubmissionAuditTrailIntegrationTests(AzuriteFixture fixture)
 
         entries[6].Outcome.Status.Should().Be("Succeeded");
         entries[6].Outcome.HttpStatus.Should().Be(200);
-        entries[6].ProcessesConsumed.Should().Contain(p => p.ProcessName == "BlobStorage:PromoteToProcessed" && p.Outcome == "Succeeded");
+        entries[6].ProcessesConsumed.Should().Contain(p =>
+            p.ProcessName == "BlobStorage:PromoteToProcessed" &&
+            p.Outcome == SubmissionProcessOutcome.Succeeded);
         entries[6].Details.Should().ContainKey("processedBlobUri");
 
         entries[7].Outcome.Status.Should().Be("Rejected");

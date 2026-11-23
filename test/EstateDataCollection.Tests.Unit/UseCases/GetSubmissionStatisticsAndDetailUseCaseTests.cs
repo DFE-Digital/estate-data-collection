@@ -34,9 +34,32 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
 
         IReadOnlyList<SubmissionSummary> summaries =
         [
-            new(Guid.NewGuid(), "school_site", 1, now.AddHours(-2), null, now.AddHours(-1), false, "Draft", 100001, "URN", "100001", true, 3, now.AddHours(-1), 4, "UpdateSubmission", "SavedWithPendingErrors", 200, now.AddHours(-1)),
-            new(Guid.NewGuid(), "school_site", 1, now.AddDays(-3), null, now.AddDays(-3), false, "AwaitingPayload", null, null, null, false, 0, null, 1, "CreateSubmission", "Succeeded", 201, now.AddDays(-3)),
-            new(Guid.NewGuid(), "school_site", 1, now.AddHours(-5), now.AddHours(-2), now.AddHours(-2), true, "Finalised", 100002, "URN", "100002", false, 2, now.AddHours(-3), 4, "FinaliseSubmission", "Succeeded", 200, now.AddHours(-2))
+            new SubmissionSummaryBuilder()
+                .WithSchema("school_site", 1)
+                .CreatedAt(now.AddHours(-2))
+                .LastActivityAt(now.AddHours(-1))
+                .WithLifecycleState("Draft")
+                .WithUrn(100001)
+                .WithDrafts(3, now.AddHours(-1))
+                .WithLastAudit("UpdateSubmission", "SavedWithPendingErrors", 200, now.AddHours(-1), totalEvents: 4)
+                .Build(),
+            new SubmissionSummaryBuilder()
+                .WithSchema("school_site", 1)
+                .CreatedAt(now.AddDays(-3))
+                .LastActivityAt(now.AddDays(-3))
+                .WithLifecycleState("AwaitingPayload")
+                .WithDrafts(0, null, hasDraftPayload: false)
+                .WithLastAudit("CreateSubmission", "Succeeded", 201, now.AddDays(-3), totalEvents: 1)
+                .Build(),
+            new SubmissionSummaryBuilder()
+                .WithSchema("school_site", 1)
+                .CreatedAt(now.AddHours(-5))
+                .LastActivityAt(now.AddHours(-2))
+                .Finalised(now.AddHours(-2))
+                .WithUrn(100002)
+                .WithDrafts(2, now.AddHours(-3), hasDraftPayload: false)
+                .WithLastAudit("FinaliseSubmission", "Succeeded", 200, now.AddHours(-2), totalEvents: 4)
+                .Build()
         ];
 
         queryRepo.ListSubmissionsAsync(null, null, null, null, Arg.Any<CancellationToken>())

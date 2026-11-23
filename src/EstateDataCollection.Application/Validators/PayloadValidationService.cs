@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Models.Options;
+using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Options;
@@ -11,8 +11,9 @@ namespace EstateDataCollection.Application.Validators;
 public sealed class PayloadValidationService(
     ISchemaValidator schemaValidator,
     IBusinessLogicValidator logicValidator,
-    IOptions<ValidationOptions>? options = null
-) : IPayloadValidationService
+    IOptions<ValidationOptions>? options = null,
+    ProcessExecutionInstrumentation? processInstrumentation = null
+) : IPayloadValidationService, IScopedPayloadValidationService
 {
     private readonly ValidationOptions _options = options?.Value ?? new ValidationOptions();
 
@@ -26,48 +27,74 @@ public sealed class PayloadValidationService(
         return report.IsFailure ? report.Error : Result<IReadOnlyList<ValidationError>>.Success(report.Value.Errors);
     }
 
-    public async Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceAsync(
+    public Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceAsync(
         string rawPayloadJson,
         ResolvedSchema schema,
         bool isDraftUpdate = false,
         CancellationToken cancellationToken = default)
     {
-        var processes = new List<SubmissionProcessExecution>(3);
+        return ValidatePayloadWithTraceCoreAsync(rawPayloadJson, schema, isDraftUpdate, executionScope: null, cancellationToken);
+    }
+
+    Task<Result<PayloadValidationReport>> IScopedPayloadValidationService.ValidatePayloadWithTraceAsync(
+        string rawPayloadJson,
+        ResolvedSchema schema,
+        bool isDraftUpdate,
+        SubmissionExecutionScope executionScope,
+        CancellationToken cancellationToken)
+    {
+        return ValidatePayloadWithTraceCoreAsync(rawPayloadJson, schema, isDraftUpdate, executionScope, cancellationToken);
+    }
+
+    public Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceAsync(
+        string rawPayloadJson,
+        ResolvedSchema schema,
+        bool isDraftUpdate,
+        SubmissionExecutionScope? executionScope,
+        CancellationToken cancellationToken = default)
+    {
+        return ValidatePayloadWithTraceCoreAsync(rawPayloadJson, schema, isDraftUpdate, executionScope, cancellationToken);
+    }
+
+    private async Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceCoreAsync(
+        string rawPayloadJson,
+        ResolvedSchema schema,
+        bool isDraftUpdate,
+        SubmissionExecutionScope? executionScope,
+        CancellationToken cancellationToken)
+    {
+        using var ownedScope = executionScope is null
+            ? SubmissionExecutionScope.Start(
+                isDraftUpdate ? "ValidateDraftPayload" : "ValidatePayload",
+                instrumentation: processInstrumentation,
+                initialCapacity: 3)
+            : null;
+        var scope = executionScope ?? ownedScope!;
+
         var errors = new List<ValidationError>();
 
         // Step 1: Structural JSON Schema Validation
-        var schemaSw = Stopwatch.StartNew();
-        var schemaResult = await schemaValidator.ValidateAsync(rawPayloadJson, schema.Schema, cancellationToken);
-        schemaSw.Stop();
+        var schemaResult = await scope.ExecuteAsync(
+            SubmissionProcessCatalog.JsonSchemaValidator,
+            () => schemaValidator.ValidateAsync(rawPayloadJson, schema.Schema, cancellationToken),
+            val =>
+            {
+                var count = val.Errors?.Count ?? 0;
+                return new ProcessStepDetails(
+                    Outcome: count == 0 ? SubmissionProcessOutcome.Succeeded : SubmissionProcessOutcome.ValidationErrorsFound,
+                    ItemCount: count,
+                    Summary: count == 0 ? "Schema structure valid" : $"{count} schema error(s)");
+            });
 
         if (schemaResult.IsFailure)
         {
-            processes.Add(new SubmissionProcessExecution
-            {
-                ProcessName = "JsonSchemaValidator",
-                Engine = "json-schema",
-                Outcome = "Failed",
-                DurationMs = schemaSw.ElapsedMilliseconds,
-                Summary = schemaResult.Error.Description ?? schemaResult.Error.Code
-            });
             return schemaResult.Error;
         }
 
-        var schemaErrorCount = schemaResult.Value.Errors?.Count ?? 0;
-        if (schemaErrorCount > 0)
+        if (schemaResult.Value.Errors is { Count: > 0 } schemaErrors)
         {
-            errors.AddRange(schemaResult.Value.Errors!);
+            errors.AddRange(schemaErrors);
         }
-
-        processes.Add(new SubmissionProcessExecution
-        {
-            ProcessName = "JsonSchemaValidator",
-            Engine = "json-schema",
-            Outcome = schemaErrorCount == 0 ? "Succeeded" : "ValidationErrorsFound",
-            DurationMs = schemaSw.ElapsedMilliseconds,
-            ItemCount = schemaErrorCount,
-            Summary = schemaErrorCount == 0 ? "Schema structure valid" : $"{schemaErrorCount} schema error(s)"
-        });
 
         var shouldRunRules = !isDraftUpdate || _options.RunQualityRulesOnDraftUpdate;
 
@@ -82,75 +109,80 @@ public sealed class PayloadValidationService(
 
             if (!shouldRunRules)
             {
-                processes.Add(new SubmissionProcessExecution
-                {
-                    ProcessName = "QualityRulesValidator",
-                    Engine = engineList,
-                    Outcome = "Skipped",
-                    DurationMs = 0,
-                    ItemCount = schema.Rules.Count,
-                    Summary = "Skipped during draft update per ValidationOptions"
-                });
+                scope.RecordSkipped(
+                    SubmissionProcessCatalog.QualityRulesValidator,
+                    itemCount: schema.Rules.Count,
+                    summary: "Skipped during draft update per ValidationOptions",
+                    engineOverride: engineList);
             }
             else if (errors.Count > 0)
             {
-                processes.Add(new SubmissionProcessExecution
-                {
-                    ProcessName = "QualityRulesValidator",
-                    Engine = engineList,
-                    Outcome = "Skipped",
-                    DurationMs = 0,
-                    ItemCount = schema.Rules.Count,
-                    Summary = "Skipped because structural JSON Schema validation failed"
-                });
+                scope.RecordSkipped(
+                    SubmissionProcessCatalog.QualityRulesValidator,
+                    itemCount: schema.Rules.Count,
+                    summary: "Skipped because structural JSON Schema validation failed",
+                    engineOverride: engineList);
             }
             else
             {
-                var logicSw = Stopwatch.StartNew();
-                var logicResult = await logicValidator.ValidateAsync(rawPayloadJson, schema.Rules, cancellationToken);
-                logicSw.Stop();
+                var logicResult = await scope.ExecuteAsync(
+                    SubmissionProcessCatalog.QualityRulesValidator,
+                    () => logicValidator.ValidateAsync(rawPayloadJson, schema.Rules, cancellationToken),
+                    val =>
+                    {
+                        var violationCount = val.Errors?.Count ?? 0;
+                        return new ProcessStepDetails(
+                            Outcome: violationCount == 0
+                                ? SubmissionProcessOutcome.Succeeded
+                                : SubmissionProcessOutcome.ValidationErrorsFound,
+                            ItemCount: schema.Rules.Count,
+                            Summary: violationCount == 0
+                                ? $"Evaluated {schema.Rules.Count} quality rule(s) with 0 failures"
+                                : $"Evaluated {schema.Rules.Count} quality rule(s); {violationCount} violation(s)");
+                    },
+                    err => new ProcessStepDetails(
+                        Outcome: SubmissionProcessOutcome.Failed,
+                        ItemCount: schema.Rules.Count,
+                        Summary: err.Description ?? err.Code),
+                    engineOverride: engineList);
 
                 if (logicResult.IsFailure)
                 {
-                    processes.Add(new SubmissionProcessExecution
-                    {
-                        ProcessName = "QualityRulesValidator",
-                        Engine = engineList,
-                        Outcome = "Failed",
-                        DurationMs = logicSw.ElapsedMilliseconds,
-                        ItemCount = schema.Rules.Count,
-                        Summary = logicResult.Error.Description ?? logicResult.Error.Code
-                    });
                     return logicResult.Error;
                 }
 
-                var logicErrorCount = logicResult.Value.Errors?.Count ?? 0;
-                if (logicErrorCount > 0)
+                if (logicResult.Value.Errors is { Count: > 0 } logicErrors)
                 {
-                    errors.AddRange(logicResult.Value.Errors!);
+                    errors.AddRange(logicErrors);
                 }
-
-                processes.Add(new SubmissionProcessExecution
-                {
-                    ProcessName = "QualityRulesValidator",
-                    Engine = engineList,
-                    Outcome = logicErrorCount == 0 ? "Succeeded" : "ValidationErrorsFound",
-                    DurationMs = logicSw.ElapsedMilliseconds,
-                    ItemCount = schema.Rules.Count,
-                    Summary = logicErrorCount == 0
-                        ? $"Evaluated {schema.Rules.Count} quality rule(s) with 0 failures"
-                        : $"Evaluated {schema.Rules.Count} quality rule(s); {logicErrorCount} violation(s)"
-                });
             }
         }
 
         // Step 3: School / Establishment Identifier Extraction Check
+        PayloadIdentifierExtractor.ExtractionEvaluation? identifierEval = null;
         var shouldCheckIdentifier = !isDraftUpdate || _options.ValidateIdentifierOnDraftUpdate;
         if (shouldCheckIdentifier)
         {
-            var idSw = Stopwatch.StartNew();
-            var identifierEval = PayloadIdentifierExtractor.Evaluate(rawPayloadJson, schema, _options);
-            idSw.Stop();
+            identifierEval = scope.ExecuteSync(
+                SubmissionProcessCatalog.IdentifierExtractor,
+                () => PayloadIdentifierExtractor.Evaluate(rawPayloadJson, schema, _options),
+                eval =>
+                {
+                    if (!eval.IsValid && eval.ValidationError is not null)
+                    {
+                        return new ProcessStepDetails(
+                            Outcome: SubmissionProcessOutcome.ValidationErrorsFound,
+                            Summary: eval.ValidationError.Message);
+                    }
+
+                    var idLabel = eval.Identifier is { } id
+                        ? $"{id.Type}={id.Value}"
+                        : "Not required by schema";
+
+                    return new ProcessStepDetails(
+                        Outcome: SubmissionProcessOutcome.Succeeded,
+                        Summary: idLabel);
+                });
 
             if (!identifierEval.IsValid && identifierEval.ValidationError is not null)
             {
@@ -162,34 +194,10 @@ public sealed class PayloadValidationService(
                 {
                     errors.Add(identifierEval.ValidationError);
                 }
-
-                processes.Add(new SubmissionProcessExecution
-                {
-                    ProcessName = "IdentifierExtractor",
-                    Engine = "identifier-extractor",
-                    Outcome = "ValidationErrorsFound",
-                    DurationMs = idSw.ElapsedMilliseconds,
-                    Summary = identifierEval.ValidationError.Message
-                });
-            }
-            else
-            {
-                var idLabel = identifierEval.Identifier is { } id
-                    ? $"{id.Type}={id.Value}"
-                    : "Not required by schema";
-
-                processes.Add(new SubmissionProcessExecution
-                {
-                    ProcessName = "IdentifierExtractor",
-                    Engine = "identifier-extractor",
-                    Outcome = "Succeeded",
-                    DurationMs = idSw.ElapsedMilliseconds,
-                    Summary = idLabel
-                });
             }
         }
 
-        return new PayloadValidationReport(errors, processes);
+        return new PayloadValidationReport(errors, scope.Processes.ToArray(), identifierEval);
     }
 
     private static string NormalizePointerForDedupe(string? path)

@@ -15,6 +15,12 @@ This index tracks technical spikes, exploratory investigations, and research not
 | [**OpenAPI Documentation**](docs/spikes/openapi/openapi-documentation.md) | Review of .NET 10 OpenAPI tooling (`Microsoft.AspNetCore.OpenApi`, Scalar, Redoc, Swagger UI, NSwag, DocFX, Docusaurus) and 2026 recommendations. |
 | [**Recommended Generation & Publishing of API Docs**](docs/spikes/openapi/recommended-generation-and-publishing-of-api-docs.md) | Build-time OpenAPI spec generation, static site rendering with Scalar, and CI/CD publishing via GitHub Actions. |
 
+### Observability & Telemetry
+
+| Document | Summary |
+| --- | --- |
+| [**OpenTelemetry Span Boundaries: Endpoint Wrappers vs. Use-Case Scopes**](docs/spikes/observability/endpoint-vs-usecase-opentelemetry-spans.md) | Architectural comparison of `SubmissionExecutionScope`-only tracing versus wrapping `FunctionEndpointBase` and `FunctionEventBase` with endpoint/event spans and RED metrics. |
+
 ### Resilience & Chaos Engineering
 
 | Document | Summary |

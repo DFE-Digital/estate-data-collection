@@ -1,12 +1,10 @@
 using AwesomeAssertions;
 using EstateDataCollection.Admin.UI.Models;
 using EstateDataCollection.Admin.UI.Models.ViewModels;
-using EstateDataCollection.Application.Models.Contracts;
-using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
-using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
+using EstateDataCollection.Tests.Common.Builders;
 using Xunit;
 
 namespace EstateDataCollection.Tests.Unit.AdminUi;
@@ -21,49 +19,34 @@ public sealed class ViewModelPresentationTests
     [Fact]
     public void SchemaTestsViewModel_Should_Project_Field_Errors_SoftWarnings_And_Invalid_Fixture_Cards()
     {
-        var detail = new SchemaVersionDetail(
-            SchemaName: "cdc survey",
-            Version: 2,
-            State: SchemaLifecycleState.Active.ToNode(),
-            EffectiveFromUtc: new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
-            EffectiveToUtc: null,
-            IsActiveNow: true,
-            CanAcceptTraffic: true,
-            Sha256Hash: "abcdef1234567890",
-            CreatedAtUtc: new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
-            Fields: [],
-            QualityRules:
-            [
-                new SchemaQualityRuleSummary("r1", "validity", "error", "", "cel", "Bad", "Desc1"),
-                new SchemaQualityRuleSummary("r2", "validity", "error", "", "jsonlogic", "Bad", "Desc2"),
-                new SchemaQualityRuleSummary("r3", "validity", "error", "", "CEL", "Bad", "Desc3")
-            ],
-            ValidFixtures: ["""{"urn":123456}"""],
-            InvalidFixtures:
-            [
+        var detail = new SchemaVersionDetailBuilder()
+            .WithSchema("cdc survey", 2)
+            .WithState(SchemaLifecycleState.Active)
+            .WithEffectiveWindow(new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero))
+            .WithHash("abcdef1234567890")
+            .WithQualityRule("r1", "Bad", engine: "cel", description: "Desc1")
+            .WithQualityRule("r2", "Bad", engine: "jsonlogic", description: "Desc2")
+            .WithQualityRule("r3", "Bad", engine: "CEL", description: "Desc3")
+            .WithValidFixtures("""{"urn":123456}""")
+            .WithInvalidFixtures(
                 """{"description":"With expected","payload":{"urn":1},"expectedErrors":["RULE-1","RULE-2"]}""",
-                """{"urn":2}"""
-            ],
-            LastTestRunAtUtc: new DateTimeOffset(2026, 11, 17, 12, 0, 0, TimeSpan.Zero),
-            LastTestRunAppVersion: "build-9",
-            LastTestRunPassed: true,
-            LastTestRunInvalidFixtures:
-            [
-                new InvalidFixtureOutcome(
-                    Index: 0,
-                    FailedAsExpected: false,
-                    TriggeredErrors: ["[Rule:RULE-1] /urn: bad"],
-                    ExpectedErrors: ["RULE-1", "RULE-2"],
-                    UnmatchedExpectedErrors: ["RULE-2"],
-                    Description: "With expected"),
-                new InvalidFixtureOutcome(
-                    Index: 1,
-                    FailedAsExpected: true,
-                    TriggeredErrors: ["[Schema] /urn: too small"],
-                    ExpectedErrors: [],
-                    UnmatchedExpectedErrors: [],
-                    Warning: "unknown if expected")
-            ]);
+                """{"urn":2}""")
+            .WithLastTestRun(new DateTimeOffset(2026, 11, 17, 12, 0, 0, TimeSpan.Zero), "build-9", passed: true)
+            .WithInvalidFixtureOutcome(
+                index: 0,
+                failedAsExpected: false,
+                triggeredErrors: ["[Rule:RULE-1] /urn: bad"],
+                expectedErrors: ["RULE-1", "RULE-2"],
+                unmatchedExpectedErrors: ["RULE-2"],
+                description: "With expected")
+            .WithInvalidFixtureOutcome(
+                index: 1,
+                failedAsExpected: true,
+                triggeredErrors: ["[Schema] /urn: too small"],
+                expectedErrors: [],
+                unmatchedExpectedErrors: [],
+                warning: "unknown if expected")
+            .Build();
 
         var err = Error.Validation(
             "Schema.VerificationFailed",
@@ -112,17 +95,11 @@ public sealed class ViewModelPresentationTests
     [Fact]
     public void DashboardViewModel_Should_Compute_Warning_And_Failure_States()
     {
-        var run = new RunSchemaTestsResult(
-            ExecutedAtUtc: DateTimeOffset.UtcNow,
-            AppVersion: "v1",
-            TotalSchemasChecked: 2,
-            PassedCount: 2,
-            FailedCount: 0,
-            Results:
-            [
-                new SchemaTestSuiteItemResult("a", 1, "Active", true, true, 1, 1, 0, []),
-                new SchemaTestSuiteItemResult("b", 2, "Validated", true, true, 0, 1, 0, [], Warnings: ["warn-1"])
-            ]);
+        var run = new RunSchemaTestsResultBuilder()
+            .WithAppVersion("v1")
+            .WithItem("a", version: 1, state: "Active", passed: true, hasFixtures: true, validFixtureCount: 1, invalidFixtureCount: 0)
+            .WithItem("b", version: 2, state: "Validated", passed: true, hasFixtures: true, validFixtureCount: 0, invalidFixtureCount: 1, warnings: ["warn-1"])
+            .Build();
 
         var vm = new DashboardViewModel(CreateMeta(), [], TestRunResult: run);
 
@@ -138,23 +115,14 @@ public sealed class ViewModelPresentationTests
     public void SchemaSectionCardViewModel_Should_Project_All_Test_States()
     {
         var now = new DateTimeOffset(2026, 11, 17, 14, 30, 0, TimeSpan.Zero);
-        var entry = new SchemaCatalogueEntry(
-            SchemaName: "cdc_survey",
-            ActiveVersion: 1,
-            Versions:
-            [
-                new SchemaVersionSummary(
-                    "cdc_survey", 1, SchemaLifecycleState.Active.ToNode(), now, null, true, true, "hash1", now,
-                    LastTestRunAtUtc: now, LastTestRunAppVersion: "1.0", LastTestRunPassed: true, LastTestRunWarnings: []),
-                new SchemaVersionSummary(
-                    "cdc_survey", 2, SchemaLifecycleState.Validated.ToNode(), null, null, false, false, "hash2", now,
-                    LastTestRunAtUtc: now, LastTestRunAppVersion: "1.0", LastTestRunPassed: true, LastTestRunWarnings: ["warn"]),
-                new SchemaVersionSummary(
-                    "cdc_survey", 3, SchemaLifecycleState.Validated.ToNode(), null, null, false, false, "hash3", now,
-                    LastTestRunAtUtc: now, LastTestRunAppVersion: "1.0", LastTestRunPassed: false),
-                new SchemaVersionSummary(
-                    "cdc_survey", 4, SchemaLifecycleState.Draft.ToNode(), null, null, false, false, "hash4", now)
-            ]);
+        var entry = new SchemaCatalogueEntryBuilder()
+            .WithName("cdc_survey")
+            .WithActiveVersion(1)
+            .WithVersion(v => v.WithVersion(1).WithState(SchemaLifecycleState.Active).WithEffectiveWindow(now).WithHash("hash1").CreatedAt(now).WithLastTestRun(now, "1.0", passed: true, warnings: []))
+            .WithVersion(v => v.WithVersion(2).WithState(SchemaLifecycleState.Validated).WithHash("hash2").CreatedAt(now).WithLastTestRun(now, "1.0", passed: true, warnings: ["warn"]))
+            .WithVersion(v => v.WithVersion(3).WithState(SchemaLifecycleState.Validated).WithHash("hash3").CreatedAt(now).WithLastTestRun(now, "1.0", passed: false))
+            .WithVersion(v => v.WithVersion(4).WithState(SchemaLifecycleState.Draft).WithHash("hash4").CreatedAt(now))
+            .Build();
 
         var card = SchemaSectionCardViewModel.From(entry);
 

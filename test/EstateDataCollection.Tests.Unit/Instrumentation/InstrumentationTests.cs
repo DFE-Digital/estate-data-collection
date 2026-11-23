@@ -5,8 +5,10 @@ using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
+using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Application.UseCases.Submissions.CreateSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
+using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatus;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 using EstateDataCollection.Infrastructure.Persistence;
 using EstateDataCollection.Infrastructure.Registry;
@@ -42,6 +44,8 @@ public class InstrumentationTests
         provider.GetRequiredService<CreateSubmissionUseCaseInstrumentation>().Should().NotBeNull();
         provider.GetRequiredService<UpdateSubmissionUseCaseInstrumentation>().Should().NotBeNull();
         provider.GetRequiredService<FinaliseSubmissionUseCaseInstrumentation>().Should().NotBeNull();
+        provider.GetRequiredService<GetSubmissionStatusUseCaseInstrumentation>().Should().NotBeNull();
+        provider.GetRequiredService<ProcessExecutionInstrumentation>().Should().NotBeNull();
     }
 
     [Fact]

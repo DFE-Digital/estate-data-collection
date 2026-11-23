@@ -4,11 +4,6 @@ using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
-public sealed record SubmissionStatusFilterOptionViewModel(
-    string Value,
-    string Label,
-    bool IsSelected);
-
 public sealed record SubmissionsViewModel(
     AdminPageMeta Page,
     GetSubmissionsResult? Result,

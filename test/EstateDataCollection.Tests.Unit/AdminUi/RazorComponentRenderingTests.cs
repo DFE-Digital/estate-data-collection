@@ -7,11 +7,10 @@ using EstateDataCollection.Admin.UI.Models.ViewModels;
 using EstateDataCollection.Admin.UI.Pages;
 using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application.Models.Contracts;
-using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
-using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
+using EstateDataCollection.Tests.Common.Builders;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -39,48 +38,31 @@ public sealed class RazorComponentRenderingTests
     public async Task DashboardPage_Should_Render_Dfe_Header_Stats_And_Schema_Versions()
     {
         var renderer = CreateRenderer();
-        var schemas = new List<SchemaCatalogueEntry>
-        {
-            new(
-                SchemaName: "school-site",
-                ActiveVersion: 1,
-                Versions:
-                [
-                    new SchemaVersionSummary(
-                        SchemaName: "school-site",
-                        Version: 1,
-                        State: SchemaLifecycleState.Active.ToNode(),
-                        EffectiveFromUtc: new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
-                        EffectiveToUtc: null,
-                        IsActiveNow: true,
-                        CanAcceptTraffic: true,
-                        Sha256Hash: "abcdef1234567890",
-                        CreatedAtUtc: new DateTimeOffset(2026, 8, 20, 10, 0, 0, TimeSpan.Zero),
-                        IdentifierConfig: new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/urn", Required = true }),
-                    new SchemaVersionSummary(
-                        SchemaName: "school-site",
-                        Version: 2,
-                        State: SchemaLifecycleState.Validated.ToNode(),
-                        EffectiveFromUtc: null,
-                        EffectiveToUtc: null,
-                        IsActiveNow: false,
-                        CanAcceptTraffic: false,
-                        Sha256Hash: "1234567890abcdef",
-                        CreatedAtUtc: new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero),
-                        IdentifierConfig: new SchemaIdentifierConfig { Type = "None" })
-                ])
-        };
+        List<SchemaCatalogueEntry> schemas =
+        [
+            new SchemaCatalogueEntryBuilder()
+                .WithName("school-site")
+                .WithActiveVersion(1)
+                .WithVersion(v => v
+                    .WithVersion(1)
+                    .WithState(SchemaLifecycleState.Active)
+                    .WithEffectiveWindow(new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero))
+                    .CreatedAt(new DateTimeOffset(2026, 8, 20, 10, 0, 0, TimeSpan.Zero))
+                    .WithIdentifier("URN", "/urn", required: true))
+                .WithVersion(v => v
+                    .WithVersion(2)
+                    .WithState(SchemaLifecycleState.Validated)
+                    .WithHash("1234567890abcdef")
+                    .CreatedAt(new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero))
+                    .WithIdentifier("None"))
+                .Build()
+        ];
 
-        var testRunResult = new RunSchemaTestsResult(
-            ExecutedAtUtc: new DateTimeOffset(2026, 11, 17, 11, 0, 0, TimeSpan.Zero),
-            AppVersion: "2026.11.1+abc123",
-            TotalSchemasChecked: 1,
-            PassedCount: 1,
-            FailedCount: 0,
-            Results:
-            [
-                new SchemaTestSuiteItemResult("school-site", 1, "Active", true, true, 1, 1, 1, [], "URN", "/urn")
-            ]);
+        var testRunResult = new RunSchemaTestsResultBuilder()
+            .ExecutedAt(new DateTimeOffset(2026, 11, 17, 11, 0, 0, TimeSpan.Zero))
+            .WithAppVersion("2026.11.1+abc123")
+            .WithItem("school-site", version: 1, state: "Active", passed: true, hasFixtures: true, validFixtureCount: 1, invalidFixtureCount: 1, businessRuleCount: 1, identifierType: "URN", identifierPointer: "/urn")
+            .Build();
 
         var html = await renderer.RenderComponentAsync<DashboardPage>(new Dictionary<string, object?>
         {
@@ -120,23 +102,14 @@ public sealed class RazorComponentRenderingTests
     {
         var renderer = CreateRenderer();
         var runAt = new DateTimeOffset(2026, 11, 17, 14, 30, 0, TimeSpan.Zero);
-        var entry = new SchemaCatalogueEntry(
-            SchemaName: "cdc_survey",
-            ActiveVersion: 1,
-            Versions:
-            [
-                new SchemaVersionSummary(
-                    "cdc_survey", 1, SchemaLifecycleState.Active.ToNode(), runAt, null, true, true, "hash1", runAt,
-                    LastTestRunAtUtc: runAt, LastTestRunAppVersion: "1.0", LastTestRunPassed: true, LastTestRunWarnings: []),
-                new SchemaVersionSummary(
-                    "cdc_survey", 2, SchemaLifecycleState.Validated.ToNode(), null, null, false, false, "hash2", runAt,
-                    LastTestRunAtUtc: runAt, LastTestRunAppVersion: "1.0", LastTestRunPassed: true, LastTestRunWarnings: ["warn"]),
-                new SchemaVersionSummary(
-                    "cdc_survey", 3, SchemaLifecycleState.Validated.ToNode(), null, null, false, false, "hash3", runAt,
-                    LastTestRunAtUtc: runAt, LastTestRunAppVersion: "1.0", LastTestRunPassed: false),
-                new SchemaVersionSummary(
-                    "cdc_survey", 4, SchemaLifecycleState.Draft.ToNode(), null, null, false, false, "hash4", runAt)
-            ]);
+        var entry = new SchemaCatalogueEntryBuilder()
+            .WithName("cdc_survey")
+            .WithActiveVersion(1)
+            .WithVersion(v => v.WithVersion(1).WithState(SchemaLifecycleState.Active).WithEffectiveWindow(runAt).WithHash("hash1").CreatedAt(runAt).WithLastTestRun(runAt, "1.0", passed: true, warnings: []))
+            .WithVersion(v => v.WithVersion(2).WithState(SchemaLifecycleState.Validated).WithHash("hash2").CreatedAt(runAt).WithLastTestRun(runAt, "1.0", passed: true, warnings: ["warn"]))
+            .WithVersion(v => v.WithVersion(3).WithState(SchemaLifecycleState.Validated).WithHash("hash3").CreatedAt(runAt).WithLastTestRun(runAt, "1.0", passed: false))
+            .WithVersion(v => v.WithVersion(4).WithState(SchemaLifecycleState.Draft).WithHash("hash4").CreatedAt(runAt))
+            .Build();
 
         var html = await renderer.RenderComponentAsync<SchemaSectionCard>(new Dictionary<string, object?>
         {
@@ -155,48 +128,28 @@ public sealed class RazorComponentRenderingTests
     public async Task SchemaDetailPage_Should_Render_Field_Tree_Quality_Rules_And_Raw_Schema()
     {
         var renderer = CreateRenderer();
-        var detail = new SchemaVersionDetail(
-            SchemaName: "academy-return",
-            Version: 3,
-            State: SchemaLifecycleState.Scheduled.ToNode(),
-            EffectiveFromUtc: new DateTimeOffset(2026, 12, 1, 0, 0, 0, TimeSpan.Zero),
-            EffectiveToUtc: null,
-            IsActiveNow: false,
-            CanAcceptTraffic: true,
-            Sha256Hash: "deadbeef12345678",
-            CreatedAtUtc: new DateTimeOffset(2026, 11, 10, 8, 30, 0, TimeSpan.Zero),
-            Fields:
-            [
-                new SchemaFieldDescriptor(
-                    Name: "school",
-                    Path: "$.school",
-                    Type: "object",
+        var detail = new SchemaVersionDetailBuilder()
+            .WithSchema("academy-return", 3)
+            .WithState(SchemaLifecycleState.Scheduled)
+            .WithEffectiveWindow(new DateTimeOffset(2026, 12, 1, 0, 0, 0, TimeSpan.Zero))
+            .CreatedAt(new DateTimeOffset(2026, 11, 10, 8, 30, 0, TimeSpan.Zero))
+            .WithField(
+                name: "school",
+                path: "$.school",
+                type: "object",
+                required: true,
+                children: new SchemaFieldDescriptor(
+                    Name: "urn",
+                    Path: "$.school.urn",
+                    Type: "integer",
                     Required: true,
-                    Children:
-                    [
-                        new SchemaFieldDescriptor(
-                            Name: "urn",
-                            Path: "$.school.urn",
-                            Type: "integer",
-                            Required: true,
-                            Constraints: new SchemaFieldConstraints(Minimum: 100000, Maximum: 999999))
-                    ])
-            ],
-            QualityRules:
-            [
-                new SchemaQualityRuleSummary(
-                    Id: "rule-1",
-                    Dimension: "validity",
-                    Severity: "error",
-                    TargetPath: "$.school.urn",
-                    Engine: "cel",
-                    ErrorMessage: "URN must be valid",
-                    Description: "Checks URN")
-            ],
-            RawJsonSchema: "{\"type\":\"object\"}",
-            IdentifierConfig: new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/school/urn", Required = null },
-            ValidFixtures: ["""{"school":{"urn":123456}}"""],
-            InvalidFixtures: ["""{"school":{"urn":0}}"""]);
+                    Constraints: new SchemaFieldConstraints(Minimum: 100000, Maximum: 999999)))
+            .WithQualityRule("rule-1", "URN must be valid", engine: "cel", targetPath: "$.school.urn", description: "Checks URN")
+            .WithRawJsonSchema("{\"type\":\"object\"}")
+            .WithIdentifier("URN", "/school/urn", required: null)
+            .WithValidFixtures("""{"school":{"urn":123456}}""")
+            .WithInvalidFixtures("""{"school":{"urn":0}}""")
+            .Build();
 
         var html = await renderer.RenderComponentAsync<SchemaDetailPage>(new Dictionary<string, object?>
         {
@@ -218,46 +171,22 @@ public sealed class RazorComponentRenderingTests
     public async Task SchemaTestsPage_Should_Render_Stored_Fixtures_Business_Rules_And_Run_Results()
     {
         var renderer = CreateRenderer();
-        var detail = new SchemaVersionDetail(
-            SchemaName: "academy-return",
-            Version: 2,
-            State: SchemaLifecycleState.Active.ToNode(),
-            EffectiveFromUtc: new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
-            EffectiveToUtc: null,
-            IsActiveNow: true,
-            CanAcceptTraffic: true,
-            Sha256Hash: "deadbeef12345678",
-            CreatedAtUtc: new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
-            Fields: [],
-            QualityRules:
-            [
-                new SchemaQualityRuleSummary(
-                    Id: "capacity-check",
-                    Dimension: "validity",
-                    Severity: "ERROR",
-                    TargetPath: "",
-                    Engine: "jsonlogic",
-                    ErrorMessage: "Capacity must be > 0",
-                    Description: "Checks positive capacity")
-            ],
-            IdentifierConfig: new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/urn", Required = true },
-            ValidFixtures: ["""{"urn":123456,"capacity":50}"""],
-            InvalidFixtures: ["""{"urn":123456,"capacity":-5}"""],
-            LastTestRunAtUtc: new DateTimeOffset(2026, 11, 17, 10, 30, 0, TimeSpan.Zero),
-            LastTestRunAppVersion: "2026.11.1+sha",
-            LastTestRunPassed: true,
-            LastTestRunErrors: []);
+        var runAt = new DateTimeOffset(2026, 11, 17, 10, 30, 0, TimeSpan.Zero);
+        var detail = new SchemaVersionDetailBuilder()
+            .WithSchema("academy-return", 2)
+            .WithState(SchemaLifecycleState.Active)
+            .WithQualityRule("capacity-check", "Capacity must be > 0", engine: "jsonlogic", severity: "ERROR", description: "Checks positive capacity")
+            .WithIdentifier("URN", "/urn", required: true)
+            .WithValidFixtures("""{"urn":123456,"capacity":50}""")
+            .WithInvalidFixtures("""{"urn":123456,"capacity":-5}""")
+            .WithLastTestRun(runAt, "2026.11.1+sha", passed: true, errors: [])
+            .Build();
 
-        var runResult = new RunSchemaTestsResult(
-            ExecutedAtUtc: new DateTimeOffset(2026, 11, 17, 10, 30, 0, TimeSpan.Zero),
-            AppVersion: "2026.11.1+sha",
-            TotalSchemasChecked: 1,
-            PassedCount: 1,
-            FailedCount: 0,
-            Results:
-            [
-                new SchemaTestSuiteItemResult("academy-return", 2, "Active", true, true, 1, 1, 1, [], "URN", "/urn")
-            ]);
+        var runResult = new RunSchemaTestsResultBuilder()
+            .ExecutedAt(runAt)
+            .WithAppVersion("2026.11.1+sha")
+            .WithItem("academy-return", version: 2, state: "Active", passed: true, hasFixtures: true, validFixtureCount: 1, invalidFixtureCount: 1, businessRuleCount: 1, identifierType: "URN", identifierPointer: "/urn")
+            .Build();
 
         var html = await renderer.RenderComponentAsync<SchemaTestsPage>(new Dictionary<string, object?>
         {
@@ -289,18 +218,10 @@ public sealed class RazorComponentRenderingTests
     public async Task SchemaTestsPage_Should_Highlight_Invalid_Fixture_Inputs_And_Preserve_Edits()
     {
         var renderer = CreateRenderer();
-        var detail = new SchemaVersionDetail(
-            SchemaName: "academy-return",
-            Version: 2,
-            State: SchemaLifecycleState.Validated.ToNode(),
-            EffectiveFromUtc: null,
-            EffectiveToUtc: null,
-            IsActiveNow: false,
-            CanAcceptTraffic: false,
-            Sha256Hash: "deadbeef12345678",
-            CreatedAtUtc: new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
-            Fields: [],
-            QualityRules: []);
+        var detail = new SchemaVersionDetailBuilder()
+            .WithSchema("academy-return", 2)
+            .WithState(SchemaLifecycleState.Validated)
+            .Build();
 
         var err = Error.Validation(
             "Schema.VerificationFailed",
@@ -329,55 +250,40 @@ public sealed class RazorComponentRenderingTests
     public async Task SchemaTestsPage_Should_Render_Triggered_Errors_ExpectedErrors_And_SoftWarnings_For_Invalid_Fixtures()
     {
         var renderer = CreateRenderer();
-        var detail = new SchemaVersionDetail(
-            SchemaName: "cdc_survey",
-            Version: 1,
-            State: SchemaLifecycleState.Active.ToNode(),
-            EffectiveFromUtc: new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
-            EffectiveToUtc: null,
-            IsActiveNow: true,
-            CanAcceptTraffic: true,
-            Sha256Hash: "deadbeef12345678",
-            CreatedAtUtc: new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
-            Fields: [],
-            QualityRules: [],
-            ValidFixtures: [],
-            InvalidFixtures:
-            [
+        var detail = new SchemaVersionDetailBuilder()
+            .WithSchema("cdc_survey", 1)
+            .WithState(SchemaLifecycleState.Active)
+            .WithValidFixtures()
+            .WithInvalidFixtures(
                 """{"description":"Grade D without repairs","payload":{"urn":123456},"expectedErrors":["RULE-CONDITION-GRADE-D"]}""",
                 """{"urn":123456,"unexpected":true}""",
-                """{"urn":123456,"grade":"D"}"""
-            ],
-            LastTestRunAtUtc: new DateTimeOffset(2026, 11, 17, 12, 0, 0, TimeSpan.Zero),
-            LastTestRunAppVersion: "2026.11.1+sha",
-            LastTestRunPassed: true,
-            LastTestRunInvalidFixtures:
-            [
-                new InvalidFixtureOutcome(
-                    Index: 0,
-                    FailedAsExpected: true,
-                    TriggeredErrors: ["[Rule:RULE-CONDITION-GRADE-D] /elements/0/occurrences/0/repairs: At least one repair must be provided."],
-                    ExpectedErrors: ["RULE-CONDITION-GRADE-D"],
-                    UnmatchedExpectedErrors: [],
-                    Description: "Grade D without repairs"),
-                new InvalidFixtureOutcome(
-                    Index: 1,
-                    FailedAsExpected: false,
-                    TriggeredErrors: [],
-                    ExpectedErrors: [],
-                    UnmatchedExpectedErrors: []),
-                new InvalidFixtureOutcome(
-                    Index: 2,
-                    FailedAsExpected: true,
-                    TriggeredErrors: ["[Rule:RULE-CONDITION-GRADE-D] /repairs: Missing repair."],
-                    ExpectedErrors: [],
-                    UnmatchedExpectedErrors: [],
-                    Warning: "Failed validation, but unknown if expected because no expectedErrors assertions were configured.")
-            ],
-            LastTestRunWarnings:
-            [
-                "SampleInvalidFixtures:2 failed validation, but unknown if expected (no expectedErrors configured)."
-            ]);
+                """{"urn":123456,"grade":"D"}""")
+            .WithLastTestRun(
+                new DateTimeOffset(2026, 11, 17, 12, 0, 0, TimeSpan.Zero),
+                "2026.11.1+sha",
+                passed: true,
+                warnings: ["SampleInvalidFixtures:2 failed validation, but unknown if expected (no expectedErrors configured)."])
+            .WithInvalidFixtureOutcome(
+                index: 0,
+                failedAsExpected: true,
+                triggeredErrors: ["[Rule:RULE-CONDITION-GRADE-D] /elements/0/occurrences/0/repairs: At least one repair must be provided."],
+                expectedErrors: ["RULE-CONDITION-GRADE-D"],
+                unmatchedExpectedErrors: [],
+                description: "Grade D without repairs")
+            .WithInvalidFixtureOutcome(
+                index: 1,
+                failedAsExpected: false,
+                triggeredErrors: [],
+                expectedErrors: [],
+                unmatchedExpectedErrors: [])
+            .WithInvalidFixtureOutcome(
+                index: 2,
+                failedAsExpected: true,
+                triggeredErrors: ["[Rule:RULE-CONDITION-GRADE-D] /repairs: Missing repair."],
+                expectedErrors: [],
+                unmatchedExpectedErrors: [],
+                warning: "Failed validation, but unknown if expected because no expectedErrors assertions were configured.")
+            .Build();
 
         var html = await renderer.RenderComponentAsync<SchemaTestsPage>(new Dictionary<string, object?>
         {
