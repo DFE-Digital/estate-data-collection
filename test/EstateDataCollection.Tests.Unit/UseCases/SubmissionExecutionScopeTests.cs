@@ -67,8 +67,15 @@ public sealed class SubmissionExecutionScopeTests
                 string? outcome = null;
                 foreach (var tag in tags)
                 {
-                    if (tag.Key == "process.name") proc = tag.Value?.ToString();
-                    if (tag.Key == "process.outcome") outcome = tag.Value?.ToString();
+                    if (tag.Key == "process.name")
+                    {
+                        proc = tag.Value?.ToString();
+                    }
+
+                    if (tag.Key == "process.outcome")
+                    {
+                        outcome = tag.Value?.ToString();
+                    }
                 }
 
                 lock (recordedExecutions)

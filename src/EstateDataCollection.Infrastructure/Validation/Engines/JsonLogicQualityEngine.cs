@@ -285,11 +285,30 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
 
         if (node is JsonValue val)
         {
-            if (val.TryGetValue<bool>(out var b)) return b;
-            if (val.TryGetValue<double>(out var num)) return num != 0;
-            if (val.TryGetValue<int>(out var i)) return i != 0;
-            if (val.TryGetValue<long>(out var l)) return l != 0;
-            if (val.TryGetValue<string>(out var s)) return !string.IsNullOrEmpty(s);
+            if (val.TryGetValue<bool>(out var b))
+            {
+                return b;
+            }
+
+            if (val.TryGetValue<double>(out var num))
+            {
+                return num != 0;
+            }
+
+            if (val.TryGetValue<int>(out var i))
+            {
+                return i != 0;
+            }
+
+            if (val.TryGetValue<long>(out var l))
+            {
+                return l != 0;
+            }
+
+            if (val.TryGetValue<string>(out var s))
+            {
+                return !string.IsNullOrEmpty(s);
+            }
         }
 
         if (node is JsonArray arr)

@@ -58,12 +58,35 @@ public sealed record SchemaFieldTreeViewModel(
         }
 
         var parts = new List<string>();
-        if (c.Minimum.HasValue) parts.Add($"min: {c.Minimum}");
-        if (c.Maximum.HasValue) parts.Add($"max: {c.Maximum}");
-        if (c.MinLength.HasValue) parts.Add($"minLen: {c.MinLength}");
-        if (c.MaxLength.HasValue) parts.Add($"maxLen: {c.MaxLength}");
-        if (!string.IsNullOrWhiteSpace(c.Pattern)) parts.Add($"pattern: {c.Pattern}");
-        if (c.EnumValues is { Count: > 0 }) parts.Add($"enum: [{string.Join(", ", c.EnumValues)}]");
+        if (c.Minimum.HasValue)
+        {
+            parts.Add($"min: {c.Minimum}");
+        }
+
+        if (c.Maximum.HasValue)
+        {
+            parts.Add($"max: {c.Maximum}");
+        }
+
+        if (c.MinLength.HasValue)
+        {
+            parts.Add($"minLen: {c.MinLength}");
+        }
+
+        if (c.MaxLength.HasValue)
+        {
+            parts.Add($"maxLen: {c.MaxLength}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(c.Pattern))
+        {
+            parts.Add($"pattern: {c.Pattern}");
+        }
+
+        if (c.EnumValues is { Count: > 0 })
+        {
+            parts.Add($"enum: [{string.Join(", ", c.EnumValues)}]");
+        }
 
         return parts.Count > 0 ? string.Join("; ", parts) : null;
     }

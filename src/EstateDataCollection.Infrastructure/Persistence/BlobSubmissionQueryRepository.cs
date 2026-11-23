@@ -462,9 +462,21 @@ public sealed class BlobSubmissionQueryRepository(
         DateTimeOffset? lastAuditAt)
     {
         var max = createdAt;
-        if (finalisedAt.HasValue && finalisedAt.Value > max) max = finalisedAt.Value;
-        if (lastDraftAt.HasValue && lastDraftAt.Value > max) max = lastDraftAt.Value;
-        if (lastAuditAt.HasValue && lastAuditAt.Value > max) max = lastAuditAt.Value;
+        if (finalisedAt.HasValue && finalisedAt.Value > max)
+        {
+            max = finalisedAt.Value;
+        }
+
+        if (lastDraftAt.HasValue && lastDraftAt.Value > max)
+        {
+            max = lastDraftAt.Value;
+        }
+
+        if (lastAuditAt.HasValue && lastAuditAt.Value > max)
+        {
+            max = lastAuditAt.Value;
+        }
+
         return max;
     }
 }

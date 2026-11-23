@@ -150,7 +150,11 @@ public sealed record SubmissionDetailViewModel(
     {
         get
         {
-            if (Detail is null) return "—";
+            if (Detail is null)
+            {
+                return "—";
+            }
+
             if (!string.IsNullOrWhiteSpace(Detail.ResolvedIdentifierValue))
             {
                 return !string.IsNullOrWhiteSpace(Detail.ResolvedIdentifierType)
