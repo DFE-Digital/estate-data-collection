@@ -16,7 +16,10 @@ builder.Services.AddFunctions(typeof(Program).Assembly);
 builder.Services.AddApplication();
 builder.Services.AddDomain();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddMonitoring(builder.Configuration, builder.Logging);
+builder.Services.AddMonitoring(
+    builder.Configuration,
+    builder.Logging,
+    new MonitoringOptions { ServiceName = "estate-data-collection-public" });
 
 var app = builder.Build();
 app.Run();
