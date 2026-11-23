@@ -63,21 +63,29 @@ The collection is organized into seven logical folders reflecting the EDC Public
 - **`3.4 Get Public ODCS Schema Version Detail (edc-survey-sites v1)`** (`GET {{baseUrl}}/schemas/{{odcsSiteSchemaName}}/versions/1?includeRawJsonSchema=true`):
   - Retrieves the compiled ODCS schema fields and extracted `CDC-DQ1-JSONLogic` quality rule summary.
 
-### `4. Submission Lifecycle - Generic EDC Schema (Public API)`
-- **`4.1 Create Submission Session (Auto Schedule)`** (`POST {{baseUrl}}/submissions/{{schemaName}}`):
-  - Automatically resolves the active schema schedule and captures `submissionId` into Postman variables.
-- **`4.2 Create Submission Session (Explicitly Pin Version 1)`** (`POST {{baseUrl}}/submissions/{{schemaName}}?version=1`):
-  - Explicitly pins the session to Schema v1.
-- **`4.3 Upload Draft 1 (Incomplete - Missing Address)`** (`PUT {{baseUrl}}/submissions/{{submissionId}}`):
-  - Persists partial draft to `payloads` container and returns HTTP 200 with `isSuccessful: false` and `pendingErrors`.
-- **`4.4 Upload Draft 2 (Invalid Data Type - URN is string)`** (`PUT {{baseUrl}}/submissions/{{submissionId}}`):
-  - Tests type mismatch diagnostics on partial saves.
-- **`4.5 Attempt Finalise While Incomplete (422 Unprocessable Entity)`** (`POST {{baseUrl}}/submissions/{{submissionId}}/finalise`):
-  - Verifies that incomplete drafts are rejected with HTTP 422 on finalisation.
-- **`4.6 Upload Draft 3 (Complete & Valid)`** (`PUT {{baseUrl}}/submissions/{{submissionId}}`):
-  - Complete payload meeting all Schema v1 and quality rule requirements (`isSuccessful: true`, `pendingErrors: []`).
-- **`4.7 Finalise Submission (Success - Promote to Processed)`** (`POST {{baseUrl}}/submissions/{{submissionId}}/finalise`):
-  - Verifies payload integrity, stamps SHA-256 hash, promotes blob from `payloads` to `processed`, and updates status to `ReadyForCde`.
+### `4. Submission Lifecycle - CDC Survey (Public API)`
+- **`4.1 Create Submission Session (Auto Schedule - cdc_survey)`** (`POST {{baseUrl}}/submissions/{{cdcSchemaName}}`):
+  - Automatically resolves the active `cdc_survey` schema schedule and captures `submissionId` (and `cdcSubmissionId`) into Postman variables.
+- **`4.2 Create Submission Session (Explicitly Pin Version 1 - cdc_survey)`** (`POST {{baseUrl}}/submissions/{{cdcSchemaName}}?version=1`):
+  - Explicitly pins the `cdc_survey` session to Schema v1 and updates `submissionId` (and `cdcSubmissionId`).
+- **`4.3 Get Submission Status (Initial Draft - Awaiting Payload)`** (`GET {{baseUrl}}/submissions/{{submissionId}}`):
+  - Checks the newly created session status (`Draft`, `hasDraftPayload: false`, `isReadyToFinalise: false`).
+- **`4.4 Upload Draft 1 (Incomplete CDC Survey - Fails Step 1 JSON Schema)`** (`PUT {{baseUrl}}/submissions/{{submissionId}}`):
+  - Persists partial `cdc_survey` draft to `payloads` container and returns HTTP 200 with `isSuccessful: false` and `pendingErrors`.
+- **`4.5 Upload Draft 2 (Passes Step 1, Fails Step 2 RULE-CONDITION-GRADE-D)`** (`PUT {{baseUrl}}/submissions/{{submissionId}}`):
+  - Tests business rule diagnostics (`condition_grade: "D"` with empty `repairs`) on partial/draft saves.
+- **`4.6 Check Submission Readiness (Not Ready)`** (`GET {{baseUrl}}/submissions/{{submissionId}}/check`):
+  - Merges timestamped draft chunks and confirms `isReadyToFinalise: false` with actionable `nextSteps`.
+- **`4.7 Attempt Finalise While Invalid (422 Unprocessable Entity)`** (`POST {{baseUrl}}/submissions/{{submissionId}}/finalise`):
+  - Verifies that invalid drafts are rejected with HTTP 422 on finalisation.
+- **`4.8 Upload Draft 3 (Complete & Valid CDC Survey)`** (`PUT {{baseUrl}}/submissions/{{submissionId}}`):
+  - Complete `cdc_survey` payload meeting all Schema v1 and quality rule requirements (`isSuccessful: true`, `pendingErrors: []`).
+- **`4.9 Check Submission Readiness (Ready to Finalise)`** (`GET {{baseUrl}}/submissions/{{submissionId}}/check`):
+  - Confirms `isReadyToFinalise: true` and zero `pendingErrors` prior to finalisation.
+- **`4.10 Finalise Submission (Success - Promote to Processed)`** (`POST {{baseUrl}}/submissions/{{submissionId}}/finalise`):
+  - Verifies payload integrity, stamps SHA-256 hash, and promotes the blob from `payloads` to `processed`.
+- **`4.11 Get Submission Status (Finalised)`** (`GET {{baseUrl}}/submissions/{{submissionId}}`):
+  - Confirms the submission status has transitioned to `Finalised`.
 
 ### `5. ODCS v3.2.0 Survey Sites Workflow (edc-survey-sites)`
 - **`5.1 Create ODCS Survey Sites Submission Session`** (`POST {{baseUrl}}/submissions/{{odcsSiteSchemaName}}?version=1`)
@@ -105,9 +113,9 @@ The collection is organized into seven logical folders reflecting the EDC Public
 | `odcsSiteSchemaName` | ODCS v3.2.0 survey sites schema key | `edc-survey-sites` | `edc-survey-sites` |
 | `functionKey` | Public Azure Function key | *(Empty - not required locally)* | `dGhpcy1pcy1hLWtleS4uLg==` |
 | `adminFunctionKey` | Admin Azure Function key | *(Empty - not required locally)* | `YW5vdGhlci1hZG1pbi1rZXk=` |
-| `submissionId` | Auto-populated by 4.1 / 4.2 | *(Managed dynamically)* | *(Managed dynamically)* |
+| `submissionId` | Auto-populated by 4.1 / 4.2 / 6.3 | *(Managed dynamically)* | *(Managed dynamically)* |
 | `odcsSubmissionId` | Auto-populated by 5.1 | *(Managed dynamically)* | *(Managed dynamically)* |
-| `cdcSubmissionId` | Auto-populated by 6.3 | *(Managed dynamically)* | *(Managed dynamically)* |
+| `cdcSubmissionId` | Auto-populated by 4.1 / 4.2 / 6.3 | *(Managed dynamically)* | *(Managed dynamically)* |
 
 > [!TIP]
 > When testing against Azure environments (**Dev**, **Test**, or **Prod**), obtain your Function Keys from the Azure Portal (`Function App -> App keys` or `Functions -> Manage function keys`) and paste them into `functionKey` and `adminFunctionKey`. If both Public and Admin routes are hosted on a single Function App instance, set `adminBaseUrl` equal to `baseUrl`.

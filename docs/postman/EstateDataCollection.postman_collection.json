@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "c1f79f22-9650-48e2-9ef4-7cb45d625d19",
     "name": "Estate Data Collection (EDC) API",
-    "description": "Comprehensive Postman test kit for the Estate Data Collection (EDC) Azure Functions platform (Public & Admin Function Apps).\n\nCovers:\n0. Health & Version Observability (GET /api/about)\n1. Admin Schema & Multi-Engine Quality Rule Verification (POST /api/schemas/verify, POST /api/logic/verify \u2014 JSON Schema Draft-07 & 2020-12, ODCS v3.2.0 YAML, JsonLogic & CEL)\n2. Admin Schema Ingestion, Scheduling & Catalogue Management (POST /api/schemas/{schemaName}/versions/{version}, PATCH /api/schemas/{schemaName}/versions/{version}/schedule, GET /api/schemas, GET /api/schemas/{schemaName}/versions/{version})\n3. Public Schema Discovery & Catalogue (GET /api/schemas, GET /api/schemas/{schemaName}, GET /api/schemas/{schemaName}/versions/{version})\n4. Generic EDC Submission Lifecycle (POST /api/submissions/{schemaName}, PUT /api/submissions/{submissionId}, POST /api/submissions/{submissionId}/finalise)\n5. ODCS v3.2.0 Survey Sites Workflow (edc-survey-sites)\n6. CDC Survey Two-Step Validation Pipeline (cdc_survey with 10 Quality Rules)",
+    "description": "Comprehensive Postman test kit for the Estate Data Collection (EDC) Azure Functions platform (Public & Admin Function Apps).\n\nCovers:\n0. Health & Version Observability (GET /api/about)\n1. Admin Schema & Multi-Engine Quality Rule Verification (POST /api/schemas/verify, POST /api/logic/verify — JSON Schema Draft-07 & 2020-12, ODCS v3.2.0 YAML, JsonLogic & CEL)\n2. Admin Schema Ingestion, Scheduling & Catalogue Management (POST /api/schemas/{schemaName}/versions/{version}, PATCH /api/schemas/{schemaName}/versions/{version}/schedule, GET /api/schemas, GET /api/schemas/{schemaName}/versions/{version})\n3. Public Schema Discovery & Catalogue (GET /api/schemas, GET /api/schemas/{schemaName}, GET /api/schemas/{schemaName}/versions/{version})\n4. CDC Survey Submission Lifecycle (POST /api/submissions/{cdcSchemaName}, GET /api/submissions/{submissionId}, PUT /api/submissions/{submissionId}, GET /api/submissions/{submissionId}/check, POST /api/submissions/{submissionId}/finalise)\n5. ODCS v3.2.0 Survey Sites Workflow (edc-survey-sites)\n6. CDC Survey Two-Step Validation Pipeline (cdc_survey with 10 Quality Rules)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1209,10 +1209,10 @@
       ]
     },
     {
-      "name": "4. Submission Lifecycle - Generic EDC Schema (Public API)",
+      "name": "4. Submission Lifecycle - CDC Survey (Public API)",
       "item": [
         {
-          "name": "4.1 Create Submission Session (Auto Schedule)",
+          "name": "4.1 Create Submission Session (Auto Schedule - cdc_survey)",
           "event": [
             {
               "listen": "test",
@@ -1224,14 +1224,16 @@
                   "",
                   "const jsonData = pm.response.json();",
                   "const data = jsonData.data ?? jsonData;",
-                  "pm.test(\"Contains valid SubmissionId and Schema\", function () {",
+                  "pm.test(\"Contains valid SubmissionId and cdc_survey schema\", function () {",
                   "    pm.expect(data.submissionId).to.be.a(\"string\");",
-                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"cdcSchemaName\"));",
                   "});",
                   "",
-                  "// Automatically propagate submissionId for subsequent draft updates and finalisation",
+                  "// Automatically propagate submissionId (and cdcSubmissionId) for subsequent requests",
                   "pm.collectionVariables.set(\"submissionId\", data.submissionId);",
                   "pm.environment.set(\"submissionId\", data.submissionId);",
+                  "pm.collectionVariables.set(\"cdcSubmissionId\", data.submissionId);",
+                  "pm.environment.set(\"cdcSubmissionId\", data.submissionId);",
                   "console.log(\"Saved submissionId to environment: \" + data.submissionId);"
                 ],
                 "type": "text/javascript"
@@ -1248,21 +1250,21 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/submissions/{{schemaName}}",
+              "raw": "{{baseUrl}}/submissions/{{cdcSchemaName}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "submissions",
-                "{{schemaName}}"
+                "{{cdcSchemaName}}"
               ]
             },
-            "description": "Initialises a new submission session. The API automatically resolves the currently active schema version from the schedule."
+            "description": "Initialises a new cdc_survey submission session. The API automatically resolves the currently active schema version from the schedule."
           },
           "response": []
         },
         {
-          "name": "4.2 Create Submission Session (Explicitly Pin Version 1)",
+          "name": "4.2 Create Submission Session (Explicitly Pin Version 1 - cdc_survey)",
           "event": [
             {
               "listen": "test",
@@ -1274,13 +1276,17 @@
                   "",
                   "const jsonData = pm.response.json();",
                   "const data = jsonData.data ?? jsonData;",
-                  "pm.test(\"Pinned explicitly to Version 1\", function () {",
+                  "pm.test(\"Pinned explicitly to cdc_survey Version 1\", function () {",
+                  "    pm.expect(data.submissionId).to.be.a(\"string\");",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"cdcSchemaName\"));",
                   "    pm.expect(data.version).to.eql(1);",
                   "});",
                   "",
-                  "// Update submissionId to use this newly created session",
+                  "// Update submissionId (and cdcSubmissionId) to use this newly created session",
                   "pm.collectionVariables.set(\"submissionId\", data.submissionId);",
-                  "pm.environment.set(\"submissionId\", data.submissionId);"
+                  "pm.environment.set(\"submissionId\", data.submissionId);",
+                  "pm.collectionVariables.set(\"cdcSubmissionId\", data.submissionId);",
+                  "pm.environment.set(\"cdcSubmissionId\", data.submissionId);"
                 ],
                 "type": "text/javascript"
               }
@@ -1296,13 +1302,13 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/submissions/{{schemaName}}?version=1",
+              "raw": "{{baseUrl}}/submissions/{{cdcSchemaName}}?version=1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "submissions",
-                "{{schemaName}}"
+                "{{cdcSchemaName}}"
               ],
               "query": [
                 {
@@ -1311,12 +1317,64 @@
                 }
               ]
             },
-            "description": "Creates a submission session explicitly pinned to Schema Version 1."
+            "description": "Creates a cdc_survey submission session explicitly pinned to Schema Version 1."
           },
           "response": []
         },
         {
-          "name": "4.3 Upload Draft 1 (Incomplete - Missing Address)",
+          "name": "4.3 Get Submission Status (Initial Draft - Awaiting Payload)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Returns Draft status awaiting initial payload\", function () {",
+                  "    pm.expect(data.submissionId).to.eql(pm.variables.get(\"submissionId\"));",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"cdcSchemaName\"));",
+                  "    pm.expect(data.status).to.eql(\"Draft\");",
+                  "    pm.expect(data.hasDraftPayload).to.be.false;",
+                  "    pm.expect(data.isReadyToFinalise).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "Checks the current lifecycle state and validation readiness for the submission session."
+          },
+          "response": []
+        },
+        {
+          "name": "4.4 Upload Draft 1 (Incomplete CDC Survey - Fails Step 1 JSON Schema)",
           "event": [
             {
               "listen": "test",
@@ -1328,7 +1386,7 @@
                   "",
                   "const jsonData = pm.response.json();",
                   "const data = jsonData.data ?? jsonData;",
-                  "pm.test(\"Reports missing required fields as pending errors\", function () {",
+                  "pm.test(\"Reports missing required CDC sections as pending errors\", function () {",
                   "    pm.expect(data.isSuccessful).to.be.false;",
                   "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
                   "});"
@@ -1352,7 +1410,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"urn\": 104521,\n  \"school_name\": \"St Mary's High School\"\n}"
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-2026-001\",\n    \"survey_name\": \"Condition Survey 2026\",\n    \"participant_id\": \"PART-001\",\n    \"is_complete\": false,\n    \"created_at\": \"2026-10-28T10:00:00Z\",\n    \"updated_at\": \"2026-10-28T10:00:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"104521\",\n    \"name\": \"St Mary's High School\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/submissions/{{submissionId}}",
@@ -1364,24 +1422,24 @@
                 "{{submissionId}}"
               ]
             },
-            "description": "Demonstrates draft persistence in the 'payloads' landing container. Even though required fields are missing, the draft is safely persisted and returns 200 OK with pending error diagnostic details."
+            "description": "Uploads a partial cdc_survey draft missing required sections (sites, elements, answers, evidence). Persisted to the 'payloads' container and returns 200 OK with pending error diagnostics."
           },
           "response": []
         },
         {
-          "name": "4.4 Upload Draft 2 (Invalid Data Type - URN is string)",
+          "name": "4.5 Upload Draft 2 (Passes Step 1, Fails Step 2 RULE-CONDITION-GRADE-D)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status code is 200 OK (Persisted with schema type error)\", function () {",
+                  "pm.test(\"Status code is 200 OK (Persisted with business rule error)\", function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
                   "const jsonData = pm.response.json();",
                   "const data = jsonData.data ?? jsonData;",
-                  "pm.test(\"Detects data type mismatch on URN\", function () {",
+                  "pm.test(\"Detects RULE-CONDITION-GRADE-D violation\", function () {",
                   "    pm.expect(data.isSuccessful).to.be.false;",
                   "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
                   "});"
@@ -1405,7 +1463,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"urn\": \"NOT_A_NUMBER\",\n  \"school_name\": \"St Mary's High School\",\n  \"school_address\": \"High Street, Leeds\"\n}"
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-1234-5678\",\n    \"survey_name\": \"CCD\",\n    \"participant_id\": \"abc-def-ghi\",\n    \"surveyor_email\": \"surveyor@supplier.com\",\n    \"is_complete\": true,\n    \"created_at\": \"2026-10-15T10:00:00Z\",\n    \"updated_at\": \"2026-10-15T14:30:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"123456\",\n    \"name\": \"Example School\"\n  },\n  \"sites\": [\n    {\n      \"name\": \"EFA1\",\n      \"blocks\": [\n        {\n          \"name\": \"EFAA\",\n          \"type\": \"block\",\n          \"floors\": [\n            { \"name\": \"EFAA-GF\" },\n            { \"name\": \"EFAA-1F\" }\n          ]\n        }\n      ]\n    }\n  ],\n  \"elements\": [\n    {\n      \"id\": \"ELM-001\",\n      \"NRM3_code\": \"25.10.10\",\n      \"description\": \"Windows\",\n      \"asset_id\": \"EFA1\",\n      \"asset_type\": \"site\",\n      \"occurrences\": [\n        {\n          \"id\": \"OCC-001\",\n          \"name\": \"Main Building Windows\",\n          \"basis_of_assessment\": \"Seen\",\n          \"condition_grade\": \"D\",\n          \"condition_description\": \"Defective glazed units and ironmongery\",\n          \"replacement\": {\n            \"rem_life\": 7,\n            \"uom\": \"m2\",\n            \"replacement_quantity\": 400,\n            \"replacement_rate\": 1000.0\n          },\n          \"repairs\": []\n        }\n      ]\n    }\n  ],\n  \"answers\": [\n    {\n      \"id\": \"ANS-001\",\n      \"question_id\": \"Q-101\",\n      \"asset_id\": \"EFA1\",\n      \"asset_type\": \"site\",\n      \"value\": \"Yes\",\n      \"value_type\": \"lookup_list\",\n      \"created_at\": \"2026-10-15T11:00:00Z\",\n      \"updated_at\": \"2026-10-15T11:00:00Z\",\n      \"evidence\": [ { \"id\": \"EVD-001\" } ]\n    },\n    {\n      \"id\": \"ANS-002\",\n      \"question_id\": \"Q-102\",\n      \"asset_id\": \"EFAA\",\n      \"asset_type\": \"block\",\n      \"value\": \"Critical\",\n      \"value_type\": \"lookup_list\",\n      \"created_at\": \"2026-10-15T11:00:00Z\",\n      \"updated_at\": \"2026-10-15T11:00:00Z\",\n      \"evidence\": [ { \"id\": \"EVD-001\" } ]\n    }\n  ],\n  \"evidence\": [\n    {\n      \"id\": \"EVD-001\",\n      \"asset_id\": \"ELM-001\",\n      \"asset_type\": \"element\",\n      \"description\": \"Photograph showing rust on the main boiler casing\",\n      \"mime_type\": \"image/jpeg\",\n      \"blob_key\": \"s3://dfe-surveys/evidence/EVD-001.jpg\",\n      \"file_origin\": \"iPad Camera\",\n      \"created_at\": \"2026-10-15T11:02:00Z\",\n      \"updated_at\": \"2026-10-15T11:02:00Z\"\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/submissions/{{submissionId}}",
@@ -1417,12 +1475,64 @@
                 "{{submissionId}}"
               ]
             },
-            "description": "Demonstrates schema contract enforcement. The draft is persisted to Blob storage, but reports contract validation failure for the surveyor."
+            "description": "Uploads a structurally valid cdc_survey draft that violates RULE-CONDITION-GRADE-D (condition_grade is 'D' with an empty repairs array)."
           },
           "response": []
         },
         {
-          "name": "4.5 Attempt Finalise While Incomplete (422 Unprocessable Entity)",
+          "name": "4.6 Check Submission Readiness (Not Ready)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Reports merged draft is not ready to finalise\", function () {",
+                  "    pm.expect(data.submissionId).to.eql(pm.variables.get(\"submissionId\"));",
+                  "    pm.expect(data.hasDraftPayload).to.be.true;",
+                  "    pm.expect(data.isReadyToFinalise).to.be.false;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{submissionId}}/check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{submissionId}}",
+                "check"
+              ]
+            },
+            "description": "Merges timestamped draft chunks, runs soft validation (schema, quality rules, identifier), and returns readiness alongside next steps."
+          },
+          "response": []
+        },
+        {
+          "name": "4.7 Attempt Finalise While Invalid (422 Unprocessable Entity)",
           "event": [
             {
               "listen": "test",
@@ -1462,12 +1572,12 @@
                 "finalise"
               ]
             },
-            "description": "Verifies that attempting to finalise an incomplete or invalid draft returns 422 Unprocessable Entity and leaves the draft in the 'payloads' landing zone."
+            "description": "Verifies that attempting to finalise an incomplete or invalid cdc_survey draft returns 422 Unprocessable Entity and leaves the draft in the 'payloads' landing zone."
           },
           "response": []
         },
         {
-          "name": "4.6 Upload Draft 3 (Complete & Valid)",
+          "name": "4.8 Upload Draft 3 (Complete & Valid CDC Survey)",
           "event": [
             {
               "listen": "test",
@@ -1479,7 +1589,7 @@
                   "",
                   "const jsonData = pm.response.json();",
                   "const data = jsonData.data ?? jsonData;",
-                  "pm.test(\"Payload conforms to schema and quality rules with 0 pending errors\", function () {",
+                  "pm.test(\"Payload conforms to cdc_survey schema and quality rules with 0 pending errors\", function () {",
                   "    pm.expect(data.isSuccessful).to.be.true;",
                   "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.empty;",
                   "});"
@@ -1503,7 +1613,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"urn\": 104521,\n  \"school_name\": \"St Mary's High School\",\n  \"school_address\": \"High Street, Leeds\",\n  \"local_authority\": \"Leeds\",\n  \"telephone\": \"0113 123 4567\",\n  \"diocese\": \"Diocese of Leeds\",\n  \"school_capacity\": 450\n}"
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-1234-5678\",\n    \"survey_name\": \"CCD\",\n    \"participant_id\": \"abc-def-ghi\",\n    \"surveyor_email\": \"surveyor@supplier.com\",\n    \"is_complete\": true,\n    \"created_at\": \"2026-10-15T10:00:00Z\",\n    \"updated_at\": \"2026-10-15T14:30:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"123456\",\n    \"name\": \"Example School\"\n  },\n  \"sites\": [\n    {\n      \"name\": \"EFA1\",\n      \"blocks\": [\n        {\n          \"name\": \"EFAA\",\n          \"type\": \"block\",\n          \"floors\": [\n            { \"name\": \"EFAA-GF\" },\n            { \"name\": \"EFAA-1F\" }\n          ]\n        },\n        {\n          \"name\": \"EFAB\",\n          \"type\": \"block\",\n          \"floors\": [\n            { \"name\": \"EFAB-GF\" }\n          ]\n        },\n        {\n          \"name\": \"EFAC\",\n          \"type\": \"block\",\n          \"floors\": []\n        }\n      ]\n    }\n  ],\n  \"elements\": [\n    {\n      \"id\": \"ELM-001\",\n      \"NRM3_code\": \"25.10.10\",\n      \"description\": \"Windows\",\n      \"asset_id\": \"EFA1\",\n      \"asset_type\": \"site\",\n      \"occurrences\": [\n        {\n          \"id\": \"OCC-001\",\n          \"name\": \"Main Building Windows\",\n          \"basis_of_assessment\": \"Seen\",\n          \"condition_grade\": \"C\",\n          \"condition_description\": \"Defective glazed units and ironmongery\",\n          \"replacement\": {\n            \"rem_life\": 7,\n            \"uom\": \"m2\",\n            \"replacement_quantity\": 400,\n            \"replacement_rate\": 1000.0\n          },\n          \"repairs\": [\n            {\n              \"id\": \"REP-001\",\n              \"repair_description\": \"(1) Replace 20no. Defective Double Glazed Units\",\n              \"repair_item\": \"Double Glazed Unit Replacement\",\n              \"repair_classification\": \"Y\",\n              \"uom\": \"No.\",\n              \"repair_quantity\": 20,\n              \"repair_rate\": 400.0,\n              \"estimated_cost\": 8000.0\n            },\n            {\n              \"id\": \"REP-002\",\n              \"repair_description\": \"(2) Replace Defective Ironmongery: 2no GF Windows and 5no 1st Floor Windows\",\n              \"repair_item\": \"Aluminium Window Handle Replacement\",\n              \"repair_classification\": \"X\",\n              \"uom\": \"No.\",\n              \"repair_quantity\": 7,\n              \"repair_rate\": 100.0,\n              \"estimated_cost\": 700.0\n            }\n          ]\n        }\n      ]\n    }\n  ],\n  \"answers\": [\n    {\n      \"id\": \"ANS-001\",\n      \"question_id\": \"Q-101\",\n      \"asset_id\": \"EFA1\",\n      \"asset_type\": \"site\",\n      \"value\": \"Yes\",\n      \"value_type\": \"lookup_list\",\n      \"created_at\": \"2026-10-15T11:00:00Z\",\n      \"updated_at\": \"2026-10-15T11:00:00Z\",\n      \"evidence\": [ { \"id\": \"EVD-001\" } ]\n    },\n    {\n      \"id\": \"ANS-002\",\n      \"question_id\": \"Q-102\",\n      \"asset_id\": \"EFAA\",\n      \"asset_type\": \"block\",\n      \"value\": \"Critical\",\n      \"value_type\": \"lookup_list\",\n      \"created_at\": \"2026-10-15T11:00:00Z\",\n      \"updated_at\": \"2026-10-15T11:00:00Z\",\n      \"evidence\": [ { \"id\": \"EVD-001\" } ]\n    }\n  ],\n  \"evidence\": [\n    {\n      \"id\": \"EVD-001\",\n      \"asset_id\": \"ELM-001\",\n      \"asset_type\": \"element\",\n      \"description\": \"Photograph showing rust on the main boiler casing\",\n      \"mime_type\": \"image/jpeg\",\n      \"blob_key\": \"s3://dfe-surveys/evidence/EVD-001.jpg\",\n      \"file_origin\": \"iPad Camera\",\n      \"created_at\": \"2026-10-15T11:02:00Z\",\n      \"updated_at\": \"2026-10-15T11:02:00Z\"\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/submissions/{{submissionId}}",
@@ -1515,12 +1625,63 @@
                 "{{submissionId}}"
               ]
             },
-            "description": "Complete and valid survey payload satisfying all mandatory and optional properties of Schema Version 1 and companion quality rules."
+            "description": "Complete and valid cdc_survey payload satisfying all JSON Schema and JsonLogic quality rule requirements."
           },
           "response": []
         },
         {
-          "name": "4.7 Finalise Submission (Success - Promote to Processed)",
+          "name": "4.9 Check Submission Readiness (Ready to Finalise)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Submission is ready to finalise with 0 pending errors\", function () {",
+                  "    pm.expect(data.submissionId).to.eql(pm.variables.get(\"submissionId\"));",
+                  "    pm.expect(data.isReadyToFinalise).to.be.true;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{submissionId}}/check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{submissionId}}",
+                "check"
+              ]
+            },
+            "description": "Confirms that the merged cdc_survey draft passes all validation checks and is ready to finalise."
+          },
+          "response": []
+        },
+        {
+          "name": "4.10 Finalise Submission (Success - Promote to Processed)",
           "event": [
             {
               "listen": "test",
@@ -1534,9 +1695,8 @@
                   "const data = jsonData.data ?? jsonData;",
                   "pm.test(\"Submission successfully finalised and promoted\", function () {",
                   "    pm.expect(data.submissionId).to.eql(pm.variables.get(\"submissionId\"));",
-                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"schemaName\"));",
-                  "    pm.expect(data.status).to.eql(\"ReadyForCde\");",
-                  "    pm.expect(data.processedBlobUri).to.be.a(\"string\");",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"cdcSchemaName\"));",
+                  "    pm.expect(data.processedBlobUri).to.be.a(\"string\").and.not.be.empty;",
                   "    pm.expect(data.finalisedAtUtc).to.be.a(\"string\");",
                   "});"
                 ],
@@ -1564,7 +1724,57 @@
                 "finalise"
               ]
             },
-            "description": "Validates the stored draft against the pinned schema version and quality rules, stamps with SHA-256 integrity hash, moves payload from 'payloads' to 'processed' blob container, and marks status as ReadyForCde."
+            "description": "Validates the stored cdc_survey draft against the pinned schema version and quality rules, stamps with SHA-256 integrity hash, and promotes the payload from 'payloads' to 'processed' blob container."
+          },
+          "response": []
+        },
+        {
+          "name": "4.11 Get Submission Status (Finalised)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Submission status is Finalised\", function () {",
+                  "    pm.expect(data.submissionId).to.eql(pm.variables.get(\"submissionId\"));",
+                  "    pm.expect(data.status).to.eql(\"Finalised\");",
+                  "    pm.expect(data.finalisedAtUtc).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "Verifies that the submission lifecycle state has transitioned to Finalised."
           },
           "response": []
         }
@@ -1894,8 +2104,15 @@
                   "",
                   "const jsonData = pm.response.json();",
                   "const data = jsonData.data ?? jsonData;",
+                  "pm.test(\"Contains valid SubmissionId for cdc_survey\", function () {",
+                  "    pm.expect(data.submissionId).to.be.a(\"string\");",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"cdcSchemaName\"));",
+                  "});",
+                  "",
                   "pm.collectionVariables.set(\"cdcSubmissionId\", data.submissionId);",
-                  "pm.environment.set(\"cdcSubmissionId\", data.submissionId);"
+                  "pm.environment.set(\"cdcSubmissionId\", data.submissionId);",
+                  "pm.collectionVariables.set(\"submissionId\", data.submissionId);",
+                  "pm.environment.set(\"submissionId\", data.submissionId);"
                 ],
                 "type": "text/javascript"
               }
@@ -2096,9 +2313,11 @@
                   "",
                   "const jsonData = pm.response.json();",
                   "const data = jsonData.data ?? jsonData;",
-                  "pm.test(\"CDC survey finalised and promoted to ReadyForCde\", function () {",
+                  "pm.test(\"CDC survey finalised and promoted to processed storage\", function () {",
                   "    pm.expect(data.submissionId).to.eql(pm.variables.get(\"cdcSubmissionId\"));",
-                  "    pm.expect(data.status).to.eql(\"ReadyForCde\");",
+                  "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"cdcSchemaName\"));",
+                  "    pm.expect(data.processedBlobUri).to.be.a(\"string\").and.not.be.empty;",
+                  "    pm.expect(data.finalisedAtUtc).to.be.a(\"string\");",
                   "});"
                 ],
                 "type": "text/javascript"
