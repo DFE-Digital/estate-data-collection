@@ -301,7 +301,7 @@ public sealed class RazorComponentRenderingTests
         decoded.Should().Contain("[Rule:RULE-CONDITION-GRADE-D]");
         decoded.Should().Contain("Passed unexpectedly");
         decoded.Should().Contain("Failed — unknown if expected");
-        decoded.Should().Contain("Soft warning: 1 invalid fixture(s) failed validation");
+        decoded.Should().Contain("1 invalid fixture(s) failed validation");
         decoded.Should().Contain("1 soft warning(s)");
     }
 
@@ -397,7 +397,7 @@ public sealed class RazorComponentRenderingTests
         decodedWorkbench.Should().Contain("Contract Workbench");
         decodedWorkbench.Should().Contain("Verification passed");
         decodedWorkbench.Should().Contain("Schema verified successfully");
-        decodedWorkbench.Should().Contain("Soft warning: 1 invalid fixture(s) failed validation");
+        decodedWorkbench.Should().Contain("1 invalid fixture(s) failed validation");
         decodedWorkbench.Should().Contain("Failed — unknown if expected");
         decodedWorkbench.Should().Contain("[Schema] /schoolCode: Required property missing");
         decodedWorkbench.Should().Contain("SchoolCode");

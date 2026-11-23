@@ -359,7 +359,7 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
         runSingleHtml.Content.Should().Contain("Schema tests passed");
         runSingleHtml.Content.Should().Contain("Evaluated 1 valid fixture(s), 1 invalid fixture(s), and 1 business rule(s)");
         var decodedSingle = WebUtility.HtmlDecode(runSingleHtml.Content!);
-        decodedSingle.Should().Contain("Soft warning: 1 invalid fixture(s) failed validation");
+        decodedSingle.Should().Contain("1 invalid fixture(s) failed validation");
         decodedSingle.Should().Contain("Failed — unknown if expected");
         decodedSingle.Should().Contain("[Rule:positive-capacity]");
 
