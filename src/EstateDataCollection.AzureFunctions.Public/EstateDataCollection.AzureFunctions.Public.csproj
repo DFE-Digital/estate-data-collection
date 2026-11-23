@@ -3,7 +3,6 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <AzureFunctionsVersion>v4</AzureFunctionsVersion>
-        <RootNamespace>EstateDataCollection.AzureFunctions</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
