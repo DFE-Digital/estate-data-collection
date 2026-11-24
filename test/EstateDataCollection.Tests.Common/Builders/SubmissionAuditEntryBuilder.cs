@@ -79,9 +79,9 @@ public sealed class SubmissionAuditEntryBuilder
         return this;
     }
 
-    public SubmissionAuditEntryBuilder WithIdentifier(string? type, string? value, int? urn = null)
+    public SubmissionAuditEntryBuilder WithIdentifier(string? type, string? value)
     {
-        _identifier = new SubmissionAuditIdentifier(type, value, urn);
+        _identifier = new SubmissionAuditIdentifier(type, value);
         return this;
     }
 

@@ -6,7 +6,8 @@ public sealed class SubmissionSessionBuilder
 {
     private string _schemaName = "edc_payload";
     private int _schemaVersion = 1;
-    private int? _urn;
+    private string? _identifierType;
+    private string? _identifierValue;
     private bool _finalised;
 
     public SubmissionSessionBuilder WithSchema(string schemaName, int version = 1)
@@ -28,9 +29,10 @@ public sealed class SubmissionSessionBuilder
         return this;
     }
 
-    public SubmissionSessionBuilder WithUrn(int urn)
+    public SubmissionSessionBuilder WithIdentifier(string type, string value)
     {
-        _urn = urn;
+        _identifierType = type;
+        _identifierValue = value;
         return this;
     }
 
@@ -43,9 +45,9 @@ public sealed class SubmissionSessionBuilder
     public SubmissionSession Build()
     {
         var session = SubmissionSession.Create(_schemaName, _schemaVersion);
-        if (_urn.HasValue)
+        if (!string.IsNullOrWhiteSpace(_identifierValue))
         {
-            session.AssignUrn(_urn.Value);
+            session.AssignIdentifier(_identifierType, _identifierValue);
         }
 
         if (_finalised)

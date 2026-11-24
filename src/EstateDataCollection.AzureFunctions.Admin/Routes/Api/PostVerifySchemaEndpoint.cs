@@ -16,7 +16,8 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// <summary>
 /// Dry-run verification endpoint for the Data Team / CI pipelines.
 /// Evaluates schema syntax (Draft-07 / Draft 2020-12), validates quality rules (JsonLogic / CEL),
-/// validates identifier extraction alignment, supports direct ODCS YAML contracts, and runs in-flight golden fixture checks without persisting to Blob.
+/// validates identifier extraction alignment, supports direct ODCS YAML contracts or raw JSON rule arrays,
+/// and runs in-flight golden fixture checks without persisting to Blob.
 /// Route: POST /api/schemas/verify
 /// </summary>
 public sealed class PostVerifySchemaEndpoint(
@@ -47,6 +48,17 @@ public sealed class PostVerifySchemaEndpoint(
         if (string.IsNullOrWhiteSpace(rawBody))
         {
             return Error.Failure(ErrorCodes.PayloadEmpty);
+        }
+
+        if (rawBody.TrimStart().StartsWith('['))
+        {
+            return new VerifySchemaRequest(
+                SchemaJson: null,
+                SampleValidFixtures: [],
+                SampleInvalidFixtures: [],
+                RulesJson: rawBody,
+                FileName: AdminRequestHelpers.GetFileNameHint(http),
+                IdentifierConfig: AdminRequestHelpers.GetIdentifierConfigHint(http));
         }
 
         VerifySchemaBodyDto? body = null;

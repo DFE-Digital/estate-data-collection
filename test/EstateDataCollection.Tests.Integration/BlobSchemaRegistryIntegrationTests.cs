@@ -14,8 +14,10 @@ namespace EstateDataCollection.Tests.Integration;
 
 [Collection("AzuriteCollection")]
 public class BlobSchemaRegistryIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task When_Saving_A_Schema_To_Azurite_It_Should_Roundtrip_Successfully_And_Be_Retrievable()

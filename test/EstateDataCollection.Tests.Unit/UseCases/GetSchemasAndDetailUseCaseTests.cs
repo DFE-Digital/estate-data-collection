@@ -16,23 +16,38 @@ namespace EstateDataCollection.Tests.Unit.UseCases;
 public class GetSchemasAndDetailUseCaseTests
 {
     [Fact]
-    public async Task GetSchemasUseCase_Should_Exclude_Unscheduled_Schemas_When_IncludeUnscheduled_Is_False()
+    public async Task GetSchemasUseCase_Should_Expose_Only_Active_Schemas_By_Default_And_Allow_Filtering_Upcoming_Or_Retired()
     {
         var registry = Substitute.For<ISchemaRegistry>();
         var unscheduledMeta = new SchemaMetadataBuilder().WithName("school-workforce").WithVersion(1).Unscheduled().Build();
         var activeMeta = new SchemaMetadataBuilder().WithName("school-workforce").WithVersion(2).Build();
+        var deprecatedMeta = new SchemaMetadataBuilder().WithName("school-workforce").WithVersion(3).Build();
+        deprecatedMeta.Deprecate();
+        var upcomingMeta = new SchemaMetadataBuilder().WithName("school-workforce").WithVersion(4).ScheduledInFuture(5).Build();
+        var retiredMeta = new SchemaMetadataBuilder().WithName("school-workforce").WithVersion(5).Retired().Build();
 
         registry.ListSchemasAsync(null, Arg.Any<CancellationToken>())
-            .Returns(Result<IReadOnlyList<SchemaMetadata>>.Success([unscheduledMeta, activeMeta]));
+            .Returns(Result<IReadOnlyList<SchemaMetadata>>.Success([unscheduledMeta, activeMeta, deprecatedMeta, upcomingMeta, retiredMeta]));
 
         var useCase = new GetSchemasUseCase(registry);
 
-        var publicResult = (await useCase.ExecuteAsync(new GetSchemasRequest(IncludeUnscheduled: false), CancellationToken.None)).ShouldSucceed();
-        publicResult.Schemas.Should().ContainSingle();
-        publicResult.Schemas[0].Versions.Should().ContainSingle(v => v.Version == 2);
+        var defaultPublic = (await useCase.ExecuteAsync(new GetSchemasRequest(), CancellationToken.None)).ShouldSucceed();
+        defaultPublic.Schemas.Should().ContainSingle();
+        defaultPublic.Schemas[0].Versions.Select(v => v.Version).Should().BeEquivalentTo([2, 3]);
 
-        var adminResult = (await useCase.ExecuteAsync(new GetSchemasRequest(IncludeUnscheduled: true), CancellationToken.None)).ShouldSucceed();
-        adminResult.Schemas[0].Versions.Should().HaveCount(2);
+        var withUpcoming = (await useCase.ExecuteAsync(new GetSchemasRequest(IncludeUpcoming: true), CancellationToken.None)).ShouldSucceed();
+        withUpcoming.Schemas[0].Versions.Select(v => v.Version).Should().BeEquivalentTo([2, 3, 4]);
+
+        var withRetired = (await useCase.ExecuteAsync(new GetSchemasRequest(IncludeRetired: true), CancellationToken.None)).ShouldSucceed();
+        withRetired.Schemas[0].Versions.Select(v => v.Version).Should().BeEquivalentTo([2, 3, 5]);
+
+        var withUpcomingAndRetired = (await useCase.ExecuteAsync(
+            new GetSchemasRequest(IncludeUpcoming: true, IncludeRetired: true), CancellationToken.None)).ShouldSucceed();
+        withUpcomingAndRetired.Schemas[0].Versions.Select(v => v.Version).Should().BeEquivalentTo([2, 3, 4, 5]);
+
+        var adminResult = (await useCase.ExecuteAsync(
+            new GetSchemasRequest(IncludeUnscheduled: true, IncludeUpcoming: true, IncludeRetired: true), CancellationToken.None)).ShouldSucceed();
+        adminResult.Schemas[0].Versions.Should().HaveCount(5);
     }
 
     [Fact]
@@ -61,29 +76,46 @@ public class GetSchemasAndDetailUseCaseTests
     }
 
     [Fact]
-    public async Task GetSchemaDetailUseCase_Should_Return_NotFound_When_Schema_Is_Unscheduled_And_IncludeUnscheduled_Is_False()
+    public async Task GetSchemaDetailUseCase_Should_Enforce_Default_Active_Only_With_Upcoming_And_Retired_OptIn()
     {
         var registry = Substitute.For<ISchemaRegistry>();
-        var resolved = new ResolvedSchemaBuilder()
-            .ConfigureMetadata(m => m.WithName("school-workforce").Unscheduled())
+        var unscheduledResolved = new ResolvedSchemaBuilder()
+            .ConfigureMetadata(m => m.WithName("school-workforce").WithVersion(1).Unscheduled())
+            .Build();
+        var upcomingResolved = new ResolvedSchemaBuilder()
+            .ConfigureMetadata(m => m.WithName("school-workforce").WithVersion(2).ScheduledInFuture(3))
+            .Build();
+        var retiredResolved = new ResolvedSchemaBuilder()
+            .ConfigureMetadata(m => m.WithName("school-workforce").WithVersion(3).Retired())
             .Build();
 
         registry.GetExplicitSchemaAsync("school-workforce", 1, Arg.Any<CancellationToken>())
-            .Returns(Result<ResolvedSchema>.Success(resolved));
+            .Returns(Result<ResolvedSchema>.Success(unscheduledResolved));
+        registry.GetExplicitSchemaAsync("school-workforce", 2, Arg.Any<CancellationToken>())
+            .Returns(Result<ResolvedSchema>.Success(upcomingResolved));
+        registry.GetExplicitSchemaAsync("school-workforce", 3, Arg.Any<CancellationToken>())
+            .Returns(Result<ResolvedSchema>.Success(retiredResolved));
 
         var useCase = new GetSchemaDetailUseCase(registry);
 
-        var publicResult = await useCase.ExecuteAsync(
-            new GetSchemaDetailRequest("school-workforce", 1, IncludeUnscheduled: false),
-            CancellationToken.None);
-        publicResult.IsFailure.Should().BeTrue();
-        publicResult.Error.Type.Should().Be(ErrorType.NotFound);
+        (await useCase.ExecuteAsync(new GetSchemaDetailRequest("school-workforce", 1), CancellationToken.None))
+            .IsFailure.Should().BeTrue();
 
-        var adminResult = (await useCase.ExecuteAsync(
+        var adminUnscheduled = (await useCase.ExecuteAsync(
             new GetSchemaDetailRequest("school-workforce", 1, IncludeUnscheduled: true),
             CancellationToken.None)).ShouldSucceed();
-        adminResult.State.Name.Should().Be("Validated");
-        adminResult.EffectiveFromUtc.Should().BeNull();
+        adminUnscheduled.State.Name.Should().Be("Validated");
+        adminUnscheduled.EffectiveFromUtc.Should().BeNull();
+
+        (await useCase.ExecuteAsync(new GetSchemaDetailRequest("school-workforce", 2), CancellationToken.None))
+            .IsFailure.Should().BeTrue();
+        (await useCase.ExecuteAsync(new GetSchemaDetailRequest("school-workforce", 2, IncludeUpcoming: true), CancellationToken.None))
+            .ShouldSucceed().State.Name.Should().Be("Scheduled");
+
+        (await useCase.ExecuteAsync(new GetSchemaDetailRequest("school-workforce", 3), CancellationToken.None))
+            .IsFailure.Should().BeTrue();
+        (await useCase.ExecuteAsync(new GetSchemaDetailRequest("school-workforce", 3, IncludeRetired: true), CancellationToken.None))
+            .ShouldSucceed().State.Name.Should().Be("Retired");
     }
 
     [Fact]

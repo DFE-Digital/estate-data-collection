@@ -19,7 +19,12 @@ public sealed class GetSchemaDetailUseCase(
         GetSchemaDetailRequest request,
         CancellationToken cancellationToken = default)
     {
-        _instrumentation.FetchingSchemaDetail(request.SchemaName, request.Version, request.IncludeUnscheduled);
+        _instrumentation.FetchingSchemaDetail(
+            request.SchemaName,
+            request.Version,
+            request.IncludeUnscheduled,
+            request.IncludeUpcoming,
+            request.IncludeRetired);
 
         var resolvedResult = await schemaRegistry.GetExplicitSchemaAsync(
             request.SchemaName,
@@ -31,13 +36,17 @@ public sealed class GetSchemaDetailUseCase(
             return resolvedResult.Error;
         }
 
+        var now = DateTimeOffset.UtcNow;
         var metadata = resolvedResult.Value.Metadata;
-        if (!request.IncludeUnscheduled && !metadata.IsPubliclyVisible)
+        if (!metadata.IsVisibleForDiscovery(
+                now,
+                includeUnscheduled: request.IncludeUnscheduled,
+                includeUpcoming: request.IncludeUpcoming,
+                includeRetired: request.IncludeRetired))
         {
             return Error.NotFound(ErrorCodes.SchemaNotFound, new { request.SchemaName, request.Version });
         }
 
-        var now = DateTimeOffset.UtcNow;
         var fields = JsonSchemaFieldExtractor.ExtractFields(metadata.RawJsonSchema);
         var rules = (resolvedResult.Value.Rules ?? [])
             .Select(r => new SchemaQualityRuleSummary(

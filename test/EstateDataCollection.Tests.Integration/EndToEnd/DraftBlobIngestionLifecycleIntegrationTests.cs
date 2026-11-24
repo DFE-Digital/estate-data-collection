@@ -18,8 +18,10 @@ namespace EstateDataCollection.Tests.Integration.EndToEnd;
 
 [Collection("AzuriteCollection")]
 public sealed class DraftBlobIngestionLifecycleIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task Draft_Blob_Triggered_Should_Promote_Unscheduled_Until_Admin_Schedules_It()
@@ -65,6 +67,66 @@ public sealed class DraftBlobIngestionLifecycleIntegrationTests(AzuriteFixture f
             .ShouldBeApiSuccess<SchemaCatalogueEntry>(StatusCodes.Status200OK);
         catalogueEntry.ActiveVersion.Should().Be(1);
         catalogueEntry.Versions.Should().ContainSingle(v => v.Version == 1 && v.State.Name == "Active");
+    }
+
+    [Fact]
+    public async Task Draft_Blob_Triggered_Via_Yaml_When_Json_Files_Also_Present_Should_Use_Json_Over_Yaml_And_Clean_Up_All()
+    {
+        var draftSchemaName = IntegrationEndpointHarness.UniqueName("draft_json_wins");
+        var draftContainer = _harness.BlobClient.GetBlobContainerClient(_harness.DraftSchemasContainerName);
+        await draftContainer.CreateIfNotExistsAsync();
+
+        var odcsYaml = CdeContractFixtureLoader.LoadFile("contracts/edc-school-site-jsonlogic.odcs.yaml");
+        const string overrideSchemaJson = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["urn", "override_field"],
+          "properties": {
+            "urn": { "type": "integer", "minimum": 1 },
+            "override_field": { "type": "string" }
+          }
+        }
+        """;
+        const string overrideRulesJson = """
+        [
+          {
+            "id": "JSON-PRECEDENCE-RULE",
+            "type": "custom",
+            "engine": "cel",
+            "description": "Override field must be non-empty",
+            "severity": "ERROR",
+            "path": "override_field",
+            "message": "override_field is required",
+            "implementation": "override_field != ''"
+          }
+        ]
+        """;
+
+        var yamlPath = $"{draftSchemaName}/v1.odcs.yaml";
+        var schemaPath = $"{draftSchemaName}/v1.schema.json";
+        var rulesPath = $"{draftSchemaName}/v1.rules.json";
+
+        await draftContainer.GetBlobClient(schemaPath).UploadAsync(BinaryData.FromString(overrideSchemaJson), overwrite: true);
+        await draftContainer.GetBlobClient(rulesPath).UploadAsync(BinaryData.FromString(overrideRulesJson), overwrite: true);
+        await draftContainer.GetBlobClient(yamlPath).UploadAsync(BinaryData.FromString(odcsYaml), overwrite: true);
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(odcsYaml));
+        var ingest = (await _harness.Get<IngestDraftSchemaEvent>().HandleAsync(stream, yamlPath, CancellationToken.None)).ShouldSucceed();
+        ingest.Promoted.Should().BeTrue();
+        ingest.Status.Should().Be("Promoted");
+
+        var adminDetail = (await _harness.Get<GetAdminSchemaVersionDetailEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(), draftSchemaName, 1, CancellationToken.None))
+            .ShouldBeApiSuccess<SchemaVersionDetail>(StatusCodes.Status200OK);
+        adminDetail.Fields.Should().Contain(f => f.Name == "override_field");
+        adminDetail.Fields.Should().NotContain(f => f.Name == "survey");
+        adminDetail.QualityRules.Should().ContainSingle(r => r.Id == "JSON-PRECEDENCE-RULE");
+
+        // All draft blobs (JSON + YAML) cleaned up
+        (await draftContainer.GetBlobClient(yamlPath).ExistsAsync()).Value.Should().BeFalse();
+        (await draftContainer.GetBlobClient(schemaPath).ExistsAsync()).Value.Should().BeFalse();
+        (await draftContainer.GetBlobClient(rulesPath).ExistsAsync()).Value.Should().BeFalse();
     }
 
     [Fact]

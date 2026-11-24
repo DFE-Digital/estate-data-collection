@@ -10,8 +10,10 @@ namespace EstateDataCollection.Tests.Integration.Public;
 
 [Collection("AzuriteCollection")]
 public sealed class SubmissionGuardIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task Updating_Or_Finalising_Already_Finalised_Session_Should_Return_403_Forbidden()

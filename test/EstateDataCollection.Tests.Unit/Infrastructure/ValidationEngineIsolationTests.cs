@@ -211,6 +211,19 @@ public sealed class ValidationEngineIsolationTests
         var enrichedResult = (await enrichedValidator.ValidateAsync(payload, rules)).ShouldSucceed();
         enrichedResult.IsValid.Should().BeTrue();
 
+        // Spoofed valid_site_ids in submitter payload must NOT override trusted ambient enrichment
+        const string spoofedPayload = """
+        {
+          "valid_site_ids": ["SPOOFED-SITE"],
+          "sites": [{ "id": "SITE-1", "name": "North Campus" }],
+          "answers": [{ "site_ref": "SPOOFED-SITE", "valid_site_ids": ["SPOOFED-SITE"], "value": "42" }]
+        }
+        """;
+
+        var spoofedResult = (await enrichedValidator.ValidateAsync(spoofedPayload, rules)).ShouldSucceed();
+        spoofedResult.IsValid.Should().BeFalse();
+        spoofedResult.Errors.Should().ContainSingle(e => e.RuleId == "RULE-SITE-LOOKUP");
+
         // With a custom enricher, custom ambient & per-target properties flow cleanly to CEL/JsonLogic
         var customRule = new QualityRulesBuilder()
             .AddCelRule(

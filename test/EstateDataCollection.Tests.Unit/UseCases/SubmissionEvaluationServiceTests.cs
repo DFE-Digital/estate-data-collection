@@ -135,7 +135,7 @@ public sealed class SubmissionEvaluationServiceTests
     [Fact]
     public async Task TryAssembleDraftForDetailAsync_When_Finalised_And_No_Chunks_Should_Not_Load_Draft_Blob()
     {
-        var session = new SubmissionSessionBuilder().WithUrn(104521).Finalised().Build();
+        var session = new SubmissionSessionBuilder().WithIdentifier("URN", "104521").Finalised().Build();
         var inventory = new SubmissionDraftInventory([], 0, null);
 
         var sut = CreateSut();
@@ -238,7 +238,8 @@ public sealed class SubmissionEvaluationServiceTests
 
         evaluation.ValidationErrors.Should().BeEmpty();
         evaluation.IdentifierEvaluation.IsValid.Should().BeTrue();
-        evaluation.AuditIdentifier?.Urn.Should().Be(104521);
+        evaluation.AuditIdentifier?.Type.Should().Be("URN");
+        evaluation.AuditIdentifier?.Value.Should().Be("104521");
         scope.Processes.Select(p => p.ProcessName)
             .Should().Contain(["SchemaResolution", "JsonSchemaValidator", "IdentifierExtractor"]);
     }

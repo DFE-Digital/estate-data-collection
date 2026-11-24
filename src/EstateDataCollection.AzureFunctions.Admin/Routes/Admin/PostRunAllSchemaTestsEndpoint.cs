@@ -37,7 +37,12 @@ public sealed class PostRunAllSchemaTestsEndpoint(
             cancellationToken);
 
         var schemasResult = await getSchemasUseCase.ExecuteAsync(
-            new GetSchemasRequest(SchemaName: null, IncludeUnscheduled: true, IncludeActiveVersionFields: false),
+            new GetSchemasRequest(
+                SchemaName: null,
+                IncludeUnscheduled: true,
+                IncludeActiveVersionFields: false,
+                IncludeUpcoming: true,
+                IncludeRetired: true),
             cancellationToken);
 
         var meta = CreatePageMeta(http, "Schema Contracts & Lifecycle", activeNav: "schemas");

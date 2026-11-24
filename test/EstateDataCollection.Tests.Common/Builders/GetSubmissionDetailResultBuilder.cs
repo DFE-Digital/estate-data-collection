@@ -18,7 +18,6 @@ public sealed class GetSubmissionDetailResultBuilder
     private string? _nextStepsSummary;
     private string? _resolvedIdentifierType;
     private string? _resolvedIdentifierValue;
-    private int? _resolvedUrn;
     private readonly List<SubmissionAuditEntry> _auditEntries = [];
 
     public GetSubmissionDetailResultBuilder WithSession(SubmissionSession session)
@@ -78,11 +77,10 @@ public sealed class GetSubmissionDetailResultBuilder
         return this;
     }
 
-    public GetSubmissionDetailResultBuilder WithIdentifier(string? type, string? value, int? urn = null)
+    public GetSubmissionDetailResultBuilder WithIdentifier(string? type, string? value)
     {
         _resolvedIdentifierType = type;
         _resolvedIdentifierValue = value;
-        _resolvedUrn = urn;
         return this;
     }
 
@@ -116,7 +114,6 @@ public sealed class GetSubmissionDetailResultBuilder
             NextStepsSummary: _nextStepsSummary,
             ResolvedIdentifierType: _resolvedIdentifierType,
             ResolvedIdentifierValue: _resolvedIdentifierValue,
-            ResolvedUrn: _resolvedUrn,
             AuditEntries: _auditEntries.ToArray());
     }
 }

@@ -46,7 +46,7 @@ public class GetSubmissionStatusUseCaseTests
     public async Task When_Submission_Is_Already_Finalised_It_Should_Return_Finalised_Status_Without_Reading_Draft()
     {
         var session = new SubmissionSessionBuilder()
-            .WithUrn(104521)
+            .WithIdentifier("URN", "104521")
             .Finalised()
             .Build();
 
@@ -59,7 +59,6 @@ public class GetSubmissionStatusUseCaseTests
         result.FinalisedAtUtc.Should().NotBeNull();
         result.HasDraftPayload.Should().BeFalse();
         result.IsReadyToFinalise.Should().BeFalse();
-        result.Urn.Should().Be(104521);
         result.Identifier.Should().Be("104521");
         result.IdentifierType.Should().Be("URN");
         result.PendingErrors.Should().BeEmpty();
@@ -130,7 +129,6 @@ public class GetSubmissionStatusUseCaseTests
         result.HasDraftPayload.Should().BeTrue();
         result.IsReadyToFinalise.Should().BeTrue();
         result.PendingErrors.Should().BeEmpty();
-        result.Urn.Should().Be(104521);
         result.Identifier.Should().Be("104521");
         result.IdentifierType.Should().Be("URN");
     }

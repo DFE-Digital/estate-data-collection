@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Security.Cryptography;
 using EstateDataCollection.Common;
@@ -6,7 +7,10 @@ namespace EstateDataCollection.Admin.UI.Assets;
 
 public static class EmbeddedUiAssetProvider
 {
+    private sealed record CachedAsset(byte[] Bytes, string ContentType, string ETag);
+
     private static readonly Assembly ResourceAssembly = typeof(EmbeddedUiAssetProvider).Assembly;
+    private static readonly ConcurrentDictionary<string, CachedAsset?> AssetCache = new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly Dictionary<string, string> ContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -44,31 +48,43 @@ public static class EmbeddedUiAssetProvider
             return false;
         }
 
+        var cached = AssetCache.GetOrAdd(sanitized, LoadAsset);
+        if (cached is null)
+        {
+            return false;
+        }
+
+        bytes = cached.Bytes;
+        contentType = cached.ContentType;
+        etag = cached.ETag;
+        return true;
+    }
+
+    private static CachedAsset? LoadAsset(string sanitized)
+    {
         var stream = ResourceAssembly.GetManifestResourceStream($"wwwroot/{sanitized}")
             ?? ResourceAssembly.GetManifestResourceStream($"wwwroot/assets/{sanitized}");
 
         if (stream is null)
         {
-            return false;
+            return null;
         }
 
+        byte[] loadedBytes;
         using (stream)
         {
             using var ms = new MemoryStream();
             stream.CopyTo(ms);
-            bytes = ms.ToArray();
+            loadedBytes = ms.ToArray();
         }
 
         var ext = Path.GetExtension(sanitized);
-        if (ContentTypes.TryGetValue(ext, out var mapped))
-        {
-            contentType = mapped;
-        }
+        var mappedContentType = ContentTypes.TryGetValue(ext, out var mapped)
+            ? mapped
+            : "application/octet-stream";
 
-        var hashHex = Convert.ToHexStringLower(SHA256.HashData(bytes))[..16];
-        var version = AppVersionProvider.Version;
-        etag = $"\"{version}-{hashHex}\"";
-
-        return true;
+        var hashHex = Convert.ToHexStringLower(SHA256.HashData(loadedBytes))[..16];
+        var etag = $"\"{AppVersionProvider.Version}-{hashHex}\"";
+        return new CachedAsset(loadedBytes, mappedContentType, etag);
     }
 }

@@ -11,8 +11,9 @@ using Microsoft.Azure.Functions.Worker;
 namespace EstateDataCollection.AzureFunctions.Public.Routes;
 
 /// <summary>
-/// Lists all publicly visible schemas, their versions, lifecycle states, effective dates, and extracted fields.
-/// Route: GET /schemas
+/// Lists active schemas by default, with optional query filtering for upcoming and/or retired versions.
+/// Never exposes unscheduled (Draft / Validated) schemas.
+/// Route: GET /api/schemas
 /// </summary>
 public sealed class GetSchemasEndpoint(
     IUseCase<GetSchemasResult, GetSchemasRequest> getSchemasUseCase,
@@ -28,7 +29,8 @@ public sealed class GetSchemasEndpoint(
         HttpRequest http,
         CancellationToken cancellationToken)
     {
-        var includeUnscheduled = http.GetBoolFromQuery("includeUnscheduled", defaultValue: false);
+        var includeUpcoming = http.GetBoolFromQuery("includeUpcoming", defaultValue: false);
+        var includeRetired = http.GetBoolFromQuery("includeRetired", defaultValue: false);
         var includeFields = http.GetBoolFromQuery("includeFields", defaultValue: true);
 
         return ExecuteAsync(
@@ -36,10 +38,12 @@ public sealed class GetSchemasEndpoint(
             getSchemasUseCase,
             () => Task.FromResult(Result<GetSchemasRequest>.Success(new GetSchemasRequest(
                 SchemaName: null,
-                IncludeUnscheduled: includeUnscheduled,
-                IncludeActiveVersionFields: includeFields))),
+                IncludeUnscheduled: false,
+                IncludeActiveVersionFields: includeFields,
+                IncludeUpcoming: includeUpcoming,
+                IncludeRetired: includeRetired))),
             StatusCodes.Status200OK,
-            context: $"IncludeUnscheduled={includeUnscheduled}",
+            context: $"IncludeUpcoming={includeUpcoming}, IncludeRetired={includeRetired}",
             cancellationToken: cancellationToken);
     }
 }

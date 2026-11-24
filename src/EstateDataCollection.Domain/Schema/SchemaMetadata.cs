@@ -88,19 +88,6 @@ public class SchemaMetadata
     }
 
     /// <summary>
-    /// Is this schema version visible in the public discovery API?
-    /// </summary>
-    public bool IsPubliclyVisible
-    {
-        get
-        {
-            return State is SchemaLifecycleState.Active
-                or SchemaLifecycleState.Scheduled
-                or SchemaLifecycleState.Deprecated;
-        }
-    }
-
-    /// <summary>
     /// Is this eligible to be the default version when no explicit version is requested?
     /// </summary>
     public bool CanBeDefault
@@ -156,6 +143,48 @@ public class SchemaMetadata
     public bool CanAcceptTrafficAt(DateTimeOffset timestamp)
     {
         return IsActiveAt(timestamp) || State == SchemaLifecycleState.Deprecated;
+    }
+
+    public bool IsUpcomingAt(DateTimeOffset timestamp)
+    {
+        return State == SchemaLifecycleState.Scheduled &&
+               EffectiveFromUtc is not null &&
+               timestamp < EffectiveFromUtc.Value;
+    }
+
+    public bool IsRetiredAt(DateTimeOffset timestamp)
+    {
+        return State == SchemaLifecycleState.Retired ||
+               (State is SchemaLifecycleState.Active or SchemaLifecycleState.Scheduled &&
+                EffectiveToUtc is not null &&
+                timestamp >= EffectiveToUtc.Value);
+    }
+
+    public bool IsVisibleForDiscovery(
+        DateTimeOffset timestamp,
+        bool includeUnscheduled = false,
+        bool includeUpcoming = false,
+        bool includeRetired = false)
+    {
+        if (CanAcceptTrafficAt(timestamp))
+        {
+            return true;
+        }
+
+        if (includeUpcoming && IsUpcomingAt(timestamp))
+        {
+            return true;
+        }
+
+        if (includeRetired && IsRetiredAt(timestamp))
+        {
+            return true;
+        }
+
+        return includeUnscheduled &&
+               State is SchemaLifecycleState.Unassigned
+                   or SchemaLifecycleState.Draft
+                   or SchemaLifecycleState.Validated;
     }
 
     /// <summary>

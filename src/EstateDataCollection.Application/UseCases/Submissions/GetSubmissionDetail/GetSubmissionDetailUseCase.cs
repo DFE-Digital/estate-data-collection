@@ -50,7 +50,6 @@ public sealed class GetSubmissionDetailUseCase(
 
         var resolvedIdentifierType = session.IdentifierType;
         var resolvedIdentifierValue = session.IdentifierValue;
-        var resolvedUrn = session.Urn;
         var isReadyToFinalise = false;
         IReadOnlyList<ValidationError> pendingErrors = [];
 
@@ -83,12 +82,15 @@ public sealed class GetSubmissionDetailUseCase(
                         isReadyToFinalise = pendingErrors.Count == 0;
                         resolvedIdentifierType ??= evaluation.IdentifierEvaluation.Identifier?.Type;
                         resolvedIdentifierValue ??= evaluation.IdentifierEvaluation.Identifier?.Value;
-                        resolvedUrn ??= evaluation.IdentifierEvaluation.Identifier?.AsPositiveInt;
                     }
                     else
                     {
                         pendingErrors = [new ValidationError("$", evaluationResult.Error.Description ?? evaluationResult.Error.Code)];
                     }
+                }
+                else
+                {
+                    pendingErrors = [new ValidationError("$", schemaResult.Error.Description ?? schemaResult.Error.Code)];
                 }
             }
         }
@@ -113,7 +115,6 @@ public sealed class GetSubmissionDetailUseCase(
             NextStepsSummary: guidance.Summary,
             ResolvedIdentifierType: resolvedIdentifierType,
             ResolvedIdentifierValue: resolvedIdentifierValue,
-            ResolvedUrn: resolvedUrn,
             AuditEntries: auditEntries);
     }
 }

@@ -77,9 +77,11 @@ public static class RuleTargetResolver
             }
         }
 
+        // Server-derived ambient context (e.g. valid_site_ids, valid_block_ids, valid_evidence_ids)
+        // must overwrite any identically named keys in the submitter payload so clients cannot spoof them.
         foreach (var (key, value) in ambientContext)
         {
-            if (!enriched.ContainsKey(key) && value is not null)
+            if (value is not null)
             {
                 enriched[key] = value.DeepClone();
             }

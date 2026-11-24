@@ -9,6 +9,11 @@ public sealed partial class GetSchemaDetailUseCaseInstrumentation(
     [LoggerMessage(
         EventId = 1810,
         Level = LogLevel.Information,
-        Message = "Fetching schema detail for {SchemaName} v{Version} (IncludeUnscheduled={IncludeUnscheduled})")]
-    public partial void FetchingSchemaDetail(string schemaName, int version, bool includeUnscheduled);
+        Message = "Fetching schema detail for {SchemaName} v{Version} (IncludeUnscheduled={IncludeUnscheduled}, IncludeUpcoming={IncludeUpcoming}, IncludeRetired={IncludeRetired})")]
+    public partial void FetchingSchemaDetail(
+        string schemaName,
+        int version,
+        bool includeUnscheduled,
+        bool includeUpcoming,
+        bool includeRetired);
 }

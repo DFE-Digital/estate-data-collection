@@ -40,7 +40,7 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
                 .CreatedAt(now.AddHours(-2))
                 .LastActivityAt(now.AddHours(-1))
                 .WithLifecycleState("Draft")
-                .WithUrn(100001)
+                .WithIdentifier("URN", "100001")
                 .WithDrafts(3, now.AddHours(-1))
                 .WithLastAudit("UpdateSubmission", "SavedWithPendingErrors", 200, now.AddHours(-1), totalEvents: 4)
                 .Build(),
@@ -57,7 +57,7 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
                 .CreatedAt(now.AddHours(-5))
                 .LastActivityAt(now.AddHours(-2))
                 .Finalised(now.AddHours(-2))
-                .WithUrn(100002)
+                .WithIdentifier("URN", "100002")
                 .WithDrafts(2, now.AddHours(-3), hasDraftPayload: false)
                 .WithLastAudit("FinaliseSubmission", "Succeeded", 200, now.AddHours(-2), totalEvents: 4)
                 .Build()

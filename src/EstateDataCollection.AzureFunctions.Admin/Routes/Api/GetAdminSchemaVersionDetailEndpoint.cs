@@ -46,6 +46,8 @@ public sealed class GetAdminSchemaVersionDetailEndpoint(
             SchemaName: schemaName,
             Version: version,
             IncludeUnscheduled: http.GetBoolFromQuery("includeUnscheduled", defaultValue: true),
-            IncludeRawJsonSchema: http.GetBoolFromQuery("includeRawJsonSchema", defaultValue: true));
+            IncludeRawJsonSchema: http.GetBoolFromQuery("includeRawJsonSchema", defaultValue: true),
+            IncludeUpcoming: http.GetBoolFromQuery("includeUpcoming", defaultValue: true),
+            IncludeRetired: http.GetBoolFromQuery("includeRetired", defaultValue: true));
     }
 }

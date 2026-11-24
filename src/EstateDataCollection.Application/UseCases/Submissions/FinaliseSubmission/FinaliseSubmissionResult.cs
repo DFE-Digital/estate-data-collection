@@ -2,7 +2,6 @@ namespace EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmissi
 
 public sealed record FinaliseSubmissionResult(
     Guid SubmissionId,
-    int Urn,
     string SchemaName,
     int SchemaVersion,
     string Status,

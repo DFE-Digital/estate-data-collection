@@ -13,8 +13,10 @@ namespace EstateDataCollection.Tests.Integration.EndToEnd;
 
 [Collection("AzuriteCollection")]
 public sealed class NonUrnSubmissionPromotionIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task Finalising_NonUrn_Schema_Should_Promote_Without_Urn_Prefix_In_Blob_Path()
@@ -53,7 +55,8 @@ public sealed class NonUrnSubmissionPromotionIntegrationTests(AzuriteFixture fix
                 HttpRequestBuilder.Empty(), subId, CancellationToken.None))
             .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
 
-        finaliseData.Urn.Should().Be(0);
+        finaliseData.Identifier.Should().BeNull();
+        finaliseData.IdentifierType.Should().BeNull();
         finaliseData.ProcessedBlobUri.Should().NotContain("urn");
         finaliseData.ProcessedBlobUri.Should().Contain($"schema%3D{nonUrnSchemaName}/v%3D1/{subId}.json");
     }
@@ -112,7 +115,6 @@ public sealed class NonUrnSubmissionPromotionIntegrationTests(AzuriteFixture fix
                 HttpRequestBuilder.Empty(), subId, CancellationToken.None))
             .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
 
-        finaliseData.Urn.Should().Be(0);
         finaliseData.Identifier.Should().Be("201-3614");
         finaliseData.IdentifierType.Should().Be("LAEstab");
         finaliseData.ProcessedBlobUri.Should().Contain($"laestab%3D201-3614/schema%3D{laestabSchemaName}/v%3D1/{subId}.json");

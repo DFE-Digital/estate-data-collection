@@ -58,6 +58,11 @@ public sealed class SubmissionEvaluationService(
         SubmissionDraftInventory inventory,
         CancellationToken cancellationToken = default)
     {
+        if (inventory.Count == 1)
+        {
+            return Task.FromResult(Result<string>.Success(inventory.Items[0].PayloadJson));
+        }
+
         if (inventory.Count > 1)
         {
             return Task.FromResult(SubmissionExecutionScope.StepResultSync(
@@ -223,11 +228,10 @@ public sealed class SubmissionEvaluationService(
     {
         var type = extractedIdentifier?.Type ?? session.IdentifierType;
         var value = extractedIdentifier?.Value ?? session.IdentifierValue;
-        var urn = extractedIdentifier?.AsPositiveInt ?? session.Urn;
 
-        return type is null && value is null && urn is null
+        return type is null && value is null
             ? null
-            : new SubmissionAuditIdentifier(type, value, urn);
+            : new SubmissionAuditIdentifier(type, value);
     }
 
     private PayloadIdentifierExtractor.ExtractionEvaluation EvaluateIdentifier(

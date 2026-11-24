@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <PackageReference Include="Bogus" />
     <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Bogus" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="JsonSchema.Net" />
   </ItemGroup>

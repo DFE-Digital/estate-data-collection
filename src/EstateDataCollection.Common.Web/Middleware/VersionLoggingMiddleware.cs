@@ -18,8 +18,8 @@ public sealed class VersionLoggingMiddleware : IFunctionsWorkerMiddleware
 
         using (logger.BeginScope(new Dictionary<string, object>
         {
-            [nameof(AppVersionProvider.Keys.Version)] = AppVersionProvider.Version,
-            [nameof(AppVersionProvider.Keys.Sha)] = AppVersionProvider.Sha,
+            [AppVersionProvider.Keys.Version] = AppVersionProvider.Version,
+            [AppVersionProvider.Keys.Sha] = AppVersionProvider.Sha,
             ["Environment"] = EnvironmentName,
         }))
         {

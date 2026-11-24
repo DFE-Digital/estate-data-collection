@@ -72,7 +72,6 @@ public class GetSubmissionStatusUseCase(
                 HasDraftPayload: false,
                 IsReadyToFinalise: false,
                 PendingErrors: [],
-                Urn: session.Urn,
                 Identifier: session.IdentifierValue,
                 IdentifierType: session.IdentifierType,
                 DraftCount: inventory.Count,
@@ -125,7 +124,6 @@ public class GetSubmissionStatusUseCase(
                     HasDraftPayload: false,
                     IsReadyToFinalise: false,
                     PendingErrors: missingDraftErrors,
-                    Urn: session.Urn,
                     Identifier: session.IdentifierValue,
                     IdentifierType: session.IdentifierType,
                     DraftCount: 0,
@@ -154,7 +152,6 @@ public class GetSubmissionStatusUseCase(
         var isReadyToFinalise = pendingErrors.Count == 0;
         var resolvedIdentifier = evaluation.IdentifierEvaluation.Identifier?.Value ?? session.IdentifierValue;
         var resolvedIdentifierType = evaluation.IdentifierEvaluation.Identifier?.Type ?? session.IdentifierType;
-        var resolvedUrn = evaluation.IdentifierEvaluation.Identifier?.AsPositiveInt ?? session.Urn;
 
         var draftGuidance = SubmissionNextStepsBuilder.Build(
             session.SubmissionId,
@@ -187,7 +184,6 @@ public class GetSubmissionStatusUseCase(
             HasDraftPayload: true,
             IsReadyToFinalise: isReadyToFinalise,
             PendingErrors: pendingErrors,
-            Urn: resolvedUrn,
             Identifier: resolvedIdentifier,
             IdentifierType: resolvedIdentifierType,
             DraftCount: effectiveDraftCount,

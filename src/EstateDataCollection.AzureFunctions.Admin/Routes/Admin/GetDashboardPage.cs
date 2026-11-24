@@ -33,7 +33,9 @@ public sealed class GetDashboardPage(
             new GetSchemasRequest(
                 SchemaName: null,
                 IncludeUnscheduled: true,
-                IncludeActiveVersionFields: false),
+                IncludeActiveVersionFields: false,
+                IncludeUpcoming: true,
+                IncludeRetired: true),
             cancellationToken);
 
         var meta = CreatePageMeta(http, "Schema Contracts & Lifecycle", activeNav: "schemas");

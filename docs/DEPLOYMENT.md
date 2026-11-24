@@ -9,13 +9,13 @@ The EDC platform operates on **Azure Functions v4 (Isolated Worker Model)** targ
 | Deployable Host Project | Responsibility | Artifact Name |
 | :--- | :--- | :--- |
 | `src/EstateDataCollection.AzureFunctions.Public` | Public M2M survey ingestion & active schema discovery API (`/api/schemas*`, `/api/submissions*`, `/api/about`) | `edc-functions-public-linux-x64.zip` |
-| `src/EstateDataCollection.AzureFunctions.Admin` | Unified Admin contract governance API (`/api/schemas*`, `/api/logic/verify`, `/api/schemas/tests/run`), SSR Admin Portal (`/manage/*`, `/assets/*`), & Event Grid draft ingestion | `edc-functions-admin-linux-x64.zip` |
+| `src/EstateDataCollection.AzureFunctions.Admin` | Unified Admin contract governance API (`/api/schemas*`, `/api/schemas/verify`, `/api/schemas/tests/run`), SSR Admin Portal (`/manage/*`, `/assets/*`), & Event Grid draft ingestion | `edc-functions-admin-linux-x64.zip` |
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │ GitHub Actions / Azure CLI                                             │
 │   │                                                                    │
-│   ├──> Run 227 automated tests (Unit + isolated Azurite Integration)   │
+│   ├──> Run automated tests (Unit + isolated Azurite Integration)       │
 │   ├──> dotnet publish -c Release -r linux-x64 --self-contained true    │
 │   ├──> Exclude local.settings.json, *.http, *.pdb                      │
 │   └──> Package Public & Admin Linux x64 zips                           │

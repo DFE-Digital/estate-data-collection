@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "c1f79f22-9650-48e2-9ef4-7cb45d625d19",
     "name": "Estate Data Collection (EDC) API",
-    "description": "Comprehensive Postman test kit for the Estate Data Collection (EDC) Azure Functions platform (Public & Admin Function Apps).\n\nCovers:\n0. Health & Version Observability (GET /api/about)\n1. Admin Schema & Multi-Engine Quality Rule Verification (POST /api/schemas/verify, POST /api/logic/verify — JSON Schema Draft-07 & 2020-12, ODCS v3.2.0 YAML, JsonLogic & CEL)\n2. Admin Schema Ingestion, Scheduling & Catalogue Management (POST /api/schemas/{schemaName}/versions/{version}, PATCH /api/schemas/{schemaName}/versions/{version}/schedule, GET /api/schemas, GET /api/schemas/{schemaName}/versions/{version})\n3. Public Schema Discovery & Catalogue (GET /api/schemas, GET /api/schemas/{schemaName}, GET /api/schemas/{schemaName}/versions/{version})\n4. CDC Survey Submission Lifecycle (POST /api/submissions/{cdcSchemaName}, GET /api/submissions/{submissionId}, PUT /api/submissions/{submissionId}, GET /api/submissions/{submissionId}/check, POST /api/submissions/{submissionId}/finalise)\n5. ODCS v3.2.0 Survey Sites Workflow (edc-survey-sites)\n6. CDC Survey Two-Step Validation Pipeline (cdc_survey with 10 Quality Rules)",
+    "description": "Comprehensive Postman test kit for the Estate Data Collection (EDC) Azure Functions platform (Public & Admin Function Apps).\n\nCovers:\n0. Health & Version Observability (GET /api/about)\n1. Admin Schema & Multi-Engine Quality Rule Verification (POST /api/schemas/verify — JSON Schema Draft-07 & 2020-12, ODCS v3.2.0 YAML, JsonLogic & CEL)\n2. Admin Schema Ingestion, Scheduling & Catalogue Management (POST /api/schemas/{schemaName}/versions/{version}, PATCH /api/schemas/{schemaName}/versions/{version}/schedule, GET /api/schemas, GET /api/schemas/{schemaName}/versions/{version})\n3. Public Schema Discovery & Catalogue (GET /api/schemas, GET /api/schemas/{schemaName}, GET /api/schemas/{schemaName}/versions/{version})\n4. CDC Survey Submission Lifecycle (POST /api/submissions/{cdcSchemaName}, GET /api/submissions/{submissionId}, PUT /api/submissions/{submissionId}, GET /api/submissions/{submissionId}/check, POST /api/submissions/{submissionId}/finalise)\n5. ODCS v3.2.0 Survey Sites Workflow (edc-survey-sites)\n6. CDC Survey Two-Step Validation Pipeline (cdc_survey with 10 Quality Rules)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -209,12 +209,12 @@
               "raw": "[\n  {\n    \"id\": \"CDC-DQ1-JSONLogic\",\n    \"type\": \"custom\",\n    \"engine\": \"jsonlogic\",\n    \"description\": \"Survey updated timestamp must be greater than or equal to survey creation timestamp.\",\n    \"severity\": \"ERROR\",\n    \"path\": \"survey\",\n    \"message\": \"Survey updated timestamp must be greater than or equal to survey creation timestamp.\",\n    \"implementation\": {\n      \">=\": [\n        { \"var\": \"survey.updated_at\" },\n        { \"var\": \"survey.created_at\" }\n      ]\n    }\n  },\n  {\n    \"id\": \"CDC-DQ2-CEL\",\n    \"type\": \"custom\",\n    \"engine\": \"cel\",\n    \"description\": \"School URN must be a 6-character string.\",\n    \"severity\": \"ERROR\",\n    \"path\": \"school\",\n    \"message\": \"School URN must be 6 characters long.\",\n    \"implementation\": \"size(school.urn) == 6\"\n  }\n]"
             },
             "url": {
-              "raw": "{{adminBaseUrl}}/logic/verify",
+              "raw": "{{adminBaseUrl}}/schemas/verify",
               "host": [
                 "{{adminBaseUrl}}"
               ],
               "path": [
-                "logic",
+                "schemas",
                 "verify"
               ]
             },
@@ -264,12 +264,12 @@
               "raw": "{\n  \"rulesJson\": \"[{\\\"id\\\": \\\"CDC-DQ1-JSONLogic\\\", \\\"type\\\": \\\"custom\\\", \\\"engine\\\": \\\"jsonlogic\\\", \\\"description\\\": \\\"Survey updated timestamp must be >= created timestamp.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"survey\\\", \\\"message\\\": \\\"Survey updated timestamp must be greater than or equal to survey creation timestamp.\\\", \\\"implementation\\\": {\\\">=\\\": [{\\\"var\\\": \\\"survey.updated_at\\\"}, {\\\"var\\\": \\\"survey.created_at\\\"}]}}, {\\\"id\\\": \\\"CDC-DQ2-CEL-CAPACITY\\\", \\\"type\\\": \\\"custom\\\", \\\"engine\\\": \\\"cel\\\", \\\"description\\\": \\\"School capacity when present must be positive.\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"path\\\": \\\"school\\\", \\\"message\\\": \\\"School capacity must be greater than zero.\\\", \\\"implementation\\\": \\\"school.capacity > 0\\\"}]\",\n  \"sampleValidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-001\\\", \\\"created_at\\\": \\\"2026-10-15T10:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T14:30:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"capacity\\\": 450}}\"\n  ],\n  \"sampleInvalidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-001\\\", \\\"created_at\\\": \\\"2026-10-15T16:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T10:00:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"capacity\\\": 450}}\",\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-001\\\", \\\"created_at\\\": \\\"2026-10-15T10:00:00Z\\\", \\\"updated_at\\\": \\\"2026-10-15T14:30:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"123456\\\", \\\"capacity\\\": 0}}\"\n  ]\n}"
             },
             "url": {
-              "raw": "{{adminBaseUrl}}/logic/verify",
+              "raw": "{{adminBaseUrl}}/schemas/verify",
               "host": [
                 "{{adminBaseUrl}}"
               ],
               "path": [
-                "logic",
+                "schemas",
                 "verify"
               ]
             },

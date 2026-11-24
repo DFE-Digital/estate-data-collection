@@ -11,8 +11,10 @@ namespace EstateDataCollection.Tests.Integration;
 
 [Collection("AzuriteCollection")]
 public class BlobSubmissionIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task When_Executing_Complete_Ingestion_Lifecycle_Against_Azurite_It_Should_Persist_Draft_And_Promote_To_Processed()
@@ -26,12 +28,12 @@ public class BlobSubmissionIntegrationTests(AzuriteFixture fixture)
 
         (await submissions.SaveDraftPayloadAsync(
             session.SubmissionId,
-            104521,
             SurveyPayloadFixtures.ValidPayloadJson)).ShouldSucceed();
 
         (await submissions.PromoteToProcessedAsync(
             session.SubmissionId,
-            104521,
+            "URN",
+            "104521",
             "edc_payload",
             1)).ShouldSucceed();
 

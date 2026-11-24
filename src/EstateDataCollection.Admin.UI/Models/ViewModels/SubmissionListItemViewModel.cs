@@ -34,14 +34,12 @@ public sealed record SubmissionListItemViewModel(
             _ => (summary.LifecycleState, "govuk-tag govuk-tag--grey")
         };
 
-        var hasIdentifier = !string.IsNullOrWhiteSpace(summary.IdentifierValue) || summary.Urn.HasValue;
-        var identifierDisplay = !string.IsNullOrWhiteSpace(summary.IdentifierValue)
+        var hasIdentifier = !string.IsNullOrWhiteSpace(summary.IdentifierValue);
+        var identifierDisplay = hasIdentifier
             ? (!string.IsNullOrWhiteSpace(summary.IdentifierType)
                 ? $"{summary.IdentifierType}: {summary.IdentifierValue}"
-                : summary.IdentifierValue)
-            : summary.Urn.HasValue
-                ? $"URN: {summary.Urn.Value.ToString(CultureInfo.InvariantCulture)}"
-                : "Unassigned";
+                : summary.IdentifierValue!)
+            : "Unassigned";
 
         var hasAudit = !string.IsNullOrWhiteSpace(summary.LastAuditOutcome);
         var auditSummary = hasAudit

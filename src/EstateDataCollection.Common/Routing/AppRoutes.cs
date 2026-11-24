@@ -171,7 +171,6 @@ public static class AppRoutes
             public const string ValidationEngines = $"{Prefix}/schemas/engines";
             public const string VerifySchema = $"{Prefix}/schemas/verify";
             public const string RunSchemaTests = $"{Prefix}/schemas/tests/run";
-            public const string VerifyLogic = $"{Prefix}/logic/verify";
             public const string SchemaVersionDetail = $"{Prefix}/schemas/{{schemaName}}/versions/{{version:int}}";
             public const string SubmitSchema = $"{Prefix}/schemas/{{schemaName}}/versions/{{version:int}}";
             public const string ScheduleSchema = $"{Prefix}/schemas/{{schemaName}}/versions/{{version:int}}/schedule";
@@ -182,7 +181,6 @@ public static class AppRoutes
         public const string ValidationEngines = $"/{Templates.ValidationEngines}";
         public const string VerifySchema = $"/{Templates.VerifySchema}";
         public const string RunSchemaTests = $"/{Templates.RunSchemaTests}";
-        public const string VerifyLogic = $"/{Templates.VerifyLogic}";
 
         public static string SchemaVersionDetail(string schemaName, int version)
         {

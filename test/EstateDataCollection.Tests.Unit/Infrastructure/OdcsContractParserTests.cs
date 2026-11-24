@@ -48,4 +48,19 @@ public class OdcsContractParserTests
         _sut.IsOdcsYaml(odcsYaml, "edc-school-site-jsonlogic.odcs.yaml", "application/x-yaml").Should().BeTrue();
         _sut.IsOdcsYaml(odcsYaml, null, null).Should().BeTrue();
     }
+
+    [Fact]
+    public void Parse_When_Yaml_Exceeds_Max_Recursion_Depth_Should_Fail_Validation()
+    {
+        var deeplyNestedYaml = "apiVersion: v3.0.2\nkind: DataContract\nschema:\n  - name: test\n    nested:\n";
+        for (var i = 0; i < 80; i++)
+        {
+            deeplyNestedYaml += new string(' ', (i + 3) * 2) + $"level_{i}:\n";
+        }
+        deeplyNestedYaml += new string(' ', 83 * 2) + "leaf: value\n";
+
+        var result = _sut.Parse(deeplyNestedYaml);
+
+        result.IsFailure.Should().BeTrue();
+    }
 }

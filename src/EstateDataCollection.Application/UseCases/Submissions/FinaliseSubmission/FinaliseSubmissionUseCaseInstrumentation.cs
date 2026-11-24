@@ -39,15 +39,21 @@ public sealed partial class FinaliseSubmissionUseCaseInstrumentation(
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "Submission {SubmissionId} has invalid URN {Urn}; cannot promote to CDE"
+        Message = "Submission {SubmissionId} has invalid or missing identifier ({Reason}); cannot promote to CDE"
     )]
-    public partial void InvalidUrn(Guid submissionId, int urn);
+    public partial void InvalidIdentifier(Guid submissionId, string reason);
 
     [LoggerMessage(
         Level = LogLevel.Information,
-        Message = "Submission {SubmissionId} (URN: {Urn}) finalised and promoted to processed storage at {TargetUri} under {SchemaName} v{SchemaVersion}"
+        Message = "Submission {SubmissionId} ({IdentifierType}: {IdentifierValue}) finalised and promoted to processed storage at {TargetUri} under {SchemaName} v{SchemaVersion}"
     )]
-    public partial void SubmissionFinalisedAndPromoted(Guid submissionId, int urn, string schemaName, int schemaVersion, string targetUri);
+    public partial void SubmissionFinalisedAndPromoted(
+        Guid submissionId,
+        string? identifierType,
+        string? identifierValue,
+        string schemaName,
+        int schemaVersion,
+        string targetUri);
 
     [LoggerMessage(
         Level = LogLevel.Error,

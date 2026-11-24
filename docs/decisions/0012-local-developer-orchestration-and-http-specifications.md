@@ -1,5 +1,5 @@
 ---
-status: "proposed"
+status: "accepted"
 sub-status: "implemented"
 date: 2026-10-21
 decision-makers: ["Chris Kelly"]
@@ -26,60 +26,54 @@ How should local orchestration, storage emulation, and API verification be struc
   pipeline locally without an Azure subscription or active internet connection.
 * **Dual Authentication Modes:** Seamless fallback between local connection strings (`UseDevelopmentStorage=true`) and 
   Microsoft Entra ID Managed Identity in deployed cloud environments.
-* **Executable API Documentation:** Single executable specification file acting as living documentation and manual/automated 
-  test runner across modern IDEs.
+* **Executable API Documentation:** Executable `.http` specification files acting as living documentation and manual/automated 
+  test runners across modern IDEs.
 * **Rapid Developer Onboarding:** Minimal setup steps to get a fully working environment running locally.
 
 ## Considered Options
 
-* **Option 1: Azurite Storage Emulator with Dual-Mode Infrastructure and Executable `.http` Specification**
+* **Option 1: Azurite Storage Emulator with Dual-Mode Infrastructure and Executable `.http` Specifications**
 * **Option 2: Mocking All Storage Interfaces Locally (No Real Emulator)**
 * **Option 3: Ephemeral Azure Cloud Resources Provisioned per Developer**
 
 ## Decision Outcome
 
-Chosen option: **"Option 1: Azurite Storage Emulator with Dual-Mode Infrastructure and Executable `.http` Specification"**, 
+Chosen option: **"Option 1: Azurite Storage Emulator with Dual-Mode Infrastructure and Executable `.http` Specifications"**, 
 because it delivers high-fidelity local testing against real Azure Storage REST APIs without cloud dependencies, combined 
-with an executable HTTP runner:
+with executable HTTP runners:
 
 1. **Local Blob Storage Emulation (Azurite)**:
    - Developers and integration tests run against Azurite (`UseDevelopmentStorage=true` or Docker container on port `10000`).
-   - The infrastructure layer dynamically initialises required containers (`schemas`, `payloads`, `processed`, `landing`, 
-     `cleared`, `quarantine`) automatically if they do not exist.
+   - Integration tests execute inside ephemeral `test-{runId}-*` containers via `AzuriteFixture` ([ADR 0021](0021-isolated-ephemeral-azurite-test-containers.md)).
 2. **Dual-Mode Infrastructure Authentication**:
    `EstateDataCollection.Infrastructure` automatically detects its runtime environment:
-   - **Local Development**: If `AzureWebJobsStorage` or `BlobStorage` contains a connection string (e.g. 
+   - **Local Development**: If `AzureWebJobsStorage` or `ConnectionStrings:BlobStorage` contains a connection string (e.g. 
      `UseDevelopmentStorage=true`), it connects directly using account keys.
-   - **Deployed Cloud**: If an endpoint URI or account name is provided, it uses `DefaultAzureCredential` to authenticate 
+   - **Deployed Cloud**: If `EDC_STORAGE_BLOB_ENDPOINT` or `EDC_STORAGE_ACCOUNT_NAME` is provided, it uses `DefaultAzureCredential` to authenticate 
      via Microsoft Entra ID Managed Identity.
-3. **Executable REST Specifications (`EstateDataCollection.http`)**:
-   An executable HTTP request suite in `EstateDataCollection.AzureFunctions/EstateDataCollection.http` serves as both living 
-   documentation and an automated regression test runner within modern IDEs (Rider, VS Code REST Client, Visual Studio):
-   - **Section 1 (Schema Management)**: Verification of candidate schemas, pre-flight dry-runs against valid/invalid fixtures, 
-     and versioned schema submission.
-   - **Section 2 (Survey Ingestion Workflow)**: Creating submission sessions, uploading partial/invalid drafts with RFC 
-     7807 problem details, submitting valid drafts, and finalising submissions with automated promotion to the `processed` 
-     container.
+3. **Executable REST Specifications (`EstateDataCollection.http` & `EstateDataCollection.Admin.http`)**:
+   Executable HTTP request suites in `src/EstateDataCollection.AzureFunctions.Public/EstateDataCollection.http` and `src/EstateDataCollection.AzureFunctions.Admin/EstateDataCollection.Admin.http` serve as both living documentation and interactive test runners within modern IDEs (Rider, VS Code REST Client, Visual Studio):
+   - **Admin API (`:7072/api`)**: Verification of candidate JSON Schema / ODCS YAML & JsonLogic/CEL rules, versioned schema submission, lifecycle scheduling, and regression test runs.
+   - **Public API (`:7071/api`)**: Active schema discovery, creating submission sessions, uploading partial/invalid drafts with RFC 7807 problem details, checking status, and finalising submissions with automated promotion to `processed`.
 
 ### Consequences
 
 * Good, because the entire service can be tested and debugged offline without cloud credentials or Azure subscription costs.
-* Good, because the `.http` file provides interactive, one-click execution of the entire end-to-end lifecycle directly from 
+* Good, because the `.http` files provide interactive, one-click execution of the entire end-to-end lifecycle directly from 
   the developer's IDE.
-* Good, because new developers can clone the repository, run Azurite, press F5, and immediately exercise the full workflow.
+* Good, because new developers can clone the repository, run Azurite, start the two Function hosts, and immediately exercise the full workflow.
 * Good, because integration tests execute against the exact same Azurite emulator used for local debugging.
-* Bad, because developers must run the Azurite emulator (via Docker, npm, or IDE plugin) when running the local Functions host.
+* Bad, because developers must run the Azurite emulator (via Docker, npm, or IDE plugin) when running the local Functions hosts.
 
 ### Confirmation
 
 Compliance is confirmed via:
-- All integration tests passing against local Azurite emulator instances (`LocalPipelineEndToEndIntegrationTests`).
-- Azure Functions local startup validating container creation across all six containers.
-- Execution of all requests in `EstateDataCollection.http` succeeding against `http://localhost:7071/api`.
+- All integration tests passing against local Azurite emulator instances.
+- Execution of requests in `EstateDataCollection.http` (`http://localhost:7071/api`) and `EstateDataCollection.Admin.http` (`http://localhost:7072/api`).
 
 ## Pros and Cons of the Options
 
-### Option 1: Azurite Storage + Executable .http Specification (Chosen)
+### Option 1: Azurite Storage + Executable .http Specifications (Chosen)
 
 * Good, because tests run against real Azure Storage REST protocol behavior.
 * Good, because dual-mode credentials require zero cloud infrastructure costs during local testing.
@@ -101,6 +95,8 @@ Compliance is confirmed via:
 ## More Information
 
 Artifacts:
-* `src/EstateDataCollection.AzureFunctions/EstateDataCollection.http`
-* `src/EstateDataCollection.AzureFunctions/local.settings.json`
+* `src/EstateDataCollection.AzureFunctions.Public/EstateDataCollection.http`
+* `src/EstateDataCollection.AzureFunctions.Public/local.settings.example.json`
+* `src/EstateDataCollection.AzureFunctions.Admin/EstateDataCollection.Admin.http`
+* `src/EstateDataCollection.AzureFunctions.Admin/local.settings.example.json`
 * `test/EstateDataCollection.Tests.Integration/`

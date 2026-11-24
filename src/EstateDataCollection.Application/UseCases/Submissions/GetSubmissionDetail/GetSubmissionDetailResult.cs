@@ -15,5 +15,4 @@ public sealed record GetSubmissionDetailResult(
     string? NextStepsSummary,
     string? ResolvedIdentifierType,
     string? ResolvedIdentifierValue,
-    int? ResolvedUrn,
     IReadOnlyList<SubmissionAuditEntry> AuditEntries);

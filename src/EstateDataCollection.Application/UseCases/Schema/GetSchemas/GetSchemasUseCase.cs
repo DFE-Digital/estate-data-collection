@@ -18,7 +18,11 @@ public sealed class GetSchemasUseCase(
         GetSchemasRequest request,
         CancellationToken cancellationToken = default)
     {
-        _instrumentation.ListingSchemaCatalogue(request.SchemaName, request.IncludeUnscheduled);
+        _instrumentation.ListingSchemaCatalogue(
+            request.SchemaName,
+            request.IncludeUnscheduled,
+            request.IncludeUpcoming,
+            request.IncludeRetired);
 
         var listResult = await schemaRegistry.ListSchemasAsync(request.SchemaName, cancellationToken);
         if (listResult.IsFailure)
@@ -28,7 +32,11 @@ public sealed class GetSchemasUseCase(
 
         var now = DateTimeOffset.UtcNow;
         var filtered = listResult.Value
-            .Where(m => request.IncludeUnscheduled || m.IsPubliclyVisible)
+            .Where(m => m.IsVisibleForDiscovery(
+                now,
+                includeUnscheduled: request.IncludeUnscheduled,
+                includeUpcoming: request.IncludeUpcoming,
+                includeRetired: request.IncludeRetired))
             .ToList();
 
         if (!string.IsNullOrWhiteSpace(request.SchemaName) && filtered.Count == 0)

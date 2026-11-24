@@ -102,7 +102,8 @@ Compliance is confirmed via:
 ## More Information
 
 Implementation:
-* `src/EstateDataCollection.Domain/Submission/SubmissionEnvelope.cs`
+* `src/EstateDataCollection.Domain/Submission/SubmissionSession.cs`
+* `src/EstateDataCollection.Domain/Submission/SubmissionIdentifier.cs`
 * `src/EstateDataCollection.Application/UseCases/Submissions/CreateSubmission/CreateSubmissionUseCase.cs`
 * `src/EstateDataCollection.Application/UseCases/Submissions/UpdateSubmission/UpdateSubmissionUseCase.cs`
 * `src/EstateDataCollection.Application/UseCases/Submissions/FinaliseSubmission/FinaliseSubmissionUseCase.cs`

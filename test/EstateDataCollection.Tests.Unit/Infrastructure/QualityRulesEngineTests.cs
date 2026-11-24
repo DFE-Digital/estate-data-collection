@@ -142,4 +142,56 @@ public class QualityRulesEngineTests
         var runtimeLenient = (await lenientValidator.ValidateAsync(CdePayloadFixtures.ValidSchoolSitePayload, parsedRules!)).ShouldSucceed();
         runtimeLenient.IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task JsonLogicQualityEngine_Should_Preserve_Subsecond_Timestamp_Precision_And_Enforce_Depth_Limit()
+    {
+        var validator = new JsonLogicValidator();
+
+        // 1. Timestamps differing by 1 tick (100 nanoseconds) would collide if cast to double UtcTicks
+        var timestampRuleJson = new QualityRulesBuilder()
+            .AddCustomRule(
+                "JL-SUBSECOND",
+                "jsonlogic",
+                "survey",
+                "updated_at must be strictly greater than created_at",
+                JsonNode.Parse("""{ ">": [ { "var": "updated_at" }, { "var": "created_at" } ] }""")!)
+            .BuildJson();
+
+        validator.ValidateRulesSyntax(timestampRuleJson, out var timestampRules).ShouldSucceed().Should().BeEmpty();
+        const string payload = """
+        {
+          "survey": {
+            "created_at": "2026-06-01T12:00:00.0000001Z",
+            "updated_at": "2026-06-01T12:00:00.0000002Z"
+          }
+        }
+        """;
+
+        var eval = (await validator.ValidateAsync(payload, timestampRules!)).ShouldSucceed();
+        eval.IsValid.Should().BeTrue();
+
+        // 2. Deeply nested JsonLogic AST (> 64) should fail syntax validation cleanly
+        JsonNode deepNode = JsonValue.Create(true)!;
+        for (var i = 0; i < 70; i++)
+        {
+            deepNode = new JsonObject { ["!"] = deepNode };
+        }
+
+        var deepRule = new BusinessRule
+        {
+            Id = "JL-DEEP",
+            Type = "custom",
+            Engine = "jsonlogic",
+            Path = "/",
+            Description = "Excessively nested rule",
+            Message = "Excessively nested rule",
+            Implementation = deepNode
+        };
+
+        var syntaxErrors = new JsonLogicQualityEngine().ValidateSyntax(deepRule, "JL-DEEP");
+        syntaxErrors.Should().ContainSingle(e =>
+            e.Identifier == "JL-DEEP" &&
+            e.Message.Contains("maximum nesting depth", StringComparison.OrdinalIgnoreCase));
+    }
 }

@@ -54,7 +54,7 @@ public class FinaliseSubmissionUseCaseTests
 
         result.ShouldFailWith("Schema.ContractViolation");
         await _repository.DidNotReceive().PromoteToProcessedAsync(
-            Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -71,12 +71,12 @@ public class FinaliseSubmissionUseCaseTests
             .Returns(Result<ResolvedSchema>.Success(resolved));
         _validator.ValidateAsync(SurveyPayloadFixtures.ValidPayloadJson, resolved.Schema, Arg.Any<CancellationToken>())
             .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult([])));
-        _repository.PromoteToProcessedAsync(session.SubmissionId, 104521, "edc_payload", 1, Arg.Any<CancellationToken>())
+        _repository.PromoteToProcessedAsync(session.SubmissionId, "URN", "104521", "edc_payload", 1, Arg.Any<CancellationToken>())
             .Returns(Result<string>.Success("https://storage/processed/urn=104521/final.json"));
 
         var result = (await _sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId))).ShouldSucceed();
 
-        result.Urn.Should().Be(104521);
+        result.Status.Should().Be("Finalised");
         result.Identifier.Should().Be("104521");
         result.IdentifierType.Should().Be("URN");
         result.ProcessedBlobUri.Should().Contain("processed/urn=104521");
@@ -99,16 +99,17 @@ public class FinaliseSubmissionUseCaseTests
             .Returns(Result<ResolvedSchema>.Success(resolved));
         _validator.ValidateAsync(customPayload, resolved.Schema, Arg.Any<CancellationToken>())
             .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult([])));
-        _repository.PromoteToProcessedAsync(session.SubmissionId, 139876, "edc-custom-site", 1, Arg.Any<CancellationToken>())
+        _repository.PromoteToProcessedAsync(session.SubmissionId, "URN", "139876", "edc-custom-site", 1, Arg.Any<CancellationToken>())
             .Returns(Result<string>.Success("https://storage/processed/urn=139876/final.json"));
 
         var result = (await _sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId))).ShouldSucceed();
 
-        result.Urn.Should().Be(139876);
+        result.Identifier.Should().Be("139876");
+        result.IdentifierType.Should().Be("URN");
     }
 
     [Fact]
-    public async Task When_Schema_Uses_Custom_String_Identifier_Should_Promote_Via_String_Overload()
+    public async Task When_Schema_Uses_Custom_String_Identifier_Should_Promote_With_Identifier_Type_And_Value()
     {
         const string laestabSchema = """
         {
@@ -148,7 +149,6 @@ public class FinaliseSubmissionUseCaseTests
 
         var result = (await _sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId))).ShouldSucceed();
 
-        result.Urn.Should().Be(0);
         result.Identifier.Should().Be("201-3614");
         result.IdentifierType.Should().Be("LAEstab");
         result.ProcessedBlobUri.Should().Contain("laestab=201-3614");
@@ -158,7 +158,7 @@ public class FinaliseSubmissionUseCaseTests
     }
 
     [Fact]
-    public async Task When_Schema_Metadata_Marks_Identifier_As_Not_Required_It_Should_Finalise_Without_Urn()
+    public async Task When_Schema_Metadata_Marks_Identifier_As_Not_Required_It_Should_Finalise_Without_Identifier()
     {
         var session = new SubmissionSessionBuilder().WithSchemaName("edc-survey-elements").Build();
         const string elementsPayload = """{"survey":{"id":"11111111-2222-3333-4444-555555555555"},"elements":[]}""";
@@ -174,12 +174,13 @@ public class FinaliseSubmissionUseCaseTests
             .Returns(Result<ResolvedSchema>.Success(resolved));
         _validator.ValidateAsync(elementsPayload, resolved.Schema, Arg.Any<CancellationToken>())
             .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult([])));
-        _repository.PromoteToProcessedAsync(session.SubmissionId, 0, "edc-survey-elements", 1, Arg.Any<CancellationToken>())
+        _repository.PromoteToProcessedAsync(session.SubmissionId, null, null, "edc-survey-elements", 1, Arg.Any<CancellationToken>())
             .Returns(Result<string>.Success("https://storage/processed/schema=edc-survey-elements/v=1/final.json"));
 
         var result = (await _sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId))).ShouldSucceed();
 
-        result.Urn.Should().Be(0);
+        result.Identifier.Should().BeNull();
+        result.IdentifierType.Should().BeNull();
         result.ProcessedBlobUri.Should().NotContain("urn=");
     }
 
@@ -201,7 +202,7 @@ public class FinaliseSubmissionUseCaseTests
             .Returns(Result<SubmissionSession>.Success(session));
         _repository.GetDraftPayloadAsync(session.SubmissionId, Arg.Any<CancellationToken>())
             .Returns(Result<string>.Success(CdePayloadFixtures.ValidSchoolSitePayload));
-        _repository.PromoteToProcessedAsync(session.SubmissionId, 123456, "edc-school-site", 1, Arg.Any<CancellationToken>())
+        _repository.PromoteToProcessedAsync(session.SubmissionId, "URN", "123456", "edc-school-site", 1, Arg.Any<CancellationToken>())
             .Returns(Result<string>.Success("https://blob.local/processed/123456/edc-school-site/v1.json"));
         _registry.GetExplicitSchemaAsync("edc-school-site", 1, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Success(resolved));
@@ -213,8 +214,9 @@ public class FinaliseSubmissionUseCaseTests
 
         var result = (await sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId))).ShouldSucceed();
 
-        result.Urn.Should().Be(123456);
+        result.Identifier.Should().Be("123456");
+        result.IdentifierType.Should().Be("URN");
         await _repository.Received(1).PromoteToProcessedAsync(
-            session.SubmissionId, 123456, "edc-school-site", 1, Arg.Any<CancellationToken>());
+            session.SubmissionId, "URN", "123456", "edc-school-site", 1, Arg.Any<CancellationToken>());
     }
 }

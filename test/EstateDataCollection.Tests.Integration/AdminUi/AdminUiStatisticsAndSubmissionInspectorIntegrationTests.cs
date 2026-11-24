@@ -21,8 +21,10 @@ namespace EstateDataCollection.Tests.Integration.AdminUi;
 
 [Collection("AzuriteCollection")]
 public sealed class AdminUiStatisticsAndSubmissionInspectorIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task Timestamped_Draft_Merge_Check_NextSteps_And_Admin_Statistics_Inspector_Should_Work_EndToEnd()
@@ -126,7 +128,8 @@ public sealed class AdminUiStatisticsAndSubmissionInspectorIntegrationTests(Azur
         readyCheck.DraftCount.Should().Be(2);
         readyCheck.IsReadyToFinalise.Should().BeTrue();
         readyCheck.PendingErrors.Should().BeEmpty();
-        readyCheck.Urn.Should().Be(104521);
+        readyCheck.Identifier.Should().Be("104521");
+        readyCheck.IdentifierType.Should().Be("URN");
         readyCheck.NextSteps.Should().ContainSingle(s => s.Contains($"/submissions/{mergedDraftId}/finalise"));
 
         // 3. Also keep a Draft submission with 1 chunk (unfinalised) on schemaA so stats show both Draft + Finalised
@@ -143,7 +146,8 @@ public sealed class AdminUiStatisticsAndSubmissionInspectorIntegrationTests(Azur
                 mergedDraftId,
                 CancellationToken.None))
             .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
-        finaliseRes.Urn.Should().Be(104521);
+        finaliseRes.Identifier.Should().Be("104521");
+        finaliseRes.IdentifierType.Should().Be("URN");
 
         // Verify processed blob actually contains the merged data from BOTH timestamped chunks
         var processedContainer = _harness.BlobClient.GetBlobContainerClient(_harness.ProcessedContainerName);

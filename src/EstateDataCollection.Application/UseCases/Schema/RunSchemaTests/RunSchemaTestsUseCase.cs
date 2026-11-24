@@ -134,7 +134,12 @@ public sealed class RunSchemaTestsUseCase(
                 invalidOutcomes,
                 warnings,
                 ValidationEngineTraceMapper.ToDomainRecords(engineTraces));
-            await schemaRegistry.UpdateSchemaMetadataAsync(meta, cancellationToken);
+
+            var updateResult = await schemaRegistry.UpdateSchemaMetadataAsync(meta, cancellationToken);
+            if (updateResult.IsFailure)
+            {
+                return updateResult.Error;
+            }
 
             var effectiveId = verification.IsSuccess
                 ? (verification.Value.ResolvedIdentifierConfig ?? meta.IdentifierConfig)

@@ -1,56 +1,56 @@
 ---
 status: "accepted"
 sub-status: "implemented"
-date: 2026-11-17
+date: 2026-11-24
 decision-makers: ["Chris Kelly"]
 ---
 
-# 17. Server-Side Rendered Admin Portal and Proxy-Only API Boundary
+# 17. Server-Side Rendered Admin Portal and Consolidated Admin Host Boundary
 
 ## Context and Problem Statement
 
 The Estate Data Collection (EDC) platform required an internal administration portal for Education Estates Directorate operators to inspect schema contracts, preview extracted fields and business rules, dry-run verify ODCS YAML and JSON Schema contracts, manage lifecycle windows, and execute stored regression tests.
 
-Historically, Admin operations were exposed solely as headless HTTP endpoints on [`EstateDataCollection.AzureFunctions.Admin`](../../src/EstateDataCollection.AzureFunctions.Admin) secured by function keys (`x-functions-key`). Embedding UI HTML rendering or direct Blob Storage dependencies inside the core Admin API would blur API/UI boundaries, while shipping a client-side SPA (React/Angular/Blazor WASM) would introduce separate Node build toolchains, CORS surface area, and client-side credential exposure. How should the Admin UI be architected and hosted within the existing Clean Architecture and isolated Azure Functions solution?
+Historically, Admin operations were exposed solely as headless HTTP endpoints on [`EstateDataCollection.AzureFunctions.Admin`](../../src/EstateDataCollection.AzureFunctions.Admin) secured by function keys (`x-functions-key`). While an early iteration introduced a separate UI Azure Functions host (`AzureFunctions.AdminUi`) forwarding HTTP proxy calls (`Http*UseCaseProxy`) to the Admin API, operating and deploying three separate Function Apps (Public, Admin API, and Admin UI) added unnecessary operational complexity for the current phase.
+
+At the same time, operators and CI/CD pipelines still benefit from keeping headless JSON API endpoints (`Routes/Api/*`) separate from SSR HTML page routes (`Routes/Admin/*`), while shipping a pure .NET static-SSR portal without separate Node build toolchains or SPA/WASM client complexity. How should the Admin UI and Admin API be structured and hosted today while keeping the option to split into separate Function Apps later?
 
 ## Decision Drivers
 
-* **Strict Trust Boundary & Single Source of Truth:** The UI host must never read or mutate Blob Storage directly; all contract mutations, verification, lifecycle changes, and test runs must pass through the audited Admin API use cases.
-* **No Separate Frontend Build Toolchain:** Maintain a pure .NET 10 / C# build and deployment pipeline compatible with [ADR 0006](0006-flex-consumption-self-contained-deployment.md) and [ADR 0009](0009-central-package-management-and-build-props.md).
-* **DfE & GOV.UK Design System Compliance:** Render compliant GOV.UK Frontend HTML markup with embedded CSS, fonts, crest/favicon assets, and minimal progressive enhancement JS (`workbench.js`) without external CDN dependencies.
-* **Host Isolation:** Keep UI traffic, static asset serving, and Entra/portal concerns separate from machine-to-machine Public ingestion and core Admin API functions.
+* **Single Admin Function App for Now (Reversible Split):** Combine the SSR Admin Portal (`Routes/Admin/*`) and Admin Governance API (`Routes/Api/*`) into `EstateDataCollection.AzureFunctions.Admin` to eliminate deploying and managing an extra Function App right now, while keeping route groups and Use Case boundaries cleanly separated if they split in the future.
+* **Direct In-Process Use Case Dispatch for UI Pages:** SSR Admin pages (`Routes/Admin/*`) resolve Application `IUseCase<TResult, TRequest>` handlers directly in-process instead of looping HTTP proxy calls back through the same host.
+* **Preserve Headless Admin API for CI/HTTP Callers:** Retain `Routes/Api/*` (`/api/schemas*`, Event Grid `IngestDraftSchemaEvent`) protected by `AuthorizationLevel.Function` for automated contract pipelines, schema seeding, and future flow-aware integrations, dropping only duplicate/redundant endpoints (`/api/logic/verify`, superseded by `/api/schemas/verify`).
+* **No Separate Frontend Build Toolchain & Clean UI Separation:** Keep Razor components, GOV.UK Frontend / DfE branding assets, and Presentation ViewModels isolated inside the `EstateDataCollection.Admin.UI` Razor Class Library with zero direct Azure Storage SDK dependencies.
 
 ## Considered Options
 
-* **Option 1: Separate Isolated Azure Functions UI Host (`AzureFunctions.AdminUi`) Rendering Pure SSR Razor Components (`Admin.UI`) Over Typed HTTP Proxies (`Http*UseCaseProxy`)**
-* **Option 2: Client-Side SPA (Blazor WebAssembly / React) Calling Admin API Directly**
-* **Option 3: Embedding Razor Views Inside `EstateDataCollection.AzureFunctions.Admin`**
+* **Option 1: Consolidate SSR Admin Portal (`Routes/Admin/*`) and Admin API (`Routes/Api/*`) Inside `EstateDataCollection.AzureFunctions.Admin` Using In-Process `IUseCase<TResult, TRequest>` Dispatch**
+* **Option 2: Separate Isolated Azure Functions UI Host (`AzureFunctions.AdminUi`) Over Typed HTTP Proxies (`Http*UseCaseProxy`)**
+* **Option 3: Client-Side SPA (Blazor WebAssembly / React) Calling Admin API Directly**
 
 ## Decision Outcome
 
-Chosen option: **"Option 1: Separate Isolated Azure Functions UI Host Rendering Pure SSR Razor Components Over Typed HTTP Proxies"**, structured across two projects:
+Chosen option: **"Option 1: Consolidate SSR Admin Portal and Admin API Inside `EstateDataCollection.AzureFunctions.Admin` Using In-Process `IUseCase<TResult, TRequest>` Dispatch"** (superseding the earlier two-host `AdminUi` proxy layout):
 
 1. **`EstateDataCollection.Admin.UI` (Razor Class Library):**
-   - Houses SSR Razor Pages, Components, Layouts, ViewModels, `RazorComponentRenderer` (backed by ASP.NET Core `HtmlRenderer`), and embedded GOV.UK Frontend / DfE branding assets served via `EmbeddedUiAssetProvider`.
+   - Houses pure zero-logic SSR Razor Pages, Components, Layouts, Presentation ViewModels, `RazorComponentRenderer` (backed by ASP.NET Core `HtmlRenderer`), and embedded GOV.UK Frontend / DfE branding assets served via `EmbeddedUiAssetProvider` (cached in-memory with `ETag`).
    - Zero Azure SDK, Blob Storage, or client-side SPA/WASM runtime dependencies.
-2. **`EstateDataCollection.AzureFunctions.AdminUi` (Isolated Functions Host):**
-   - Exposes anonymous/portal-authenticated HTTP GET/POST routes under `/manage/*` and `/assets/*` (`StaticAssetEndpoint`) inheriting common helpers from `FunctionPageBase`.
-   - Implements the exact same Application `IUseCase<TResult, TRequest>` contracts via typed HTTP proxy classes (`HttpGetSchemasUseCaseProxy`, `HttpGetSchemaDetailUseCaseProxy`, `HttpVerifySchemaUseCaseProxy`, `HttpSubmitSchemaUseCaseProxy`, `HttpScheduleSchemaUseCaseProxy`, `HttpRunSchemaTestsUseCaseProxy`, `HttpUpdateSchemaTestsUseCaseProxy`) built on `AdminApiUseCaseProxyBase` and forwarding `x-functions-key` from `AdminUiOptions`.
-   - References `Application` contracts and `Admin.UI`, with zero project reference to `Infrastructure`.
+2. **`EstateDataCollection.AzureFunctions.Admin` (Unified Isolated Functions Host with `"routePrefix": ""`):**
+   - **Admin Portal Routes (`Routes/Admin/*` & `Assets`):** Exposes SSR HTML GET/POST routes under `/manage/*` and static assets under `/assets/*` (`StaticAssetEndpoint`), resolving `IUseCase<TResult, TRequest>` handlers directly via DI and sharing common page helpers in `FunctionPageBase`.
+   - **Admin API & Event Triggers (`Routes/Api/*` & `Events/*`):** Exposes machine-to-machine JSON endpoints under explicit `api/...` route templates (`/api/schemas`, `/api/schemas/verify`, `/api/schemas/engines`, `/api/schemas/tests/run`, `/api/schemas/{schemaName}/versions/{version}`, `.../schedule`, `.../tests`) with `AuthorizationLevel.Function`, plus Event Grid `IngestDraftSchemaEvent` for automated `draft-schemas` ingestion.
 
 ### Consequences
 
-* Good, because the Admin UI shares the exact same `IUseCase<TResult, TRequest>` request/response contracts and `Result<T>` error semantics as the Admin API without duplicating domain or storage logic.
-* Good, because GOV.UK Frontend pages render server-side with full progressive enhancement (`GET`/`POST`/PRG flows and optional `fetch` partial verification on `/manage/workbench/verify`) and zero browser-side secret exposure.
-* Good, because UI endpoints, Admin API endpoints, and Public ingestion endpoints scale and deploy independently.
-* Bad, because adding a new UI operation requires both an Admin API endpoint and a matching `Http*UseCaseProxy` adapter in `AzureFunctions.AdminUi`.
+* Good, because operations deploy and monitor two Function Apps (`Public` and `Admin`) instead of three, cutting cold-start, networking, and CI/CD overhead.
+* Good, because Admin UI handlers invoke `IUseCase<TResult, TRequest>` directly without double-hop HTTP serialization or key forwarding, while keeping the exact same Application boundaries as the headless API.
+* Good, because `Routes/Admin/*` and `Routes/Api/*` remain cleanly separated inside `EstateDataCollection.AzureFunctions.Admin` (and `Admin.UI` has zero Blob Storage dependency), making a future split back into a dedicated Admin UI Function App straightforward when Entra Easy Auth / network isolation boundaries warrant it.
+* Bad, because hosting `/manage/*` and `/api/*` together requires route-scoped authentication middleware once Entra ID login for `/manage/*` is enabled (deferred architectural backlog item; see [Deployment Guide](../DEPLOYMENT.md#portal-authentication--network-isolation)).
 
 ### Confirmation
 
 Compliance is confirmed via:
-- Unit tests in [`AdminApiUseCaseProxyTests.cs`](../../test/EstateDataCollection.Tests.Unit/AdminUi/AdminApiUseCaseProxyTests.cs) verifying proxy HTTP method, route, headers (`x-functions-key`), and `Result<T>` error mapping.
-- Unit tests in [`RazorComponentRenderingTests.cs`](../../test/EstateDataCollection.Tests.Unit/AdminUi/RazorComponentRenderingTests.cs) verifying SSR HTML output and embedded asset resolution (`EmbeddedUiAssetProvider`).
-- End-to-end integration tests in [`AdminUiPagesIntegrationTests.cs`](../../test/EstateDataCollection.Tests.Integration/AdminUi/AdminUiPagesIntegrationTests.cs) wiring UI routes to live Admin API handlers and Azurite.
+- Unit tests in [`RazorComponentRenderingTests.cs`](../../test/EstateDataCollection.Tests.Unit/AdminUi/RazorComponentRenderingTests.cs) verifying SSR HTML output, `SchemaFieldTree` rendering, and embedded asset caching (`EmbeddedUiAssetProvider`).
+- End-to-end integration tests in [`AdminUiPagesIntegrationTests.cs`](../../test/EstateDataCollection.Tests.Integration/AdminUi/AdminUiPagesIntegrationTests.cs) and [`AdminUiStatisticsAndSubmissionInspectorIntegrationTests.cs`](../../test/EstateDataCollection.Tests.Integration/AdminUi/AdminUiStatisticsAndSubmissionInspectorIntegrationTests.cs) exercising `/manage/*` page handlers against Azurite.
 
 ## More Information
 

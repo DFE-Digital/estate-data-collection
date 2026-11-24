@@ -6,10 +6,9 @@ namespace EstateDataCollection.Application.Abstraction;
 
 public interface ISubmissionInfrastructure : IInfrastructure
 {
-    Task<Result<Guid>> SaveSubmissionAsync(SubmissionEnvelope submission, CancellationToken cancellationToken = default);
     Task<Result<Guid>> CreateSessionAsync(SubmissionSession session, CancellationToken cancellationToken = default);
     Task<Result<SubmissionSession>> GetSessionAsync(Guid submissionId, CancellationToken cancellationToken = default);
-    Task<Result> SaveDraftPayloadAsync(Guid submissionId, int? urn, string rawPayloadJson, CancellationToken cancellationToken = default);
+    Task<Result> SaveDraftPayloadAsync(Guid submissionId, string rawPayloadJson, CancellationToken cancellationToken = default);
     Task<Result<string>> GetDraftPayloadAsync(Guid submissionId, CancellationToken cancellationToken = default);
 
     Task<Result<IReadOnlyList<SubmissionDraftItem>>> GetDraftItemsAsync(
@@ -19,17 +18,11 @@ public interface ISubmissionInfrastructure : IInfrastructure
         return Task.FromResult(Result<IReadOnlyList<SubmissionDraftItem>>.Success(Array.Empty<SubmissionDraftItem>()));
     }
 
-    Task<Result<string>> PromoteToProcessedAsync(Guid submissionId, int urn, string schemaName, int schemaVersion, CancellationToken cancellationToken = default);
-
     Task<Result<string>> PromoteToProcessedAsync(
         Guid submissionId,
         string? identifierType,
         string? identifierValue,
         string schemaName,
         int schemaVersion,
-        CancellationToken cancellationToken = default)
-    {
-        var legacyUrn = int.TryParse(identifierValue, out var u) && u > 0 ? u : 0;
-        return PromoteToProcessedAsync(submissionId, legacyUrn, schemaName, schemaVersion, cancellationToken);
-    }
+        CancellationToken cancellationToken = default);
 }

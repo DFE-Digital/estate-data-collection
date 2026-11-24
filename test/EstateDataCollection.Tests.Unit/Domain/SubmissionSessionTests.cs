@@ -17,7 +17,8 @@ public class SubmissionSessionTests
         session.SchemaName.Should().Be("edc_payload");
         session.SchemaVersion.Should().Be(2);
         session.IsFinalised.Should().BeFalse();
-        session.Urn.Should().BeNull();
+        session.IdentifierType.Should().BeNull();
+        session.IdentifierValue.Should().BeNull();
         session.CreatedAtUtc.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(2));
     }
 
@@ -63,15 +64,16 @@ public class SubmissionSessionTests
     }
 
     [Fact]
-    public void When_Assigning_A_Urn_It_Should_Update_The_Session_Urn()
+    public void When_Assigning_An_Identifier_It_Should_Trim_And_Store_Type_And_Value()
     {
         // Arrange
         var session = SubmissionSession.Create("edc_payload", 1);
 
         // Act
-        session.AssignUrn(104521);
+        session.AssignIdentifier(" URN ", " 104521 ");
 
         // Assert
-        session.Urn.Should().Be(104521);
+        session.IdentifierType.Should().Be("URN");
+        session.IdentifierValue.Should().Be("104521");
     }
 }

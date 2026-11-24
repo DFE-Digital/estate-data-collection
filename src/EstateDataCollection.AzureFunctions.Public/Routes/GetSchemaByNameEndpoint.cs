@@ -12,8 +12,9 @@ using Microsoft.Azure.Functions.Worker;
 namespace EstateDataCollection.AzureFunctions.Public.Routes;
 
 /// <summary>
-/// Retrieves a specific schema's catalogue entry including all its available versions, effective dates, and extracted fields.
-/// Route: GET /schemas/{schemaName}
+/// Retrieves a specific schema's catalogue entry (active versions by default, with optional upcoming/retired filters).
+/// Never exposes unscheduled (Draft / Validated) schemas.
+/// Route: GET /api/schemas/{schemaName}
 /// </summary>
 public sealed class GetSchemaByNameEndpoint(
     IUseCase<GetSchemasResult, GetSchemasRequest> getSchemasUseCase,
@@ -30,7 +31,8 @@ public sealed class GetSchemaByNameEndpoint(
         string schemaName,
         CancellationToken cancellationToken)
     {
-        var includeUnscheduled = http.GetBoolFromQuery("includeUnscheduled", defaultValue: false);
+        var includeUpcoming = http.GetBoolFromQuery("includeUpcoming", defaultValue: false);
+        var includeRetired = http.GetBoolFromQuery("includeRetired", defaultValue: false);
         var includeFields = http.GetBoolFromQuery("includeFields", defaultValue: true);
 
         return ExecuteAsync<GetSchemasRequest, GetSchemasResult, SchemaCatalogueEntry>(
@@ -38,8 +40,10 @@ public sealed class GetSchemaByNameEndpoint(
             getSchemasUseCase,
             () => Task.FromResult(Result<GetSchemasRequest>.Success(new GetSchemasRequest(
                 SchemaName: schemaName,
-                IncludeUnscheduled: includeUnscheduled,
-                IncludeActiveVersionFields: includeFields))),
+                IncludeUnscheduled: false,
+                IncludeActiveVersionFields: includeFields,
+                IncludeUpcoming: includeUpcoming,
+                IncludeRetired: includeRetired))),
             result =>
             {
                 var entry = result.Schemas.FirstOrDefault();
@@ -48,7 +52,7 @@ public sealed class GetSchemaByNameEndpoint(
                     : Result<SchemaCatalogueEntry>.Success(entry);
             },
             StatusCodes.Status200OK,
-            context: $"{schemaName} (IncludeUnscheduled={includeUnscheduled})",
+            context: $"{schemaName} (IncludeUpcoming={includeUpcoming}, IncludeRetired={includeRetired})",
             cancellationToken: cancellationToken);
     }
 }

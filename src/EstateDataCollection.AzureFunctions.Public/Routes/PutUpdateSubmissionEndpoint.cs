@@ -46,7 +46,7 @@ public sealed class PutUpdateSubmissionEndpoint(
         var json = await http.ReadRequestBodyAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(json))
         {
-            return Error.Forbidden(ErrorCodes.PayloadEmpty);
+            return Error.Failure(ErrorCodes.PayloadEmpty);
         }
 
         return new UpdateSubmissionRequest(submissionId, json);

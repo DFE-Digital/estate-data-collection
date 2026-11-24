@@ -169,11 +169,6 @@ public sealed record SubmissionDetailViewModel(
                     : Detail.ResolvedIdentifierValue;
             }
 
-            if (Detail.ResolvedUrn.HasValue)
-            {
-                return $"URN: {Detail.ResolvedUrn.Value.ToString(CultureInfo.InvariantCulture)}";
-            }
-
             return "Unassigned";
         }
     }
@@ -357,11 +352,9 @@ public sealed record SubmissionDetailViewModel(
                         .ToList();
 
                     var hasId = entry.Identifier is not null &&
-                                (!string.IsNullOrWhiteSpace(entry.Identifier.Value) || entry.Identifier.Urn.HasValue);
+                                !string.IsNullOrWhiteSpace(entry.Identifier.Value);
                     var idText = entry.Identifier is not null && hasId
-                        ? !string.IsNullOrWhiteSpace(entry.Identifier.Value)
-                            ? $"{entry.Identifier.Type ?? "ID"}: {entry.Identifier.Value}"
-                            : $"URN: {entry.Identifier.Urn}"
+                        ? $"{entry.Identifier.Type ?? "ID"}: {entry.Identifier.Value}"
                         : string.Empty;
 
                     return new SubmissionAuditItemViewModel(

@@ -126,7 +126,9 @@ public sealed class PostScheduleSchemaSubmitEndpoint(
                     SchemaName: schemaName,
                     Version: version,
                     IncludeUnscheduled: true,
-                    IncludeRawJsonSchema: false),
+                    IncludeRawJsonSchema: false,
+                    IncludeUpcoming: true,
+                    IncludeRetired: true),
                 cancellationToken);
 
             var meta = CreatePageMeta(http, $"Schedule {schemaName} v{version}", activeNav: "schemas");

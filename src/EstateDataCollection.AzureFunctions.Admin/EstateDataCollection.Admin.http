@@ -23,8 +23,8 @@ x-functions-key: {{adminFunctionKey}}
 }
 
 
-### 1.2 Verify Multi-Engine Quality Rules (JsonLogic & CEL)
-POST {{adminBaseUrl}}/logic/verify
+### 1.2 Verify Multi-Engine Quality Rules (JsonLogic & CEL) via /schemas/verify
+POST {{adminBaseUrl}}/schemas/verify
 Content-Type: application/json
 x-functions-key: {{adminFunctionKey}}
 
@@ -79,14 +79,14 @@ x-functions-key: {{adminFunctionKey}}
 < ../../cde-data-contracts/contracts/edc-school-site-jsonlogic.odcs.yaml
 
 
-### 2.3 Get Admin Schema Catalogue (Includes Unscheduled & Retired Versions)
-GET {{adminBaseUrl}}/schemas?includeUnscheduled=true&includeFields=true
+### 2.3 Get Admin Schema Catalogue (Includes Unscheduled, Upcoming & Retired Versions by Default)
+GET {{adminBaseUrl}}/schemas?includeUnscheduled=true&includeUpcoming=true&includeRetired=true&includeFields=true
 Accept: application/json
 x-functions-key: {{adminFunctionKey}}
 
 
 ### 2.4 Get Admin Schema Version Detail (Includes Raw JSON Schema, Extracted Fields, Quality Rules & IdentifierConfig)
-GET {{adminBaseUrl}}/schemas/{{schemaName}}/versions/1?includeUnscheduled=true&includeRawJsonSchema=true
+GET {{adminBaseUrl}}/schemas/{{schemaName}}/versions/1?includeUnscheduled=true&includeUpcoming=true&includeRetired=true&includeRawJsonSchema=true
 Accept: application/json
 x-functions-key: {{adminFunctionKey}}
 

@@ -9,8 +9,12 @@ public sealed partial class GetSchemasUseCaseInstrumentation(
     [LoggerMessage(
         EventId = 1800,
         Level = LogLevel.Information,
-        Message = "Listing schema catalogue (SchemaNameFilter={SchemaNameFilter}, IncludeUnscheduled={IncludeUnscheduled})")]
-    public partial void ListingSchemaCatalogue(string? schemaNameFilter, bool includeUnscheduled);
+        Message = "Listing schema catalogue (SchemaNameFilter={SchemaNameFilter}, IncludeUnscheduled={IncludeUnscheduled}, IncludeUpcoming={IncludeUpcoming}, IncludeRetired={IncludeRetired})")]
+    public partial void ListingSchemaCatalogue(
+        string? schemaNameFilter,
+        bool includeUnscheduled,
+        bool includeUpcoming,
+        bool includeRetired);
 
     [LoggerMessage(
         EventId = 1801,
