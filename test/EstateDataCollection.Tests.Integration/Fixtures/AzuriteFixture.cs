@@ -57,7 +57,9 @@ public sealed partial class AzuriteFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         ConnectionString = ResolveConnectionString();
-        Client = new BlobServiceClient(ConnectionString);
+        Client = new BlobServiceClient(
+            ConnectionString,
+            new BlobClientOptions(BlobClientOptions.ServiceVersion.V2025_11_05));
         await EnsureContainersAsync();
         await CleanupStaleTestContainersAsync(TimeSpan.FromHours(1));
     }

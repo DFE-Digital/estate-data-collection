@@ -124,7 +124,7 @@ public sealed class SubmissionAuditTrailIntegrationTests(AzuriteFixture fixture)
         // Verify physical audit blobs in Azurite payloads/{subId}/audit/ folder
         var payloadsContainer = _harness.BlobClient.GetBlobContainerClient(_harness.PayloadsContainerName);
         var auditBlobNames = new List<string>();
-        await foreach (var blob in payloadsContainer.GetBlobsAsync(prefix: $"{subId}/audit/"))
+        await foreach (var blob in payloadsContainer.GetBlobsAsync(traits: Azure.Storage.Blobs.Models.BlobTraits.None, states: Azure.Storage.Blobs.Models.BlobStates.None, prefix: $"{subId}/audit/", cancellationToken: CancellationToken.None))
         {
             auditBlobNames.Add(blob.Name);
         }

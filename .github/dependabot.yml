@@ -7,6 +7,15 @@ updates:
       day: "monday"
     cooldown:
       default-days: 3
+    groups:
+      json-everything:
+        patterns:
+          - "JsonSchema*"
+          - "JsonLogic*"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"

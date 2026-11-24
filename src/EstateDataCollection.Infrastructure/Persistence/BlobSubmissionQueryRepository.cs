@@ -53,6 +53,8 @@ public sealed class BlobSubmissionQueryRepository(
 
             await foreach (var blobItem in container.GetBlobsAsync(
                                traits: BlobTraits.Metadata,
+                               states: BlobStates.None,
+                               prefix: null,
                                cancellationToken: cancellationToken))
             {
                 var slashIndex = blobItem.Name.IndexOf('/');

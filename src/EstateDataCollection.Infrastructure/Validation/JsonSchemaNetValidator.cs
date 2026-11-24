@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+using System.Text.Json;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Schema;
@@ -40,14 +40,14 @@ public class JsonSchemaNetValidator(
         try
         {
             _instrumentation.ValidationStarted();
-            var node = JsonNode.Parse(payload);
+            using var doc = JsonDocument.Parse(payload);
 
-            if (node is null)
+            if (doc.RootElement.ValueKind == JsonValueKind.Null)
             {
                 return Error.Validation(ErrorCodes.JsonEmptyPayload);
             }
             
-            var result = schema.Evaluate(node, _evaluationOpts);
+            var result = schema.Evaluate(doc.RootElement, _evaluationOpts);
 
             if (result.IsValid)
             {
@@ -55,12 +55,20 @@ public class JsonSchemaNetValidator(
                 return Result<SchemaValidationResult>.Success(new SchemaValidationResult());
             }
 
-            var validationErrors = result.Details
-                .Where(d => d.HasErrors)
-                .SelectMany(d => d.Errors?
+            var rootErrors = result.Errors?
+                .Select(e => new ValidationError(
+                    PropertyPath: result.InstanceLocation.ToString(),
+                    Message: e.Value)) ?? [];
+
+            var detailErrors = (result.Details ?? [])
+                .Where(d => d.Errors is { Count: > 0 })
+                .SelectMany(d => d.Errors!
                     .Select(e => new ValidationError(
                         PropertyPath: d.InstanceLocation.ToString(), 
-                        Message: e.Value)) ?? [])
+                        Message: e.Value)));
+
+            var validationErrors = rootErrors
+                .Concat(detailErrors)
                 .Distinct()
                 .ToList();
             
