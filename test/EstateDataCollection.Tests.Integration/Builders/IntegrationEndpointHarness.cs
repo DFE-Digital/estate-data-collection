@@ -124,10 +124,14 @@ public class IntegrationEndpointHarness : IDisposable, IAsyncDisposable
         string schemaName,
         int version,
         string schemaJson,
-        SchemaIdentifierConfig? identifierConfig = null)
+        SchemaIdentifierConfig? identifierConfig = null,
+        string? rulesJson = null)
     {
         var submitRes = await Get<PostSubmitSchemaEndpoint>().HandleAsync(
-            HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(SchemaJson: schemaJson, IdentifierConfig: identifierConfig)),
+            HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(
+                SchemaJson: schemaJson,
+                RulesJson: rulesJson,
+                IdentifierConfig: identifierConfig)),
             schemaName,
             version,
             CancellationToken.None);
