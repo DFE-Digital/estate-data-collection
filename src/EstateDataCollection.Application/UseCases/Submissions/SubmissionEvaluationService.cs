@@ -265,7 +265,17 @@ public sealed class SubmissionEvaluationService(
                 SubmissionProcessCatalog.IdentifierExtractor,
                 () => PayloadIdentifierExtractor.Evaluate(rawPayloadJson, schema, _options),
                 eval => !eval.IsValid && eval.ValidationError is not null
-                    ? new ProcessStepDetails(SubmissionProcessOutcome.ValidationErrorsFound, Summary: eval.ValidationError.Message)
+                    ? new ProcessStepDetails(
+                        SubmissionProcessOutcome.ValidationErrorsFound,
+                        Summary: eval.ValidationError.Message,
+                        ErrorCode: eval.FailureError?.Code,
+                        Errors:
+                        [
+                            new SubmissionAuditValidationIssue(
+                                eval.ValidationError.PropertyPath,
+                                eval.ValidationError.Message,
+                                eval.ValidationError.RuleId ?? eval.FailureError?.Code)
+                        ])
                     : new ProcessStepDetails(
                         Summary: eval.Identifier is { } id ? $"{id.Type}={id.Value}" : "Not required by schema"));
         }

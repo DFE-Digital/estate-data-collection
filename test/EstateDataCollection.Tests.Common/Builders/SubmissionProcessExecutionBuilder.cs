@@ -10,6 +10,8 @@ public sealed class SubmissionProcessExecutionBuilder
     private long _durationMs = 1;
     private int? _itemCount;
     private string? _summary;
+    private string? _errorCode;
+    private readonly List<SubmissionAuditValidationIssue> _errors = [];
 
     public SubmissionProcessExecutionBuilder For(SubmissionProcessDescriptor descriptor)
     {
@@ -54,6 +56,24 @@ public sealed class SubmissionProcessExecutionBuilder
         return this;
     }
 
+    public SubmissionProcessExecutionBuilder WithErrorCode(string? errorCode)
+    {
+        _errorCode = errorCode;
+        return this;
+    }
+
+    public SubmissionProcessExecutionBuilder WithError(string propertyPath, string message, string? ruleId = null)
+    {
+        _errors.Add(new SubmissionAuditValidationIssue(propertyPath, message, ruleId));
+        return this;
+    }
+
+    public SubmissionProcessExecutionBuilder WithErrors(IEnumerable<SubmissionAuditValidationIssue> errors)
+    {
+        _errors.AddRange(errors);
+        return this;
+    }
+
     public SubmissionProcessExecution Build()
     {
         return new SubmissionProcessExecution
@@ -63,7 +83,9 @@ public sealed class SubmissionProcessExecutionBuilder
             Outcome = _outcome,
             DurationMs = _durationMs,
             ItemCount = _itemCount,
-            Summary = _summary
+            Summary = _summary,
+            ErrorCode = _errorCode,
+            Errors = _errors.Count > 0 ? _errors.ToArray() : null
         };
     }
 }

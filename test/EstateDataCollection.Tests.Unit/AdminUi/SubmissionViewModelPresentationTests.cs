@@ -83,7 +83,15 @@ public sealed class SubmissionViewModelPresentationTests
                 .WithOutcome("DraftPendingErrors", 200)
                 .WithProcess(
                     SubmissionProcessCatalog.DraftPayloadMerger,
-                    p => p.WithDurationMs(2).WithItemCount(1).WithSummary("Merged 1 chunk")))
+                    p => p.WithDurationMs(2).WithItemCount(1).WithSummary("Merged 1 chunk"))
+                .WithProcess(
+                    SubmissionProcessCatalog.QualityRulesValidator,
+                    p => p.WithOutcome(SubmissionProcessOutcome.ValidationErrorsFound)
+                        .WithDurationMs(4)
+                        .WithItemCount(1)
+                        .WithSummary("Evaluated 1 quality rule(s); 1 violation(s)")
+                        .WithErrorCode("Validation.QualityRuleFailed")
+                        .WithError("$.school_capacity", "Capacity must be positive", "RULE-CAP")))
             .Build();
 
         var vm = new SubmissionDetailViewModel(CreateMeta("submissions"), detail);
@@ -93,5 +101,16 @@ public sealed class SubmissionViewModelPresentationTests
         vm.DraftChunks[0].ShortBlobName.Should().Be("01.json");
         vm.AuditItems[0].Processes[0].ProcessName.Should().Be("DraftPayloadMerger");
         vm.AuditItems[0].Processes[0].OutcomeTagCssClass.Should().Contain("govuk-tag--green");
+        vm.AuditItems[0].Processes[0].HasErrorCode.Should().BeFalse();
+        vm.AuditItems[0].Processes[0].HasErrors.Should().BeFalse();
+
+        var ruleProcess = vm.AuditItems[0].Processes[1];
+        ruleProcess.HasErrorCode.Should().BeTrue();
+        ruleProcess.ErrorCode.Should().Be("Validation.QualityRuleFailed");
+        ruleProcess.HasErrors.Should().BeTrue();
+        ruleProcess.Errors.Should().ContainSingle();
+        ruleProcess.Errors![0].HasPropertyPath.Should().BeTrue();
+        ruleProcess.Errors[0].PropertyPath.Should().Be("$.school_capacity");
+        ruleProcess.Errors[0].Message.Should().Be("[RULE-CAP] Capacity must be positive");
     }
 }

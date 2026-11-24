@@ -7,4 +7,5 @@ namespace EstateDataCollection.Application.Abstraction;
 public sealed record PayloadValidationReport(
     IReadOnlyList<ValidationError> Errors,
     IReadOnlyList<SubmissionProcessExecution> ProcessesExecuted,
-    PayloadIdentifierExtractor.ExtractionEvaluation? IdentifierEvaluation = null);
+    PayloadIdentifierExtractor.ExtractionEvaluation? IdentifierEvaluation = null,
+    IReadOnlyList<ValidationEngineTrace>? EngineTraces = null);

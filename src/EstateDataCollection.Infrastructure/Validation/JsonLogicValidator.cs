@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
@@ -6,7 +7,10 @@ using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Validation.Engines;
+using EstateDataCollection.Infrastructure.Validation.Enrichment;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -17,12 +21,16 @@ public class JsonLogicValidator : IBusinessLogicValidator
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly FrozenDictionary<string, IQualityRuleEngine> _engines;
+    private readonly IReadOnlyList<ValidationEngineDescriptor> _registeredDescriptors;
     private readonly FrozenSet<string> _enabledEngines;
+    private readonly IReadOnlyList<IRuleContextEnricher> _contextEnrichers;
     private readonly ValidationOptions _options;
     private readonly JsonLogicValidatorInstrumentation _instrumentation;
 
+    [ActivatorUtilitiesConstructor]
     public JsonLogicValidator(
         IEnumerable<IQualityRuleEngine> engines,
+        IEnumerable<IRuleContextEnricher>? contextEnrichers,
         IOptions<ValidationOptions>? options = null,
         JsonLogicValidatorInstrumentation? instrumentation = null)
     {
@@ -44,13 +52,34 @@ public class JsonLogicValidator : IBusinessLogicValidator
             e => e,
             StringComparer.OrdinalIgnoreCase);
 
+        _registeredDescriptors = engineList
+            .Select(e => e.Descriptor)
+            .ToArray();
+
         _enabledEngines = (_options.EnabledEngines ?? ["jsonlogic", "cel"])
             .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+        _contextEnrichers = contextEnrichers is null
+            ? [new EstateAmbientReferenceEnricher(), new SurveyAnswerContextEnricher()]
+            : contextEnrichers.ToArray();
+    }
+
+    public JsonLogicValidator(
+        IEnumerable<IQualityRuleEngine> engines,
+        IOptions<ValidationOptions>? options = null,
+        JsonLogicValidatorInstrumentation? instrumentation = null)
+        : this(engines, contextEnrichers: null, options, instrumentation)
+    {
     }
 
     public JsonLogicValidator(JsonLogicValidatorInstrumentation? instrumentation = null)
-        : this([], null, instrumentation)
+        : this([], contextEnrichers: null, options: null, instrumentation)
     {
+    }
+
+    public IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngines()
+    {
+        return _registeredDescriptors;
     }
 
     public Result<IReadOnlyList<ValidationMessage>> ValidateRulesSyntax(
@@ -162,7 +191,7 @@ public class JsonLogicValidator : IBusinessLogicValidator
 
         if (rules is null || rules.Count == 0)
         {
-            return Result<BusinessRuleValidationResult>.Success(new BusinessRuleValidationResult());
+            return Result<BusinessRuleValidationResult>.Success(new BusinessRuleValidationResult(EngineTraces: []));
         }
 
         try
@@ -177,27 +206,50 @@ public class JsonLogicValidator : IBusinessLogicValidator
 
             var violations = new List<ValidationError>();
             var resolvedRuleEngines = new List<(BusinessRule Rule, IQualityRuleEngine Engine)>(rules.Count);
+            var traceAccumulators = new Dictionary<string, EngineTraceAccumulator>(StringComparer.OrdinalIgnoreCase);
+
+            EngineTraceAccumulator GetOrCreateAccumulator(ValidationEngineDescriptor descriptor)
+            {
+                if (!traceAccumulators.TryGetValue(descriptor.EngineId, out var acc))
+                {
+                    acc = new EngineTraceAccumulator(descriptor);
+                    traceAccumulators[descriptor.EngineId] = acc;
+                }
+
+                return acc;
+            }
 
             // Step 1: Resolve engines via O(1) FrozenDictionary lookup
             foreach (var rule in rules)
             {
+                var engineName = rule.ResolveEngine(_options.DefaultEngine);
                 var isWarning = string.Equals(rule.Severity, "WARNING", StringComparison.OrdinalIgnoreCase);
                 if (isWarning && !_options.TreatWarningsAsErrors)
                 {
+                    var warnDescriptor = ResolveDescriptorOrFallback(engineName);
+                    GetOrCreateAccumulator(warnDescriptor).SkippedWarningCount++;
                     continue;
                 }
 
-                var engineName = rule.ResolveEngine(_options.DefaultEngine);
                 if (!TryResolveEngine(engineName, out var engine, out var engineError))
                 {
+                    var unknownDescriptor = ResolveDescriptorOrFallback(engineName);
+                    var unknownAcc = GetOrCreateAccumulator(unknownDescriptor);
+
                     if (_options.UnknownEngineBehavior == UnknownEngineBehavior.Fail)
                     {
                         var path = string.IsNullOrWhiteSpace(rule.Path) ? "/" : $"/{rule.Path.Replace('.', '/')}";
-                        violations.Add(new ValidationError(path, $"Rule '{rule.Id}': {engineError}"));
+                        violations.Add(new ValidationError(path, $"Rule '{rule.Id}': {engineError}", RuleId: rule.Id));
+                        unknownAcc.RulesCount++;
+                        unknownAcc.ViolationCount++;
+                        unknownAcc.HasFailure = true;
+                        unknownAcc.LastErrorSummary = engineError;
                     }
                     else
                     {
                         _instrumentation.EngineSkipped(rule.Id, engineName);
+                        unknownAcc.SkippedUnknownCount++;
+                        unknownAcc.LastErrorSummary ??= $"Engine '{engineName}' skipped per UnknownEngineBehavior.Skip";
                     }
                     continue;
                 }
@@ -205,57 +257,90 @@ public class JsonLogicValidator : IBusinessLogicValidator
                 if (rule.EffectiveAssertion is not null)
                 {
                     resolvedRuleEngines.Add((rule, engine!));
+                    GetOrCreateAccumulator(engine!.Descriptor).RulesCount++;
                 }
             }
 
             if (resolvedRuleEngines.Count > 0)
             {
-                var ambientContext = ExtractAmbientContext(rootNode);
+                var ambientContext = RuleTargetResolver.BuildAmbientContext(rootNode, _contextEnrichers);
 
                 // Step 2: Group rules by target Path so each path in the JSON tree is traversed and enriched once
                 foreach (var pathGroup in resolvedRuleEngines.GroupBy(x => x.Rule.Path ?? string.Empty, StringComparer.Ordinal))
                 {
-                    var targets = ResolvePathTargets(rootNode, pathGroup.Key);
+                    var targets = RuleTargetResolver.ResolvePathTargets(rootNode, pathGroup.Key);
 
-                    foreach (var (instancePath, contextNode, childFocusNode) in targets)
+                    foreach (var target in targets)
                     {
-                        var enrichedNode = EnrichContext(contextNode, childFocusNode, rootNode, ambientContext);
+                        var enrichedNode = RuleTargetResolver.CreateEnrichedContextNode(
+                            target.ContextNode,
+                            target.ChildFocusNode,
+                            rootNode,
+                            ambientContext,
+                            _contextEnrichers);
 
                         foreach (var (rule, engine) in pathGroup)
                         {
+                            var acc = GetOrCreateAccumulator(engine.Descriptor);
+                            var evalStart = Stopwatch.GetTimestamp();
                             var evalOutcome = engine.Evaluate(rule, enrichedNode, rootNode);
+                            acc.ElapsedTicks += Stopwatch.GetTimestamp() - evalStart;
+
                             if (evalOutcome.IsFailure)
                             {
-                                var errPath = string.IsNullOrWhiteSpace(instancePath) ? rule.Path : instancePath;
-                                violations.Add(new ValidationError(errPath, evalOutcome.Error.Description ?? $"Rule '{rule.Id}' evaluation failed.", RuleId: rule.Id));
+                                var errPath = string.IsNullOrWhiteSpace(target.InstancePath) ? rule.Path : target.InstancePath;
+                                var errMsg = evalOutcome.Error.Description ?? $"Rule '{rule.Id}' evaluation failed.";
+                                violations.Add(new ValidationError(errPath, errMsg, RuleId: rule.Id));
+                                acc.ViolationCount++;
+                                acc.HasFailure = true;
+                                acc.LastErrorSummary ??= errMsg;
                                 continue;
                             }
 
                             if (!evalOutcome.Value)
                             {
-                                var failurePath = string.IsNullOrWhiteSpace(instancePath) ? rule.Path : instancePath;
+                                var failurePath = string.IsNullOrWhiteSpace(target.InstancePath) ? rule.Path : target.InstancePath;
                                 _instrumentation.RuleViolation(rule.Id, engine.EngineName, failurePath, rule.EffectiveMessage);
                                 violations.Add(new ValidationError(failurePath, rule.EffectiveMessage, RuleId: rule.Id));
+                                acc.ViolationCount++;
                             }
                         }
                     }
                 }
             }
 
+            var engineTraces = traceAccumulators.Values
+                .Select(acc => acc.ToTrace())
+                .ToArray();
+
             if (violations.Count > 0)
             {
                 _instrumentation.ValidationFailed(violations.Count);
-                return new BusinessRuleValidationResult(violations);
+                return new BusinessRuleValidationResult(violations, engineTraces);
             }
 
             _instrumentation.ValidationPassed();
-            return new BusinessRuleValidationResult();
+            return new BusinessRuleValidationResult(EngineTraces: engineTraces);
         }
         catch (Exception ex)
         {
             _instrumentation.ValidationMalformedJson(ex.Message);
             return Error.Validation(ErrorCodes.JsonMalformed, new { ex.Message });
         }
+    }
+
+    private ValidationEngineDescriptor ResolveDescriptorOrFallback(string engineName)
+    {
+        if (_engines.TryGetValue(engineName, out var registered))
+        {
+            return registered.Descriptor;
+        }
+
+        return new ValidationEngineDescriptor(
+            EngineId: engineName,
+            DisplayName: engineName,
+            Kind: ValidationEngineKinds.QualityRule,
+            Description: $"Unregistered or unsupported quality rule engine '{engineName}'.");
     }
 
     private bool TryResolveEngine(string engineName, out IQualityRuleEngine? engine, out string? errorMessage)
@@ -280,207 +365,60 @@ public class JsonLogicValidator : IBusinessLogicValidator
         return true;
     }
 
-    private static Dictionary<string, JsonNode?> ExtractAmbientContext(JsonNode root)
+    private sealed class EngineTraceAccumulator(ValidationEngineDescriptor descriptor)
     {
-        var context = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
+        public ValidationEngineDescriptor Descriptor { get; } = descriptor;
+        public int RulesCount { get; set; }
+        public int SkippedWarningCount { get; set; }
+        public int SkippedUnknownCount { get; set; }
+        public int ViolationCount { get; set; }
+        public long ElapsedTicks { get; set; }
+        public bool HasFailure { get; set; }
+        public string? LastErrorSummary { get; set; }
 
-        var validSiteIds = new JsonArray();
-        var validBlockIds = new JsonArray();
-        var validEvidenceIds = new JsonArray();
-
-        if (root["sites"] is JsonArray sites)
+        public ValidationEngineTrace ToTrace()
         {
-            foreach (var site in sites)
+            var durationMs = (long)Stopwatch.GetElapsedTime(0, ElapsedTicks).TotalMilliseconds;
+
+            if (RulesCount == 0 && (SkippedWarningCount > 0 || SkippedUnknownCount > 0))
             {
-                if (site?["id"]?.GetValue<string>() is { } siteId)
-                {
-                    validSiteIds.Add(siteId);
-                }
-                if (site?["name"]?.GetValue<string>() is { } siteName &&
-                    !validSiteIds.Any(x => x?.GetValue<string>() == siteName))
-                {
-                    validSiteIds.Add(siteName);
-                }
-
-                if (site?["blocks"] is JsonArray blocks)
-                {
-                    foreach (var block in blocks)
-                    {
-                        if (block?["id"]?.GetValue<string>() is { } blockId)
-                        {
-                            validBlockIds.Add(blockId);
-                        }
-                        if (block?["name"]?.GetValue<string>() is { } blockName &&
-                            !validBlockIds.Any(x => x?.GetValue<string>() == blockName))
-                        {
-                            validBlockIds.Add(blockName);
-                        }
-                    }
-                }
-            }
-        }
-
-        if (root["evidence"] is JsonArray evidenceList)
-        {
-            foreach (var evidence in evidenceList)
-            {
-                if (evidence?["id"]?.GetValue<string>() is { } evId)
-                {
-                    validEvidenceIds.Add(evId);
-                }
-            }
-        }
-
-        context["valid_site_ids"] = validSiteIds;
-        context["valid_block_ids"] = validBlockIds;
-        context["valid_evidence_ids"] = validEvidenceIds;
-
-        return context;
-    }
-
-    private static List<(string InstancePath, JsonNode ContextNode, JsonNode? ChildFocusNode)> ResolvePathTargets(
-        JsonNode root,
-        string pathPattern)
-    {
-        var results = new List<(string InstancePath, JsonNode ContextNode, JsonNode? ChildFocusNode)>();
-        if (string.IsNullOrWhiteSpace(pathPattern) || pathPattern == "/")
-        {
-            results.Add(("/", root, root));
-            return results;
-        }
-
-        var segments = pathPattern.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        TraverseSegments(root, segments, 0, "", results);
-        return results;
-    }
-
-    private static void TraverseSegments(
-        JsonNode currentNode,
-        string[] segments,
-        int segmentIndex,
-        string currentJsonPointer,
-        List<(string InstancePath, JsonNode ContextNode, JsonNode? ChildFocusNode)> accumulator)
-    {
-        if (segmentIndex >= segments.Length)
-        {
-            accumulator.Add((currentJsonPointer, currentNode, currentNode));
-            return;
-        }
-
-        var segment = segments[segmentIndex];
-        var isArrayTarget = segment.EndsWith("[]", StringComparison.Ordinal);
-        var propertyName = isArrayTarget ? segment[..^2] : segment;
-
-        // If this is the last segment and it is a property on the current context object (not an array []),
-        // the context node for rule evaluation includes both the parent object and (if an object) the child property object,
-        // while the reported failure path points to the target property.
-        if (!isArrayTarget && segmentIndex == segments.Length - 1 && currentNode is JsonObject currentObj)
-        {
-            var targetPath = $"{currentJsonPointer}/{propertyName}";
-            currentObj.TryGetPropertyValue(propertyName, out var childNode);
-            accumulator.Add((targetPath, currentNode, childNode));
-            return;
-        }
-
-        if (currentNode is not JsonObject obj || !obj.TryGetPropertyValue(propertyName, out var nextNode) || nextNode is null)
-        {
-            return;
-        }
-
-        var nextPointer = $"{currentJsonPointer}/{propertyName}";
-
-        if (isArrayTarget)
-        {
-            if (nextNode is JsonArray arr)
-            {
-                for (var i = 0; i < arr.Count; i++)
-                {
-                    if (arr[i] is { } item)
-                    {
-                        TraverseSegments(item, segments, segmentIndex + 1, $"{nextPointer}/{i}", accumulator);
-                    }
-                }
-            }
-        }
-        else
-        {
-            TraverseSegments(nextNode, segments, segmentIndex + 1, nextPointer, accumulator);
-        }
-    }
-
-    private static JsonNode EnrichContext(
-        JsonNode contextNode,
-        JsonNode? childFocusNode,
-        JsonNode rootNode,
-        Dictionary<string, JsonNode?> ambientContext)
-    {
-        var enriched = JsonNode.Parse(contextNode.ToJsonString()) as JsonObject ?? new JsonObject();
-
-        // If the rule targets a nested object property (e.g. "survey" or "replacement"),
-        // merge that child object's properties into the context so both relative ("updated_at")
-        // and parent-qualified ("survey.updated_at") references resolve cleanly.
-        if (childFocusNode is JsonObject childObj && !ReferenceEquals(contextNode, childFocusNode))
-        {
-            foreach (var (key, value) in childObj)
-            {
-                if (!enriched.ContainsKey(key))
-                {
-                    enriched[key] = value is not null ? JsonNode.Parse(value.ToJsonString()) : null;
-                }
-            }
-        }
-
-        // Attach root top-level properties (survey, school, sites, elements, answers, evidence)
-        // when not already present on the local target node.
-        if (rootNode is JsonObject rootObj && !ReferenceEquals(contextNode, rootNode))
-        {
-            foreach (var (key, value) in rootObj)
-            {
-                if (!enriched.ContainsKey(key) && value is not null)
-                {
-                    enriched[key] = JsonNode.Parse(value.ToJsonString());
-                }
-            }
-        }
-
-        foreach (var (key, value) in ambientContext)
-        {
-            if (!enriched.ContainsKey(key) && value is not null)
-            {
-                enriched[key] = JsonNode.Parse(value.ToJsonString());
-            }
-        }
-
-        // Add helper properties for answer validation
-        if (enriched.TryGetPropertyValue("value", out var valNode))
-        {
-            var isNumeric = false;
-            var isBoolean = false;
-
-            if (valNode is JsonValue val)
-            {
-                if (val.TryGetValue<double>(out _) || (val.TryGetValue<string>(out var sNum) && double.TryParse(sNum, out _)))
-                {
-                    isNumeric = true;
-                }
-                if (val.TryGetValue<bool>(out _) || (val.TryGetValue<string>(out var sBool) && bool.TryParse(sBool, out _)))
-                {
-                    isBoolean = true;
-                }
+                var skippedCount = SkippedWarningCount + SkippedUnknownCount;
+                return new ValidationEngineTrace(
+                    Descriptor,
+                    nameof(SubmissionProcessOutcome.Skipped),
+                    ItemsEvaluated: skippedCount,
+                    ViolationCount: 0,
+                    DurationMs: durationMs,
+                    Summary: LastErrorSummary ?? $"Skipped {skippedCount} rule(s)");
             }
 
-            enriched["value_is_numeric"] = isNumeric;
-            enriched["value_is_boolean"] = isBoolean;
-        }
-
-        if (!enriched.ContainsKey("question") && enriched.TryGetPropertyValue("asset_type", out var assetType))
-        {
-            enriched["question"] = new JsonObject
+            string outcome;
+            if (HasFailure)
             {
-                ["expected_asset_type"] = assetType?.GetValue<string>()
-            };
-        }
+                outcome = nameof(SubmissionProcessOutcome.Failed);
+            }
+            else if (ViolationCount > 0)
+            {
+                outcome = nameof(SubmissionProcessOutcome.ValidationErrorsFound);
+            }
+            else
+            {
+                outcome = nameof(SubmissionProcessOutcome.Succeeded);
+            }
 
-        return enriched;
+            var summary = ViolationCount == 0
+                ? $"Evaluated {RulesCount} rule(s) with 0 violations"
+                : LastErrorSummary is not null && HasFailure
+                    ? LastErrorSummary
+                    : $"Evaluated {RulesCount} rule(s); {ViolationCount} violation(s)";
+
+            return new ValidationEngineTrace(
+                Descriptor,
+                outcome,
+                ItemsEvaluated: RulesCount,
+                ViolationCount: ViolationCount,
+                DurationMs: durationMs,
+                Summary: summary);
+        }
     }
 }

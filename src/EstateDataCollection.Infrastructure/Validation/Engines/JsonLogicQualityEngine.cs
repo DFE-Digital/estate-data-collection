@@ -11,9 +11,20 @@ namespace EstateDataCollection.Infrastructure.Validation.Engines;
 
 public sealed class JsonLogicQualityEngine : IQualityRuleEngine
 {
+    public static readonly ValidationEngineDescriptor EngineDescriptor = new(
+        EngineId: "jsonlogic",
+        DisplayName: "JsonLogic Quality Engine",
+        Kind: ValidationEngineKinds.QualityRule,
+        Description: "Evaluates structured JSON Logic quality rules with ISO-8601 comparison, .length property binding, and !in operator support.");
+
     public string EngineName
     {
-        get { return "jsonlogic"; }
+        get { return EngineDescriptor.EngineId; }
+    }
+
+    public ValidationEngineDescriptor Descriptor
+    {
+        get { return EngineDescriptor; }
     }
 
     private readonly ConcurrentDictionary<string, JsonNode> _normalizedAstCache = new(StringComparer.Ordinal);

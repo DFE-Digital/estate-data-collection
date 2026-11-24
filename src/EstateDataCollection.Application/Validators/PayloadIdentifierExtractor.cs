@@ -1,3 +1,4 @@
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Common.Results;
@@ -13,6 +14,12 @@ namespace EstateDataCollection.Application.Validators;
 /// </summary>
 public static class PayloadIdentifierExtractor
 {
+    public static readonly ValidationEngineDescriptor Descriptor = new(
+        EngineId: "identifier-extractor",
+        DisplayName: "Submission Identifier Extractor",
+        Kind: ValidationEngineKinds.IdentifierExtraction,
+        Description: "Extracts and validates configured school or establishment identifiers (URN, UKPRN, LAEstab, custom JSON Pointer) against schema requiredness and storage key safety constraints.");
+
     public sealed record ExtractionEvaluation(
         bool IsEnabled,
         bool IsValid,

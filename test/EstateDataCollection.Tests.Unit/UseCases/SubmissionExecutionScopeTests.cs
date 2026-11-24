@@ -119,6 +119,10 @@ public sealed class SubmissionExecutionScopeTests
             scope.Processes[1].Outcome.Should().Be(SubmissionProcessOutcome.Skipped);
         }
 
+        // Stop listening before enumerating captured collections while other test classes run in parallel
+        meterListener.Dispose();
+        activityListener.Dispose();
+
         capturedActivities.Select(a => a.OperationName)
             .Should().Contain(["SchemaResolution", "Submission:CheckSubmissionStatus"]);
 
@@ -168,6 +172,82 @@ public sealed class SubmissionExecutionScopeTests
     }
 
     [Fact]
+    public async Task PayloadValidationService_Should_Attach_Per_Process_Errors_Only_To_Steps_With_Issues()
+    {
+        var schemaValidator = Substitute.For<ISchemaValidator>();
+        var logicValidator = Substitute.For<IBusinessLogicValidator>();
+
+        var resolved = new ResolvedSchemaBuilder()
+            .ConfigureMetadata(m => m.WithUrnPointer("/urn", required: true))
+            .WithRules([new BusinessRule { Id = "RULE-CAP", Path = "school_capacity", Description = "Capacity positive", Engine = "jsonlogic" }])
+            .Build();
+
+        schemaValidator.ValidateAsync(Arg.Any<string>(), resolved.Schema, Arg.Any<CancellationToken>())
+            .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult([])));
+        logicValidator.ValidateAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<BusinessRule>>(), Arg.Any<CancellationToken>())
+            .Returns(Result<BusinessRuleValidationResult>.Success(new BusinessRuleValidationResult(
+                [new ValidationError("$.school_capacity", "Capacity must be > 0", "RULE-CAP")])));
+
+        var service = new PayloadValidationService(schemaValidator, logicValidator);
+        using var scope = SubmissionExecutionScope.Start("FinaliseSubmission", Guid.NewGuid());
+
+        var result = await service.ValidatePayloadWithTraceAsync(
+            """{"school_capacity":-5}""",
+            resolved,
+            isDraftUpdate: false,
+            scope,
+            CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        scope.Processes.Should().HaveCount(3);
+
+        var schemaStep = scope.Processes[0];
+        schemaStep.ProcessName.Should().Be("JsonSchemaValidator");
+        schemaStep.Outcome.Should().Be(SubmissionProcessOutcome.Succeeded);
+        schemaStep.ErrorCode.Should().BeNull();
+        schemaStep.Errors.Should().BeNull();
+
+        var ruleStep = scope.Processes[1];
+        ruleStep.ProcessName.Should().Be("QualityRulesValidator");
+        ruleStep.Outcome.Should().Be(SubmissionProcessOutcome.ValidationErrorsFound);
+        ruleStep.Errors.Should().ContainSingle();
+        ruleStep.Errors![0].PropertyPath.Should().Be("$.school_capacity");
+        ruleStep.Errors[0].Message.Should().Be("Capacity must be > 0");
+        ruleStep.Errors[0].RuleId.Should().Be("RULE-CAP");
+
+        var idStep = scope.Processes[2];
+        idStep.ProcessName.Should().Be("IdentifierExtractor");
+        idStep.Outcome.Should().Be(SubmissionProcessOutcome.ValidationErrorsFound);
+        idStep.ErrorCode.Should().Be("Payload.InvalidUrn");
+        idStep.Errors.Should().ContainSingle();
+        idStep.Errors![0].PropertyPath.Should().Be("#/urn");
+        idStep.Errors[0].RuleId.Should().Be("Payload.InvalidUrn");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_When_Operation_Fails_Should_Record_ErrorCode_And_Errors_On_Process()
+    {
+        using var scope = SubmissionExecutionScope.Start("UpdateSubmission", Guid.NewGuid());
+        var failure = Error.Validation(
+            "Schema.NotFound",
+            "Pinned schema version was not found.",
+            [new ValidationError("$.schemaVersion", "Version 99 does not exist", "SCHEMA_MISSING")]);
+
+        var result = await scope.ExecuteAsync(
+            SubmissionProcessCatalog.SchemaResolution,
+            () => Task.FromResult(Result<string>.Failure(failure)));
+
+        result.IsFailure.Should().BeTrue();
+        var step = scope.Processes.Should().ContainSingle().Subject;
+        step.Outcome.Should().Be(SubmissionProcessOutcome.Failed);
+        step.ErrorCode.Should().Be("Schema.NotFound");
+        step.Errors.Should().ContainSingle();
+        step.Errors![0].PropertyPath.Should().Be("$.schemaVersion");
+        step.Errors[0].Message.Should().Be("Version 99 does not exist");
+        step.Errors[0].RuleId.Should().Be("SCHEMA_MISSING");
+    }
+
+    [Fact]
     public void SubmissionProcessExecution_Should_Serialize_And_Deserialize_Outcome_As_PascalCase_String()
     {
         var entry = new SubmissionProcessExecutionBuilder()
@@ -176,10 +256,14 @@ public sealed class SubmissionExecutionScopeTests
             .WithDurationMs(12)
             .WithItemCount(3)
             .WithSummary("3 schema error(s)")
+            .WithErrorCode("Validation.Failed")
+            .WithError("$.urn", "Missing URN", "RULE-URN")
             .Build();
 
         var json = JsonSerializer.Serialize(entry, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         json.Should().Contain("\"outcome\":\"ValidationErrorsFound\"");
+        json.Should().Contain("\"errorCode\":\"Validation.Failed\"");
+        json.Should().Contain("\"propertyPath\":\"$.urn\"");
 
         var roundTripped = JsonSerializer.Deserialize<SubmissionProcessExecution>(
             json,
@@ -187,5 +271,8 @@ public sealed class SubmissionExecutionScopeTests
 
         roundTripped.Should().NotBeNull();
         roundTripped!.Outcome.Should().Be(SubmissionProcessOutcome.ValidationErrorsFound);
+        roundTripped.ErrorCode.Should().Be("Validation.Failed");
+        roundTripped.Errors.Should().ContainSingle();
+        roundTripped.Errors![0].RuleId.Should().Be("RULE-URN");
     }
 }

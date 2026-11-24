@@ -8,4 +8,6 @@ public sealed record SubmissionProcessExecution
     public long DurationMs { get; init; }
     public int? ItemCount { get; init; }
     public string? Summary { get; init; }
+    public string? ErrorCode { get; init; }
+    public IReadOnlyList<SubmissionAuditValidationIssue>? Errors { get; init; }
 }

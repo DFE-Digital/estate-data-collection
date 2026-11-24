@@ -84,7 +84,10 @@ public sealed class SubmissionExecutionScope : IDisposable
                 Outcome: SubmissionProcessOutcome.Failed,
                 Summary: result.Error.Description ?? result.Error.Code);
 
-        RecordStep(descriptor, details, durationMs, engineOverride, activity, result.IsFailure ? result.Error.Code : null);
+        var errorCode = details.ErrorCode ?? (result.IsFailure ? result.Error.Code : null);
+        var errors = details.Errors ?? (result.IsFailure ? MapErrorToIssues(result.Error) : null);
+
+        RecordStep(descriptor, details, durationMs, engineOverride, activity, errorCode, errors);
         return result;
     }
 
@@ -107,7 +110,10 @@ public sealed class SubmissionExecutionScope : IDisposable
                 Outcome: SubmissionProcessOutcome.Failed,
                 Summary: result.Error.Description ?? result.Error.Code);
 
-        RecordStep(descriptor, details, durationMs, engineOverride, activity, result.IsFailure ? result.Error.Code : null);
+        var errorCode = details.ErrorCode ?? (result.IsFailure ? result.Error.Code : null);
+        var errors = details.Errors ?? (result.IsFailure ? MapErrorToIssues(result.Error) : null);
+
+        RecordStep(descriptor, details, durationMs, engineOverride, activity, errorCode, errors);
         return result;
     }
 
@@ -130,7 +136,10 @@ public sealed class SubmissionExecutionScope : IDisposable
                 Outcome: SubmissionProcessOutcome.Failed,
                 Summary: result.Error.Description ?? result.Error.Code);
 
-        RecordStep(descriptor, details, durationMs, engineOverride, activity, result.IsFailure ? result.Error.Code : null);
+        var errorCode = details.ErrorCode ?? (result.IsFailure ? result.Error.Code : null);
+        var errors = details.Errors ?? (result.IsFailure ? MapErrorToIssues(result.Error) : null);
+
+        RecordStep(descriptor, details, durationMs, engineOverride, activity, errorCode, errors);
         return result;
     }
 
@@ -148,7 +157,7 @@ public sealed class SubmissionExecutionScope : IDisposable
         var durationMs = (long)Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
         var details = describe(value);
 
-        RecordStep(descriptor, details, durationMs, engineOverride, activity, errorCode: null);
+        RecordStep(descriptor, details, durationMs, engineOverride, activity, details.ErrorCode, details.Errors);
         return value;
     }
 
@@ -164,7 +173,8 @@ public sealed class SubmissionExecutionScope : IDisposable
             durationMs: 0,
             engineOverride,
             activity: null,
-            errorCode: null);
+            errorCode: null,
+            errors: null);
     }
 
     public void ImportProcesses(IEnumerable<SubmissionProcessExecution> processes)
@@ -275,7 +285,8 @@ public sealed class SubmissionExecutionScope : IDisposable
         long durationMs,
         string? engineOverride,
         Activity? activity,
-        string? errorCode)
+        string? errorCode,
+        IReadOnlyList<SubmissionAuditValidationIssue>? errors)
     {
         var resolvedEngine = details.EngineOverride ?? engineOverride ?? descriptor.Engine;
         var execution = new SubmissionProcessExecution
@@ -285,7 +296,9 @@ public sealed class SubmissionExecutionScope : IDisposable
             Outcome = details.Outcome,
             DurationMs = durationMs,
             ItemCount = details.ItemCount,
-            Summary = details.Summary
+            Summary = details.Summary,
+            ErrorCode = string.IsNullOrWhiteSpace(errorCode) ? null : errorCode,
+            Errors = errors is { Count: > 0 } ? errors : null
         };
 
         _processes.Add(execution);
@@ -309,5 +322,20 @@ public sealed class SubmissionExecutionScope : IDisposable
                 activity.SetStatus(ActivityStatusCode.Error, details.Summary);
             }
         }
+    }
+
+    private static IReadOnlyList<SubmissionAuditValidationIssue>? MapErrorToIssues(Error error)
+    {
+        if (error.ValidationErrors is { Count: > 0 } validationErrors)
+        {
+            return validationErrors
+                .Select(e => new SubmissionAuditValidationIssue(e.PropertyPath, e.Message, e.RuleId))
+                .ToArray();
+        }
+
+        var message = !string.IsNullOrWhiteSpace(error.Description) ? error.Description : error.Code;
+        return string.IsNullOrWhiteSpace(message)
+            ? null
+            : [new SubmissionAuditValidationIssue(string.Empty, message, error.Code)];
     }
 }

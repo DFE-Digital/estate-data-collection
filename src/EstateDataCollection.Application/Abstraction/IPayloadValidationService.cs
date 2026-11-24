@@ -6,6 +6,8 @@ namespace EstateDataCollection.Application.Abstraction;
 
 public interface IPayloadValidationService : IApplication
 {
+    IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngines() => [];
+
     Task<Result<IReadOnlyList<ValidationError>>> ValidatePayloadAsync(
         string rawPayloadJson,
         ResolvedSchema schema,

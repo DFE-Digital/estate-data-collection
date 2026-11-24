@@ -270,7 +270,30 @@
                                             <td class="govuk-table__cell"><strong class="@proc.OutcomeTagCssClass">@proc.OutcomeText</strong></td>
                                             <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s">@proc.DurationDisplay</td>
                                             <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s">@proc.ItemCountDisplay</td>
-                                            <td class="govuk-table__cell govuk-body-s">@proc.SummaryDisplay</td>
+                                            <td class="govuk-table__cell govuk-body-s">
+                                                <span>@proc.SummaryDisplay</span>
+                                                @if (proc.HasErrorCode)
+                                                {
+                                                    <div class="govuk-!-margin-top-1">
+                                                        Error Code: <code class="dfe-code-badge">@proc.ErrorCode</code>
+                                                    </div>
+                                                }
+                                                @if (proc.HasErrors)
+                                                {
+                                                    <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                                                        @foreach (var err in proc.Errors!)
+                                                        {
+                                                            <li class="govuk-body-s">
+                                                                @if (err.HasPropertyPath)
+                                                                {
+                                                                    <code class="dfe-code-badge">@err.PropertyPath</code>
+                                                                }
+                                                                <span>@err.Message</span>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+                                            </td>
                                         </tr>
                                     }
                                 </tbody>

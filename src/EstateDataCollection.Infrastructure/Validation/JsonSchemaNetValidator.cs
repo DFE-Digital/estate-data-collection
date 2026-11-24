@@ -14,6 +14,12 @@ public class JsonSchemaNetValidator(
     IOptions<ValidationOptions>? options = null
 ) : ISchemaValidator
 {
+    public ValidationEngineDescriptor Descriptor { get; } = new(
+        EngineId: "json-schema",
+        DisplayName: "JsonSchema.Net Validator",
+        Kind: ValidationEngineKinds.StructuralSchema,
+        Description: $"Validates payload structure against compiled JSON Schema (Draft 2020-12 / Draft-07) with closed-schema enforcement (format validation={(options?.Value.RequireFormatValidation ?? true)}).");
+
     private readonly JsonSchemaNetValidatorInstrumentation _instrumentation =
         instrumentation ?? new JsonSchemaNetValidatorInstrumentation(NullLogger<JsonSchemaNetValidator>.Instance);
 

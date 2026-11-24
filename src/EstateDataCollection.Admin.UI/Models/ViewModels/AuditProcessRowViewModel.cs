@@ -7,4 +7,11 @@ public sealed record AuditProcessRowViewModel(
     string OutcomeTagCssClass,
     string DurationDisplay,
     string ItemCountDisplay,
-    string SummaryDisplay);
+    string SummaryDisplay,
+    string? ErrorCode = null,
+    IReadOnlyList<ValidationErrorItemViewModel>? Errors = null)
+{
+    public bool HasErrorCode => !string.IsNullOrWhiteSpace(ErrorCode);
+
+    public bool HasErrors => Errors is { Count: > 0 };
+}

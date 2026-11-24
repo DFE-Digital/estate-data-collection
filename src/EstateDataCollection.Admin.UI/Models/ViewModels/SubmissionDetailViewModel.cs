@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionDetail;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
@@ -15,6 +16,12 @@ public sealed record SubmissionDetailViewModel(
     private static readonly JsonSerializerOptions PrettyOptions = new()
     {
         WriteIndented = true
+    };
+
+    private static readonly JsonSerializerOptions AuditPrettyOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
     public ErrorSummaryViewModel? ErrorSummary
@@ -318,6 +325,15 @@ public sealed record SubmissionDetailViewModel(
                                 _ => "govuk-tag govuk-tag--grey"
                             };
 
+                            var processErrors = (p.Errors ?? [])
+                                .Select(ve => new ValidationErrorItemViewModel(
+                                    HasPropertyPath: !string.IsNullOrWhiteSpace(ve.PropertyPath),
+                                    PropertyPath: ve.PropertyPath,
+                                    Message: !string.IsNullOrWhiteSpace(ve.RuleId)
+                                        ? $"[{ve.RuleId}] {ve.Message}"
+                                        : ve.Message))
+                                .ToList();
+
                             return new AuditProcessRowViewModel(
                                 ProcessName: p.ProcessName,
                                 EngineDisplay: string.IsNullOrWhiteSpace(p.Engine) ? "—" : p.Engine,
@@ -325,7 +341,9 @@ public sealed record SubmissionDetailViewModel(
                                 OutcomeTagCssClass: procCss,
                                 DurationDisplay: $"{p.DurationMs} ms",
                                 ItemCountDisplay: p.ItemCount?.ToString(CultureInfo.InvariantCulture) ?? "—",
-                                SummaryDisplay: string.IsNullOrWhiteSpace(p.Summary) ? "—" : p.Summary);
+                                SummaryDisplay: string.IsNullOrWhiteSpace(p.Summary) ? "—" : p.Summary,
+                                ErrorCode: string.IsNullOrWhiteSpace(p.ErrorCode) ? null : p.ErrorCode,
+                                Errors: processErrors.Count > 0 ? processErrors : null);
                         })
                         .ToList();
 
@@ -367,7 +385,7 @@ public sealed record SubmissionDetailViewModel(
                         HasProcesses: processes.Count > 0,
                         ValidationIssues: issues,
                         HasValidationIssues: issues.Count > 0,
-                        RawAuditJson: JsonSerializer.Serialize(entry, PrettyOptions));
+                        RawAuditJson: JsonSerializer.Serialize(entry, AuditPrettyOptions));
                 })
                 .ToList();
         }

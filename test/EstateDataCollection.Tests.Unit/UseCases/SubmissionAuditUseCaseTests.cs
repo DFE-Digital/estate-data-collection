@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
@@ -6,6 +8,7 @@ using EstateDataCollection.Application.UseCases.Submissions.CreateSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 using EstateDataCollection.Application.Validators;
+using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Validation;
@@ -157,5 +160,82 @@ public sealed class SubmissionAuditUseCaseTests
         recorded.Outcome.HttpStatus.Should().Be(403);
         recorded.Outcome.ErrorCode.Should().Be("Submission.AlreadyFinalised");
         recorded.Identifier?.Urn.Should().Be(104521);
+    }
+
+    [Fact]
+    public async Task FinaliseSubmission_Should_Record_Per_Process_Errors_On_ProcessesConsumed()
+    {
+        var session = new SubmissionSessionBuilder().WithUrn(104521).Build();
+        var rule = new BusinessRule
+        {
+            Id = "RULE-CAP",
+            Path = "school_capacity",
+            Description = "Capacity must be positive",
+            Severity = "ERROR",
+            Implementation = JsonNode.Parse("""{">":[{"var":"value"},0]}""")
+        };
+        var resolved = new ResolvedSchemaBuilder()
+            .ConfigureMetadata(m => m.WithName(session.SchemaName).WithUrnPointer("/urn", required: true))
+            .WithSchemaJson(JsonSchemaFixtures.ValidV1Schema)
+            .WithRules([rule])
+            .Build();
+        const string payloadJson = """{"urn":104521,"school_name":"Oak Academy","school_address":"1 High St","school_capacity":-5}""";
+
+        _infrastructure.GetSessionAsync(session.SubmissionId, Arg.Any<CancellationToken>())
+            .Returns(Result<SubmissionSession>.Success(session));
+        _infrastructure.GetDraftPayloadAsync(session.SubmissionId, Arg.Any<CancellationToken>())
+            .Returns(Result<string>.Success(payloadJson));
+        _registry.GetExplicitSchemaAsync(session.SchemaName, session.SchemaVersion, Arg.Any<CancellationToken>())
+            .Returns(Result<ResolvedSchema>.Success(resolved));
+
+        SubmissionAuditEntry? recorded = null;
+        await _auditStore.AppendAsync(Arg.Do<SubmissionAuditEntry>(e => recorded = e), Arg.Any<CancellationToken>());
+
+        var validationService = new PayloadValidationService(new JsonSchemaNetValidator(), new JsonLogicValidator());
+        var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService);
+        var sut = new FinaliseSubmissionUseCase(_infrastructure, evaluationService, auditStore: _auditStore);
+
+        var result = await sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId));
+
+        result.IsFailure.Should().BeTrue();
+        recorded.Should().NotBeNull();
+        recorded!.Outcome.Status.Should().Be("Rejected");
+
+        var schemaStep = recorded.ProcessesConsumed.Single(p => p.ProcessName == "JsonSchemaValidator");
+        schemaStep.Outcome.Should().Be(SubmissionProcessOutcome.Succeeded);
+        schemaStep.ErrorCode.Should().BeNull();
+        schemaStep.Errors.Should().BeNull();
+
+        var ruleStep = recorded.ProcessesConsumed.Single(p => p.ProcessName == "QualityRulesValidator");
+        ruleStep.Outcome.Should().Be(SubmissionProcessOutcome.ValidationErrorsFound);
+        ruleStep.Errors.Should().ContainSingle();
+        ruleStep.Errors![0].PropertyPath.Should().Contain("school_capacity");
+        ruleStep.Errors[0].RuleId.Should().Be("RULE-CAP");
+    }
+
+    [Fact]
+    public async Task UpdateSubmission_When_SchemaResolution_Fails_Should_Record_ErrorCode_And_Errors_On_Failed_Process()
+    {
+        var session = new SubmissionSessionBuilder().Build();
+        _infrastructure.GetSessionAsync(session.SubmissionId, Arg.Any<CancellationToken>())
+            .Returns(Result<SubmissionSession>.Success(session));
+        _registry.GetExplicitSchemaAsync(session.SchemaName, session.SchemaVersion, Arg.Any<CancellationToken>())
+            .Returns(Result<ResolvedSchema>.Failure(Error.NotFound("Schema.NotFound", "Pinned schema version was not found.")));
+
+        SubmissionAuditEntry? recorded = null;
+        await _auditStore.AppendAsync(Arg.Do<SubmissionAuditEntry>(e => recorded = e), Arg.Any<CancellationToken>());
+
+        var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, _validationService);
+        var sut = new UpdateSubmissionUseCase(_infrastructure, evaluationService, auditStore: _auditStore);
+        var result = await sut.ExecuteAsync(new UpdateSubmissionRequest(session.SubmissionId, "{}"));
+
+        result.ShouldFailWith("Schema.NotFound");
+        recorded.Should().NotBeNull();
+        var step = recorded!.ProcessesConsumed.Single(p => p.ProcessName == "SchemaResolution");
+        step.Outcome.Should().Be(SubmissionProcessOutcome.Failed);
+        step.ErrorCode.Should().Be("Schema.NotFound");
+        step.Errors.Should().ContainSingle();
+        step.Errors![0].Message.Should().Contain("Pinned schema version was not found.");
+        step.Errors[0].RuleId.Should().Be("Schema.NotFound");
     }
 }

@@ -10,6 +10,7 @@ using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
+using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Tests.Common.Builders;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -424,6 +425,38 @@ public sealed class RazorComponentRenderingTests
         html.Should().Contain("govuk-error-summary");
         html.Should().Contain("Schema.VerificationFailed");
         html.Should().Contain("Invalid JSON Schema syntax");
+    }
+
+    [Fact]
+    public async Task SubmissionDetailPage_Should_Render_Per_Process_ErrorCode_And_Errors_In_Audit_Table()
+    {
+        var renderer = CreateRenderer();
+        var session = SubmissionSession.Create("edc_payload", 1);
+        var detail = new GetSubmissionDetailResultBuilder()
+            .WithSession(session)
+            .WithAuditEntry(entry => entry
+                .WithAction("FinaliseSubmission")
+                .WithOutcome("Rejected", 422, errorCode: "Validation.Failed", message: "Validation failed")
+                .WithProcess(
+                    SubmissionProcessCatalog.QualityRulesValidator,
+                    p => p.WithOutcome(SubmissionProcessOutcome.ValidationErrorsFound)
+                        .WithDurationMs(5)
+                        .WithItemCount(1)
+                        .WithSummary("Evaluated 1 quality rule(s); 1 violation(s)")
+                        .WithErrorCode("Validation.QualityRuleFailed")
+                        .WithError("$.school_capacity", "Capacity must be positive", "RULE-CAP")))
+            .Build();
+
+        var html = await renderer.RenderComponentAsync<SubmissionDetailPage>(new Dictionary<string, object?>
+        {
+            ["Model"] = new SubmissionDetailViewModel(CreateMeta("Submission", "submissions"), detail)
+        });
+
+        var decoded = WebUtility.HtmlDecode(html);
+        decoded.Should().Contain("QualityRulesValidator");
+        decoded.Should().Contain("Validation.QualityRuleFailed");
+        decoded.Should().Contain("$.school_capacity");
+        decoded.Should().Contain("[RULE-CAP] Capacity must be positive");
     }
 
     [Theory]

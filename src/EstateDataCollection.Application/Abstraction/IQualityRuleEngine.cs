@@ -13,6 +13,21 @@ public interface IQualityRuleEngine : IInfrastructure
     string EngineName { get; }
 
     /// <summary>
+    /// Declarative metadata describing this engine's identity.
+    /// </summary>
+    ValidationEngineDescriptor Descriptor
+    {
+        get
+        {
+            return new ValidationEngineDescriptor(
+                EngineName,
+                EngineName,
+                ValidationEngineKinds.QualityRule,
+                $"Quality rule engine '{EngineName}'.");
+        }
+    }
+
+    /// <summary>
     /// Validates the syntax/structure of the rule's implementation during schema verification.
     /// Returns an empty list if valid, or a list of syntax errors.
     /// </summary>

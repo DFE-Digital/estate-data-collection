@@ -23,6 +23,12 @@ public sealed partial class CelQualityEngine(
         get { return "cel"; }
     }
 
+    public ValidationEngineDescriptor Descriptor { get; } = new(
+        EngineId: "cel",
+        DisplayName: "CEL Quality Engine",
+        Kind: ValidationEngineKinds.QualityRule,
+        Description: $"Evaluates Common Expression Language (CEL) quality rules with RFC3339 timestamps, comprehensions, compiled program caching, and {(options?.Value.CelMaxIterations is > 0 ? options.Value.CelMaxIterations : 10_000)} max iterations.");
+
     private readonly ValidationOptions _options = options?.Value ?? new ValidationOptions();
 
     private static readonly CelEnv SharedEnv = CelEnv.Create(new CelEnvSettings
@@ -161,17 +167,51 @@ public sealed partial class CelQualityEngine(
 
         if (node is JsonValue val)
         {
-            var element = val.GetValue<JsonElement>();
-            return element.ValueKind switch
+            if (val.TryGetValue<JsonElement>(out var element))
             {
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.Null or JsonValueKind.Undefined => null,
-                JsonValueKind.Number when element.TryGetInt64(out var l) => l,
-                JsonValueKind.Number when element.TryGetDouble(out var d) => d,
-                JsonValueKind.String => element.GetString(),
-                _ => val.ToString()
-            };
+                return element.ValueKind switch
+                {
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    JsonValueKind.Null or JsonValueKind.Undefined => null,
+                    JsonValueKind.Number when element.TryGetInt64(out var l) => l,
+                    JsonValueKind.Number when element.TryGetDouble(out var d) => d,
+                    JsonValueKind.String => element.GetString(),
+                    _ => val.ToString()
+                };
+            }
+
+            if (val.TryGetValue<bool>(out var b))
+            {
+                return b;
+            }
+
+            if (val.TryGetValue<long>(out var lVal))
+            {
+                return lVal;
+            }
+
+            if (val.TryGetValue<int>(out var iVal))
+            {
+                return (long)iVal;
+            }
+
+            if (val.TryGetValue<double>(out var dVal))
+            {
+                return dVal;
+            }
+
+            if (val.TryGetValue<decimal>(out var decVal))
+            {
+                return (double)decVal;
+            }
+
+            if (val.TryGetValue<string>(out var sVal))
+            {
+                return sVal;
+            }
+
+            return val.ToString();
         }
 
         if (node is JsonArray arr)
