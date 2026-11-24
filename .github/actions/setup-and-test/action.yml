@@ -58,7 +58,7 @@ runs:
       id: calver
       shell: bash
       run: |
-        CALVER="$(date +'%Y.%m').${{ inputs.run-number }}"
+        CALVER="$(date +'%Y.%-m').${{ inputs.run-number }}"
         FULL_VERSION="${CALVER}+${{ inputs.commit-sha }}"
         echo "version=$CALVER" >> "$GITHUB_OUTPUT"
         echo "full_version=$FULL_VERSION" >> "$GITHUB_OUTPUT"

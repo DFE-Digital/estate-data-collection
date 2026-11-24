@@ -3,6 +3,12 @@ name: 'CD: Release Pipeline (Main)'
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.gitignore'
+      - '.idea/**'
+      - '.run/**'
 
 permissions:
   id-token: write       # Required for Azure OIDC
@@ -11,13 +17,16 @@ permissions:
 concurrency:
   group: cd-release-main
   cancel-in-progress: false
-  
+
 
 jobs:
-  
+
   build-release-artifact:
     name: Build Release Package
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     outputs:
       calver-version: ${{ steps.build.outputs.calver-version }}
       full-version: ${{ steps.build.outputs.full-version }}
@@ -41,6 +50,64 @@ jobs:
           run-number: ${{ github.run_number }}
           commit-sha: ${{ github.sha }}
 
+      - name: Pack & Push Bundle to GitHub Packages (NuGet)
+        env:
+          NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CALVER: ${{ steps.build.outputs.calver-version }}
+          FULL_VER: ${{ steps.build.outputs.full-version }}
+          PUBLIC_ZIP: ${{ github.workspace }}/${{ steps.build.outputs.public-package-path }}
+          ADMIN_ZIP: ${{ github.workspace }}/${{ steps.build.outputs.admin-package-path }}
+        run: |
+          BUNDLE_DIR="${{ runner.temp }}/edc-bundle"
+          rm -rf "${BUNDLE_DIR}"
+          mkdir -p "${BUNDLE_DIR}"
+
+          cat << EOF > "${BUNDLE_DIR}/README.md"
+          # Estate Data Collection Deployment Bundle
+
+          - **Version:** \`${FULL_VER}\`
+          - **Commit:** \`${{ github.sha }}\`
+          - **Workflow Run:** https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Contains self-contained Linux x64 deployment packages in \`content/\`:
+          - \`edc-functions-public-linux-x64.zip\`
+          - \`edc-functions-admin-linux-x64.zip\`
+          EOF
+
+          cat << EOF > "${BUNDLE_DIR}/edc-bundle.csproj"
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net10.0</TargetFramework>
+              <PackageId>DFE-Digital.EstateDataCollection.Bundle</PackageId>
+              <Authors>${{ github.repository_owner }}</Authors>
+              <Description>Self-contained Linux x64 deployment bundle (Public and Admin Azure Functions) for Estate Data Collection (${FULL_VER}).</Description>
+              <PackageTags>azure-functions;edc;deployment-bundle</PackageTags>
+              <PackageReadmeFile>README.md</PackageReadmeFile>
+              <RepositoryUrl>https://github.com/${{ github.repository }}</RepositoryUrl>
+              <RepositoryType>git</RepositoryType>
+              <IsPackable>true</IsPackable>
+              <IncludeBuildOutput>false</IncludeBuildOutput>
+              <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+              <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+            </PropertyGroup>
+            <ItemGroup>
+              <None Include="${BUNDLE_DIR}/README.md" Pack="true" PackagePath="" />
+              <None Include="${PUBLIC_ZIP}" Pack="true" PackagePath="content/" />
+              <None Include="${ADMIN_ZIP}" Pack="true" PackagePath="content/" />
+            </ItemGroup>
+          </Project>
+          EOF
+
+          dotnet pack "${BUNDLE_DIR}/edc-bundle.csproj" \
+            --configuration Release \
+            -p:PackageVersion="${CALVER}" \
+            --output "${BUNDLE_DIR}/out"
+
+          dotnet nuget push "${BUNDLE_DIR}/out/*.nupkg" \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --api-key "${NUGET_TOKEN}" \
+            --skip-duplicate
+
       - name: Upload Deployment Artifacts (Public & Admin)
         uses: actions/upload-artifact@v4
         with:
@@ -54,14 +121,20 @@ jobs:
     name: Deploy to Development
     needs: build-release-artifact
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      packages: read
     environment:
       name: Dev
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Download Bundle from GitHub Packages
+        uses: ./.github/actions/download-bundle
         with:
-          name: edc-release-bundle
+          package-version: ${{ needs.build-release-artifact.outputs.calver-version }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy Public Function App
         id: deploy-public
@@ -91,16 +164,22 @@ jobs:
 
   deploy-test:
     name: Deploy to Test / UAT
-    needs: deploy-dev
+    needs: [build-release-artifact, deploy-dev]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      packages: read
     environment:
       name: Test
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Download Bundle from GitHub Packages
+        uses: ./.github/actions/download-bundle
         with:
-          name: edc-release-bundle
+          package-version: ${{ needs.build-release-artifact.outputs.calver-version }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy Public Function App
         id: deploy-public
@@ -130,16 +209,22 @@ jobs:
 
   deploy-prod:
     name: Deploy to Production
-    needs: deploy-test
+    needs: [build-release-artifact, deploy-test]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      packages: read
     environment:
       name: Prod
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Download Bundle from GitHub Packages
+        uses: ./.github/actions/download-bundle
         with:
-          name: edc-release-bundle
+          package-version: ${{ needs.build-release-artifact.outputs.calver-version }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy Public Function App
         id: deploy-public
@@ -166,3 +251,42 @@ jobs:
           function-app-name: ${{ vars.AZURE_ADMIN_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-admin-linux-x64.zip
           health-path: /manage
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-release-artifact, deploy-prod]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Bundle from GitHub Packages
+        uses: ./.github/actions/download-bundle
+        with:
+          package-version: ${{ needs.build-release-artifact.outputs.calver-version }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CALVER: ${{ needs.build-release-artifact.outputs.calver-version }}
+          FULL_VER: ${{ needs.build-release-artifact.outputs.full-version }}
+        run: |
+          TAG="v${CALVER}"
+          NOTES="Promoted to **Prod** from build \`${FULL_VER}\` (commit \`${{ github.sha }}\`)."
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" \
+              ./edc-functions-public-linux-x64.zip \
+              ./edc-functions-admin-linux-x64.zip \
+              --clobber
+          else
+            gh release create "${TAG}" \
+              ./edc-functions-public-linux-x64.zip \
+              ./edc-functions-admin-linux-x64.zip \
+              --target "${{ github.sha }}" \
+              --title "Release ${TAG}" \
+              --notes "${NOTES}" \
+              --generate-notes
+          fi
