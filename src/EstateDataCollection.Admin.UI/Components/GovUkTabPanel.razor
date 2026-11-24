@@ -1,0 +1,14 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Components
+
+@if (Tab is not null)
+{
+    <div class="@Tab.PanelCssClass" id="@Tab.Id">
+        @ChildContent
+    </div>
+}
+
+@code {
+    [Parameter] public GovUkTabItemViewModel? Tab { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

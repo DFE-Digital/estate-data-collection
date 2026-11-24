@@ -146,6 +146,32 @@
           };
           reader.readAsText(file);
         });
+    });
+  }
+
+  function syncDefaultTabs(): void {
+    if (window.location.hash) {
+      return;
+    }
+
+    document
+      .querySelectorAll<HTMLElement>(".govuk-tabs[data-default-tab]")
+      .forEach((tabsRoot) => {
+        const defaultTabId = tabsRoot.getAttribute("data-default-tab");
+        if (!defaultTabId) {
+          return;
+        }
+
+        const targetTab = tabsRoot.querySelector<HTMLAnchorElement>(
+          `a.govuk-tabs__tab[href="#${defaultTabId}"]`
+        );
+        if (
+          targetTab &&
+          targetTab.getAttribute("role") === "tab" &&
+          targetTab.getAttribute("aria-selected") !== "true"
+        ) {
+          targetTab.click();
+        }
       });
   }
 
@@ -175,5 +201,6 @@
     syncModePanels();
     syncIdentifierControls();
     wireFileInputs();
+    syncDefaultTabs();
   });
 })();

@@ -9,7 +9,7 @@
             <h2 class="govuk-heading-m govuk-!-margin-bottom-2">@Model.Heading</h2>
             @if (Model.HasSubtitle)
             {
-                <p class="govuk-body-s govuk-!-margin-bottom-2">@Model.Subtitle</p>
+                <p class="govuk-body-m">@Model.Subtitle</p>
             }
             <table class="govuk-table govuk-!-margin-bottom-3">
                 <thead class="govuk-table__head">
@@ -50,6 +50,10 @@
     {
         <section class="govuk-!-margin-top-4 govuk-!-margin-bottom-4" id="registered-validation-engines">
             <h2 class="govuk-heading-m govuk-!-margin-bottom-2">@Model.RegisteredHeading</h2>
+            @if (Model.HasRegisteredSubtitle)
+            {
+                <p class="govuk-body-m">@Model.RegisteredSubtitle</p>
+            }
             <table class="govuk-table govuk-!-margin-bottom-3">
                 <thead class="govuk-table__head">
                     <tr class="govuk-table__row">

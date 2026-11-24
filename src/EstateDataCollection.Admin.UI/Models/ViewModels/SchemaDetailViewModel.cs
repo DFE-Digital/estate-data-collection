@@ -232,4 +232,41 @@ public sealed record SchemaDetailViewModel(
     {
         get { return Detail?.RawJsonSchema ?? string.Empty; }
     }
+
+    public GovUkTabsViewModel Tabs
+    {
+        get
+        {
+            return _tabs ??= GovUkTabsViewModel.Create(
+                "schema-detail-tabs",
+                [
+                    ("schema-fields", $"Fields ({FieldsViewer.TopLevelFieldCount})", true),
+                    ("schema-quality-rules", $"Quality rules ({QualityRulesViewer.RuleCount})", true),
+                    ("schema-validation-engines", "Validation engines", EngineDiagnostics.HasContent),
+                    ("schema-raw-json", "Raw JSON Schema", HasRawJsonSchema)
+                ]);
+        }
+    }
+
+    private GovUkTabsViewModel? _tabs;
+
+    public GovUkTabItemViewModel? FieldsTab
+    {
+        get { return Tabs.Find("schema-fields"); }
+    }
+
+    public GovUkTabItemViewModel? QualityRulesTab
+    {
+        get { return Tabs.Find("schema-quality-rules"); }
+    }
+
+    public GovUkTabItemViewModel? ValidationEnginesTab
+    {
+        get { return Tabs.Find("schema-validation-engines"); }
+    }
+
+    public GovUkTabItemViewModel? RawJsonSchemaTab
+    {
+        get { return Tabs.Find("schema-raw-json"); }
+    }
 }

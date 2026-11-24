@@ -105,6 +105,7 @@ public sealed class RazorComponentRenderingTests
         html.Should().Contain("json-schema: Succeeded");
         html.Should().Contain("/assets/css/govuk-frontend.min.css");
         html.Should().Contain("/assets/css/dfe-branding.css");
+        html.Should().Contain("govuk-frontend-supported");
         html.Should().Contain("govuk-tag--green");
         html.Should().Contain("govuk-tag--purple");
         html.Should().Contain(">Tests</th>");
@@ -192,6 +193,14 @@ public sealed class RazorComponentRenderingTests
         html.Should().Contain("id=\"validation-engine-diagnostics\"");
         html.Should().Contain("id=\"registered-validation-engines\"");
         html.Should().Contain("Active (1 rule)");
+        html.Should().Contain("2 of 2 active or applicable");
+        html.Should().Contain("latest regression test run");
+        html.Should().Contain("data-module=\"govuk-tabs\"");
+        html.Should().Contain("id=\"schema-detail-tabs\"");
+        html.Should().Contain("href=\"#schema-fields\"");
+        html.Should().Contain("href=\"#schema-quality-rules\"");
+        html.Should().Contain("href=\"#schema-validation-engines\"");
+        html.Should().Contain("href=\"#schema-raw-json\"");
         WebUtility.HtmlDecode(html).Should().Contain("{\"type\":\"object\"}");
     }
 
@@ -262,6 +271,13 @@ public sealed class RazorComponentRenderingTests
         html.Should().Contain("name=\"validFixtureJson\"");
         html.Should().Contain("name=\"invalidFixtureJson\"");
         html.Should().Contain("Save &amp; Verify Tests");
+        html.Should().Contain("id=\"schema-tests-tabs\"");
+        html.Should().Contain("data-default-tab=\"test-engine-diagnostics\"");
+        html.Should().Contain("href=\"#test-valid-fixtures\"");
+        html.Should().Contain("href=\"#test-invalid-fixtures\"");
+        html.Should().Contain("href=\"#test-engine-diagnostics\"");
+        html.Should().Contain("href=\"#edit-schema-tests\"");
+        html.Should().Contain("href=\"#test-quality-rules\"");
     }
 
     [Fact]
@@ -293,6 +309,7 @@ public sealed class RazorComponentRenderingTests
         html.Should().Contain("govuk-form-group--error");
         html.Should().Contain("govuk-textarea--error");
         html.Should().Contain("SampleValidFixtures:0 violated quality rules: capacity &gt;= 0");
+        html.Should().Contain("data-default-tab=\"edit-schema-tests\"");
         WebUtility.HtmlDecode(html).Should().Contain("{\"urn\":123456,\"capacity\":-1}");
     }
 
@@ -465,6 +482,9 @@ public sealed class RazorComponentRenderingTests
         decodedWorkbench.Should().Contain("Required by schema:");
         decodedWorkbench.Should().Contain("id=\"validation-engine-diagnostics\"");
         decodedWorkbench.Should().Contain("JsonSchema.Net Validator");
+        decodedWorkbench.Should().Contain("id=\"workbench-verify-tabs\"");
+        decodedWorkbench.Should().Contain("href=\"#verify-summary\"");
+        decodedWorkbench.Should().Contain("href=\"#verify-engine-diagnostics\"");
         decodedWorkbench.Should().Contain("formaction=\"/manage/workbench/verify\"");
         decodedWorkbench.Should().Contain("id=\"identifier-pointer-group\">");
     }
@@ -518,6 +538,10 @@ public sealed class RazorComponentRenderingTests
         decoded.Should().Contain("Validation.QualityRuleFailed");
         decoded.Should().Contain("$.school_capacity");
         decoded.Should().Contain("[RULE-CAP] Capacity must be positive");
+        decoded.Should().Contain("id=\"submission-detail-tabs\"");
+        decoded.Should().Contain("href=\"#submission-audit-trail\"");
+        decoded.Should().Contain("href=\"#submission-payload-session\"");
+        decoded.Should().Contain("href=\"#submission-draft-uploads\"");
     }
 
     [Theory]

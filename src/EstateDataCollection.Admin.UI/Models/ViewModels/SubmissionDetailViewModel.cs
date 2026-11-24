@@ -398,6 +398,37 @@ public sealed record SubmissionDetailViewModel(
         get { return AuditItems.Count > 0; }
     }
 
+    public GovUkTabsViewModel Tabs
+    {
+        get
+        {
+            return _tabs ??= GovUkTabsViewModel.Create(
+                "submission-detail-tabs",
+                [
+                    ("submission-audit-trail", $"Audit trail ({AuditCount})", true),
+                    ("submission-payload-session", "Payload & session", true),
+                    ("submission-draft-uploads", $"Draft uploads ({DraftCount})", true)
+                ]);
+        }
+    }
+
+    private GovUkTabsViewModel? _tabs;
+
+    public GovUkTabItemViewModel? AuditTrailTab
+    {
+        get { return Tabs.Find("submission-audit-trail"); }
+    }
+
+    public GovUkTabItemViewModel? PayloadSessionTab
+    {
+        get { return Tabs.Find("submission-payload-session"); }
+    }
+
+    public GovUkTabItemViewModel? DraftUploadsTab
+    {
+        get { return Tabs.Find("submission-draft-uploads"); }
+    }
+
     private static string FormatJson(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))

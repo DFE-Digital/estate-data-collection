@@ -1,0 +1,16 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Components
+
+<h2 class="govuk-tabs__title">@Model.Title</h2>
+<ul class="govuk-tabs__list">
+    @foreach (var tab in Model.Tabs)
+    {
+        <li class="@tab.ListItemCssClass">
+            <a class="govuk-tabs__tab" href="@tab.Href">@tab.Label</a>
+        </li>
+    }
+</ul>
+
+@code {
+    [Parameter, EditorRequired] public GovUkTabsViewModel Model { get; set; } = default!;
+}

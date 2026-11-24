@@ -300,6 +300,56 @@ public sealed record SchemaTestsViewModel(
 
     private IReadOnlyList<InvalidFixtureCardViewModel>? _invalidFixtures;
 
+    public GovUkTabsViewModel Tabs
+    {
+        get
+        {
+            var preferredTabId = ValidFixtureField.HasError || InvalidFixtureField.HasError
+                ? "edit-schema-tests"
+                : LatestItem is not null && EngineDiagnostics.HasContent
+                    ? "test-engine-diagnostics"
+                    : "test-valid-fixtures";
+
+            return _tabs ??= GovUkTabsViewModel.Create(
+                "schema-tests-tabs",
+                [
+                    ("test-valid-fixtures", $"Valid fixtures ({ValidFixturesCount})", true),
+                    ("test-invalid-fixtures", $"Invalid fixtures ({InvalidFixturesCount})", true),
+                    ("test-engine-diagnostics", "Engine diagnostics", EngineDiagnostics.HasContent),
+                    ("edit-schema-tests", "Add / update tests", true),
+                    ("test-quality-rules", $"Quality rules ({BusinessRuleCount})", true)
+                ],
+                preferredSelectedId: preferredTabId);
+        }
+    }
+
+    private GovUkTabsViewModel? _tabs;
+
+    public GovUkTabItemViewModel? ValidFixturesTab
+    {
+        get { return Tabs.Find("test-valid-fixtures"); }
+    }
+
+    public GovUkTabItemViewModel? InvalidFixturesTab
+    {
+        get { return Tabs.Find("test-invalid-fixtures"); }
+    }
+
+    public GovUkTabItemViewModel? EngineDiagnosticsTab
+    {
+        get { return Tabs.Find("test-engine-diagnostics"); }
+    }
+
+    public GovUkTabItemViewModel? EditTestsTab
+    {
+        get { return Tabs.Find("edit-schema-tests"); }
+    }
+
+    public GovUkTabItemViewModel? QualityRulesTab
+    {
+        get { return Tabs.Find("test-quality-rules"); }
+    }
+
     private IReadOnlyList<string> ResolveSoftWarnings()
     {
         if (Detail is null)

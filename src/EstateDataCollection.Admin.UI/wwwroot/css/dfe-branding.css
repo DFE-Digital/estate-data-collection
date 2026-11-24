@@ -225,3 +225,13 @@
   gap: 8px;
   align-items: center;
 }
+
+.govuk-tabs__panel > h2:first-child,
+.govuk-tabs__panel > h3:first-child,
+.govuk-tabs__panel > section:first-child {
+  margin-top: 0 !important;
+}
+
+.govuk-tabs__panel > :last-child {
+  margin-bottom: 0 !important;
+}

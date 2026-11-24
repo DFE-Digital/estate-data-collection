@@ -97,23 +97,22 @@
                     </div>
                 </dl>
 
-                <FieldsViewer Model="Model.FieldsViewer" />
-                <QualityRulesViewer Model="Model.QualityRulesViewer" />
-                <ValidationEngineDiagnostics Model="Model.EngineDiagnostics" />
-
-                @if (Model.HasRawJsonSchema)
-                {
-                    <details class="govuk-details govuk-!-margin-top-4" data-module="govuk-details">
-                        <summary class="govuk-details__summary">
-                            <span class="govuk-details__summary-text">
-                                View raw JSON Schema (Draft 2020-12 / Draft-07)
-                            </span>
-                        </summary>
-                        <div class="govuk-details__text">
-                            <pre class="dfe-code-pre">@Model.RawJsonSchema</pre>
-                        </div>
-                    </details>
-                }
+                <div class="govuk-tabs" data-module="govuk-tabs" id="@Model.Tabs.ContainerId" data-default-tab="@Model.Tabs.DefaultTabId">
+                    <GovUkTabStrip Model="Model.Tabs" />
+                    <GovUkTabPanel Tab="Model.FieldsTab">
+                        <FieldsViewer Model="Model.FieldsViewer" />
+                    </GovUkTabPanel>
+                    <GovUkTabPanel Tab="Model.QualityRulesTab">
+                        <QualityRulesViewer Model="Model.QualityRulesViewer" />
+                    </GovUkTabPanel>
+                    <GovUkTabPanel Tab="Model.ValidationEnginesTab">
+                        <ValidationEngineDiagnostics Model="Model.EngineDiagnostics" />
+                    </GovUkTabPanel>
+                    <GovUkTabPanel Tab="Model.RawJsonSchemaTab">
+                        <h2 class="govuk-heading-m govuk-!-margin-bottom-2">Raw JSON Schema (Draft 2020-12 / Draft-07)</h2>
+                        <pre class="dfe-code-pre">@Model.RawJsonSchema</pre>
+                    </GovUkTabPanel>
+                </div>
             </div>
         </div>
     }

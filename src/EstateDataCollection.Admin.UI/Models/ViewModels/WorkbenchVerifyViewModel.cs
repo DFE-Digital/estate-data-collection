@@ -107,6 +107,46 @@ public sealed record WorkbenchVerifyViewModel(
         get { return Result?.ResolvedIdentifierConfig?.Required == true ? "Yes" : "No"; }
     }
 
+    public GovUkTabsViewModel Tabs
+    {
+        get
+        {
+            return _tabs ??= GovUkTabsViewModel.Create(
+                "workbench-verify-tabs",
+                [
+                    ("verify-summary", "Summary & fixtures", true),
+                    ("verify-engine-diagnostics", "Engine diagnostics", EngineDiagnostics.HasContent)
+                ]);
+        }
+    }
+
+    private GovUkTabsViewModel? _tabs;
+
+    public bool ShowTabs
+    {
+        get { return Tabs.Tabs.Count > 1; }
+    }
+
+    public bool HasSummaryDetails
+    {
+        get { return HasInvalidFixtureOutcomes || HasResolvedIdentifierConfig; }
+    }
+
+    public bool NoSummaryDetails
+    {
+        get { return !HasSummaryDetails; }
+    }
+
+    public GovUkTabItemViewModel? SummaryTab
+    {
+        get { return Tabs.Find("verify-summary"); }
+    }
+
+    public GovUkTabItemViewModel? EngineDiagnosticsTab
+    {
+        get { return Tabs.Find("verify-engine-diagnostics"); }
+    }
+
     private IReadOnlyList<VerifyInvalidOutcomeViewModel> BuildInvalidFixtureOutcomes()
     {
         var outcomes = Result?.InvalidFixtureOutcomes;

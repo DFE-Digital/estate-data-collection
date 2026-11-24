@@ -31,14 +31,16 @@ public sealed record ValidationEngineDiagnosticsViewModel(
     string? Subtitle,
     IReadOnlyList<ValidationEngineTraceRowViewModel> TraceRows,
     string RegisteredHeading,
-    IReadOnlyList<RegisteredValidationEngineRowViewModel> RegisteredEngines)
+    IReadOnlyList<RegisteredValidationEngineRowViewModel> RegisteredEngines,
+    string? RegisteredSubtitle = null)
 {
     public static readonly ValidationEngineDiagnosticsViewModel Empty = new(
         Heading: "Validation Engine Diagnostics",
         Subtitle: null,
         TraceRows: [],
         RegisteredHeading: "Registered Validation Engines",
-        RegisteredEngines: []);
+        RegisteredEngines: [],
+        RegisteredSubtitle: null);
 
     public bool HasTraces
     {
@@ -55,6 +57,11 @@ public sealed record ValidationEngineDiagnosticsViewModel(
         get { return RegisteredEngines.Count > 0; }
     }
 
+    public bool HasRegisteredSubtitle
+    {
+        get { return !string.IsNullOrWhiteSpace(RegisteredSubtitle); }
+    }
+
     public bool HasContent
     {
         get { return HasTraces || HasRegisteredEngines; }
@@ -66,12 +73,17 @@ public sealed record ValidationEngineDiagnosticsViewModel(
         string? subtitle = null)
     {
         var rows = MapTraceRows(traces);
+        var resolvedSubtitle = subtitle ?? (rows.Count > 0
+            ? $"Execution outcomes, evaluated items, violations, and timings recorded across {rows.Count} validation engine(s)."
+            : null);
+
         return new ValidationEngineDiagnosticsViewModel(
             Heading: heading,
-            Subtitle: subtitle,
+            Subtitle: resolvedSubtitle,
             TraceRows: rows,
             RegisteredHeading: "Registered Validation Engines",
-            RegisteredEngines: []);
+            RegisteredEngines: [],
+            RegisteredSubtitle: null);
     }
 
     public static ValidationEngineDiagnosticsViewModel FromDetail(
@@ -81,17 +93,27 @@ public sealed record ValidationEngineDiagnosticsViewModel(
         SchemaIdentifierConfig? identifierConfig,
         string traceHeading = "Last Test Run Engine Diagnostics",
         string? traceSubtitle = null,
-        string registeredHeading = "Registered Validation Engines")
+        string registeredHeading = "Registered Validation Engines",
+        string? registeredSubtitle = null)
     {
         var traceRows = MapTraceRows(traces);
         var registeredRows = MapRegisteredEngines(registeredEngines, qualityRules, identifierConfig);
+        var resolvedTraceSubtitle = traceSubtitle ?? (traceRows.Count > 0
+            ? $"Execution outcomes, evaluated items, violations, and timings recorded across {traceRows.Count} validation engine(s) in the latest regression test run."
+            : null);
+        var applicableCount = registeredRows.Count(r =>
+            string.Equals(r.ApplicabilityTagCssClass, "govuk-tag govuk-tag--green", StringComparison.Ordinal));
+        var resolvedRegisteredSubtitle = registeredSubtitle ?? (registeredRows.Count > 0
+            ? $"All validation engines currently registered in this environment and whether they apply to this schema version ({applicableCount} of {registeredRows.Count} active or applicable)."
+            : null);
 
         return new ValidationEngineDiagnosticsViewModel(
             Heading: traceHeading,
-            Subtitle: traceSubtitle,
+            Subtitle: resolvedTraceSubtitle,
             TraceRows: traceRows,
             RegisteredHeading: registeredHeading,
-            RegisteredEngines: registeredRows);
+            RegisteredEngines: registeredRows,
+            RegisteredSubtitle: resolvedRegisteredSubtitle);
     }
 
     public static string? FormatCompactSummary(IReadOnlyList<ValidationEngineTrace>? traces)

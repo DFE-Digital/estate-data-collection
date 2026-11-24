@@ -267,5 +267,78 @@ public sealed class ViewModelPresentationTests
         detailVm.EngineDiagnostics.HasRegisteredEngines.Should().BeTrue();
         detailVm.EngineDiagnostics.RegisteredEngines.Select(e => e.ApplicabilityText)
             .Should().Equal("Applicable", "Active (1 rule)", "Idle (0 rules)", "Disabled");
+        detailVm.EngineDiagnostics.HasRegisteredSubtitle.Should().BeTrue();
+        detailVm.EngineDiagnostics.RegisteredSubtitle.Should().Contain("2 of 4 active or applicable");
+
+        vm.ShowTabs.Should().BeTrue();
+        vm.Tabs.Tabs.Select(t => t.Id).Should().Equal("verify-summary", "verify-engine-diagnostics");
+        vm.SummaryTab!.IsSelected.Should().BeTrue();
+        vm.EngineDiagnosticsTab!.IsSelected.Should().BeFalse();
+
+        detailVm.Tabs.Tabs.Select(t => t.Id)
+            .Should().Equal("schema-fields", "schema-quality-rules", "schema-validation-engines");
+        detailVm.FieldsTab!.IsSelected.Should().BeTrue();
+        detailVm.RawJsonSchemaTab.Should().BeNull();
+    }
+
+    [Fact]
+    public void GovUkTabsViewModel_And_SchemaTestsViewModel_Should_Resolve_Visible_And_Default_Tabs()
+    {
+        var tabs = GovUkTabsViewModel.Create(
+            "sample-tabs",
+            [
+                ("tab-a", "First", true),
+                ("tab-hidden", "Hidden", false),
+                ("tab-b", "Second", true)
+            ],
+            preferredSelectedId: "tab-b");
+
+        tabs.Tabs.Should().HaveCount(2);
+        tabs.DefaultTabId.Should().Be("tab-b");
+        tabs.Find("tab-hidden").Should().BeNull();
+        tabs.Find("tab-a")!.IsSelected.Should().BeFalse();
+        tabs.Find("tab-a")!.PanelCssClass.Should().Be("govuk-tabs__panel govuk-tabs__panel--hidden");
+        tabs.Find("tab-b")!.IsSelected.Should().BeTrue();
+        tabs.Find("tab-b")!.ListItemCssClass.Should().Be("govuk-tabs__list-item govuk-tabs__list-item--selected");
+        tabs.Find("tab-b")!.PanelCssClass.Should().Be("govuk-tabs__panel");
+
+        var detail = new SchemaVersionDetailBuilder()
+            .WithSchema("cdc_survey", 1)
+            .WithState(SchemaLifecycleState.Active)
+            .WithEngineTrace("json-schema", "JsonSchema.Net", ValidationEngineKinds.StructuralSchema, "Succeeded", 1, 0, 1)
+            .Build();
+
+        var defaultVm = new SchemaTestsViewModel(CreateMeta(), "cdc_survey", 1, detail);
+        defaultVm.Tabs.DefaultTabId.Should().BeNull();
+        defaultVm.ValidFixturesTab!.IsSelected.Should().BeTrue();
+
+        var postRunResult = new RunSchemaTestsResultBuilder()
+            .WithItem(
+                "cdc_survey",
+                1,
+                "Active",
+                passed: true,
+                engineTraces:
+                [
+                    new ValidationEngineTrace(
+                        new ValidationEngineDescriptor("json-schema", "JsonSchema.Net", ValidationEngineKinds.StructuralSchema, "Schema"),
+                        "Succeeded",
+                        1,
+                        0,
+                        1)
+                ])
+            .Build();
+        var postRunVm = new SchemaTestsViewModel(CreateMeta(), "cdc_survey", 1, detail, LastRunResult: postRunResult);
+        postRunVm.Tabs.DefaultTabId.Should().Be("test-engine-diagnostics");
+        postRunVm.EngineDiagnosticsTab!.IsSelected.Should().BeTrue();
+
+        var errorVm = new SchemaTestsViewModel(
+            CreateMeta(),
+            "cdc_survey",
+            1,
+            detail,
+            PageError: Error.Validation("Schema.InvalidFixture", "Invalid", [new ValidationError("validFixtureJson", "Bad JSON")]));
+        errorVm.Tabs.DefaultTabId.Should().Be("edit-schema-tests");
+        errorVm.EditTestsTab!.IsSelected.Should().BeTrue();
     }
 }
