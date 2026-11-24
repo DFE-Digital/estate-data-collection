@@ -6,6 +6,7 @@ using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
+using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Registry;
 using EstateDataCollection.Infrastructure.Validation;
 using EstateDataCollection.Tests.Common.Extensions;
@@ -21,7 +22,8 @@ public sealed class SchemaVerificationServiceTests
     {
         return new SchemaVerificationService(
             new JsonLogicValidator(),
-            new OdcsContractParser());
+            new OdcsContractParser(),
+            schemaValidator: new JsonSchemaNetValidator());
     }
 
     [Fact]
@@ -40,6 +42,15 @@ public sealed class SchemaVerificationServiceTests
         result.SyntaxErrors.Should().BeEmpty();
         result.FixtureErrors.Should().BeEmpty();
         result.Warnings.Should().ContainSingle(w => w.Message.Contains("unknown if expected"));
+        result.EngineTraces.Should().NotBeNull();
+        result.EngineTraces!.Select(t => t.Descriptor.EngineId).Should().BeEquivalentTo(
+            ["json-schema", "jsonlogic", "cel", "identifier-extractor"]);
+        result.EngineTraces.Single(t => t.Descriptor.EngineId == "json-schema").Outcome
+            .Should().Be(nameof(SubmissionProcessOutcome.Succeeded));
+        result.EngineTraces.Single(t => t.Descriptor.EngineId == "jsonlogic").Outcome
+            .Should().Be(nameof(SubmissionProcessOutcome.Succeeded));
+        result.EngineTraces.Single(t => t.Descriptor.EngineId == "cel").Outcome
+            .Should().Be(nameof(SubmissionProcessOutcome.Skipped));
     }
 
     [Fact]
@@ -55,6 +66,69 @@ public sealed class SchemaVerificationServiceTests
 
         result.IsSuccessful.Should().BeFalse();
         result.SyntaxErrors.Should().ContainSingle(e => e.Identifier == "schema");
+    }
+
+    [Fact]
+    public async Task VerifyCandidateSchemaAsync_Should_Report_Per_Engine_Diagnostics_For_Failures_And_Invalid_Triggers()
+    {
+        var sut = CreateService();
+
+        const string schemaJson = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["urn", "capacity"],
+          "properties": {
+            "urn": { "type": "integer" },
+            "capacity": { "type": "integer" }
+          }
+        }
+        """;
+
+        const string rulesJson = """
+        [
+          {
+            "id": "RULE-CAPACITY-CEL",
+            "description": "Capacity >= 10",
+            "severity": "ERROR",
+            "engine": "cel",
+            "path": "/",
+            "message": "Capacity must be at least 10.",
+            "assert": "this.capacity >= 10"
+          }
+        ]
+        """;
+
+        // Failing valid fixture on CEL rule should mark cel trace ValidationErrorsFound while json-schema succeeds and jsonlogic is Skipped.
+        var failedValid = (await sut.VerifyCandidateSchemaAsync(
+            rawSchemaJson: schemaJson,
+            rawRulesJson: rulesJson,
+            sampleValidPayloads: ["""{"urn":123456,"capacity":5}"""],
+            sampleInvalidPayloads: [],
+            identifierConfig: new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/urn" })).ShouldSucceed();
+
+        failedValid.IsSuccessful.Should().BeFalse();
+        failedValid.EngineTraces.Should().NotBeNull();
+        failedValid.EngineTraces!.Single(t => t.Descriptor.EngineId == "json-schema").Outcome
+            .Should().Be(nameof(SubmissionProcessOutcome.Succeeded));
+        failedValid.EngineTraces.Single(t => t.Descriptor.EngineId == "jsonlogic").Outcome
+            .Should().Be(nameof(SubmissionProcessOutcome.Skipped));
+
+        var celFailTrace = failedValid.EngineTraces.Single(t => t.Descriptor.EngineId == "cel");
+        celFailTrace.Outcome.Should().Be(nameof(SubmissionProcessOutcome.ValidationErrorsFound));
+        celFailTrace.ViolationCount.Should().Be(1);
+
+        // Malformed schema syntax should mark json-schema as Failed.
+        var badSyntax = (await sut.VerifyCandidateSchemaAsync(
+            rawSchemaJson: "{broken",
+            rawRulesJson: null,
+            sampleValidPayloads: [],
+            sampleInvalidPayloads: [])).ShouldSucceed();
+
+        badSyntax.IsSuccessful.Should().BeFalse();
+        var schemaFailTrace = badSyntax.EngineTraces!.Single(t => t.Descriptor.EngineId == "json-schema");
+        schemaFailTrace.Outcome.Should().Be(nameof(SubmissionProcessOutcome.Failed));
+        schemaFailTrace.ViolationCount.Should().Be(1);
     }
 
     [Fact]
@@ -145,6 +219,13 @@ public sealed class SchemaVerificationServiceTests
         idError.Path.Should().Be("/urn");
         idError.Metadata.Should().ContainKey("identifierType");
         idError.Metadata!["identifierType"].Should().Be("URN");
+
+        result.EngineTraces!.Single(t => t.Descriptor.EngineId == "json-schema").Summary
+            .Should().Contain("triggered 1 invalid fixture");
+        result.EngineTraces!.Single(t => t.Descriptor.EngineId == "jsonlogic").Summary
+            .Should().Contain("triggered 1 invalid fixture");
+        result.EngineTraces!.Single(t => t.Descriptor.EngineId == "identifier-extractor").Summary
+            .Should().Contain("triggered 1 invalid fixture");
     }
 
     [Fact]

@@ -6,6 +6,7 @@ using EstateDataCollection.Admin.UI.Models;
 using EstateDataCollection.Admin.UI.Models.ViewModels;
 using EstateDataCollection.Admin.UI.Pages;
 using EstateDataCollection.Admin.UI.Rendering;
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Common.Results;
@@ -62,7 +63,26 @@ public sealed class RazorComponentRenderingTests
         var testRunResult = new RunSchemaTestsResultBuilder()
             .ExecutedAt(new DateTimeOffset(2026, 11, 17, 11, 0, 0, TimeSpan.Zero))
             .WithAppVersion("2026.11.1+abc123")
-            .WithItem("school-site", version: 1, state: "Active", passed: true, hasFixtures: true, validFixtureCount: 1, invalidFixtureCount: 1, businessRuleCount: 1, identifierType: "URN", identifierPointer: "/urn")
+            .WithItem(
+                "school-site",
+                version: 1,
+                state: "Active",
+                passed: true,
+                hasFixtures: true,
+                validFixtureCount: 1,
+                invalidFixtureCount: 1,
+                businessRuleCount: 1,
+                identifierType: "URN",
+                identifierPointer: "/urn",
+                engineTraces:
+                [
+                    new ValidationEngineTrace(
+                        new ValidationEngineDescriptor("json-schema", "JsonSchema.Net", ValidationEngineKinds.StructuralSchema, "Schema"),
+                        "Succeeded",
+                        3,
+                        0,
+                        1)
+                ])
             .Build();
 
         var html = await renderer.RenderComponentAsync<DashboardPage>(new Dictionary<string, object?>
@@ -82,6 +102,7 @@ public sealed class RazorComponentRenderingTests
         html.Should().Contain("Run All Schema Tests");
         html.Should().Contain("id=\"schema-test-run-summary\"");
         html.Should().Contain("1 / 1 Passed");
+        html.Should().Contain("json-schema: Succeeded");
         html.Should().Contain("/assets/css/govuk-frontend.min.css");
         html.Should().Contain("/assets/css/dfe-branding.css");
         html.Should().Contain("govuk-tag--green");
@@ -126,7 +147,7 @@ public sealed class RazorComponentRenderingTests
     }
 
     [Fact]
-    public async Task SchemaDetailPage_Should_Render_Field_Tree_Quality_Rules_And_Raw_Schema()
+    public async Task SchemaDetailPage_Should_Render_Field_Tree_Quality_Rules_Engine_Diagnostics_And_Raw_Schema()
     {
         var renderer = CreateRenderer();
         var detail = new SchemaVersionDetailBuilder()
@@ -150,6 +171,9 @@ public sealed class RazorComponentRenderingTests
             .WithIdentifier("URN", "/school/urn", required: null)
             .WithValidFixtures("""{"school":{"urn":123456}}""")
             .WithInvalidFixtures("""{"school":{"urn":0}}""")
+            .WithEngineTrace("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Succeeded", 3, 0, 2, "Schema valid")
+            .WithRegisteredEngine("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema)
+            .WithRegisteredEngine("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule)
             .Build();
 
         var html = await renderer.RenderComponentAsync<SchemaDetailPage>(new Dictionary<string, object?>
@@ -165,11 +189,14 @@ public sealed class RazorComponentRenderingTests
         html.Should().Contain("Default");
         html.Should().Contain("View Stored Tests (2)");
         html.Should().Contain("/manage/schemas/academy-return/3/tests/run");
+        html.Should().Contain("id=\"validation-engine-diagnostics\"");
+        html.Should().Contain("id=\"registered-validation-engines\"");
+        html.Should().Contain("Active (1 rule)");
         WebUtility.HtmlDecode(html).Should().Contain("{\"type\":\"object\"}");
     }
 
     [Fact]
-    public async Task SchemaTestsPage_Should_Render_Stored_Fixtures_Business_Rules_And_Run_Results()
+    public async Task SchemaTestsPage_Should_Render_Stored_Fixtures_Business_Rules_Engine_Diagnostics_And_Run_Results()
     {
         var renderer = CreateRenderer();
         var runAt = new DateTimeOffset(2026, 11, 17, 10, 30, 0, TimeSpan.Zero);
@@ -186,7 +213,27 @@ public sealed class RazorComponentRenderingTests
         var runResult = new RunSchemaTestsResultBuilder()
             .ExecutedAt(runAt)
             .WithAppVersion("2026.11.1+sha")
-            .WithItem("academy-return", version: 2, state: "Active", passed: true, hasFixtures: true, validFixtureCount: 1, invalidFixtureCount: 1, businessRuleCount: 1, identifierType: "URN", identifierPointer: "/urn")
+            .WithItem(
+                "academy-return",
+                version: 2,
+                state: "Active",
+                passed: true,
+                hasFixtures: true,
+                validFixtureCount: 1,
+                invalidFixtureCount: 1,
+                businessRuleCount: 1,
+                identifierType: "URN",
+                identifierPointer: "/urn",
+                engineTraces:
+                [
+                    new ValidationEngineTrace(
+                        new ValidationEngineDescriptor("jsonlogic", "JsonLogic Engine", ValidationEngineKinds.QualityRule, "JsonLogic"),
+                        "Succeeded",
+                        2,
+                        0,
+                        3,
+                        "1 rule(s) verified")
+                ])
             .Build();
 
         var html = await renderer.RenderComponentAsync<SchemaTestsPage>(new Dictionary<string, object?>
@@ -201,6 +248,8 @@ public sealed class RazorComponentRenderingTests
 
         html.Should().Contain("Run Schema Tests");
         html.Should().Contain("Schema tests passed");
+        html.Should().Contain("id=\"validation-engine-diagnostics\"");
+        html.Should().Contain("JsonLogic Engine");
         html.Should().Contain("Valid Fixture #1");
         html.Should().Contain("Invalid Fixture #1");
         html.Should().Contain("capacity-check");
@@ -391,6 +440,16 @@ public sealed class RazorComponentRenderingTests
                         Warnings:
                         [
                             "SampleInvalidFixtures:0 failed validation, but unknown if expected."
+                        ],
+                        EngineTraces:
+                        [
+                            new ValidationEngineTrace(
+                                new ValidationEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates JSON Schema"),
+                                "Succeeded",
+                                2,
+                                0,
+                                1,
+                                "Schema valid; checked 0 valid and 1 invalid fixture(s)")
                         ])))
         });
 
@@ -404,6 +463,8 @@ public sealed class RazorComponentRenderingTests
         decodedWorkbench.Should().Contain("SchoolCode");
         decodedWorkbench.Should().Contain("/schoolCode");
         decodedWorkbench.Should().Contain("Required by schema:");
+        decodedWorkbench.Should().Contain("id=\"validation-engine-diagnostics\"");
+        decodedWorkbench.Should().Contain("JsonSchema.Net Validator");
         decodedWorkbench.Should().Contain("formaction=\"/manage/workbench/verify\"");
         decodedWorkbench.Should().Contain("id=\"identifier-pointer-group\">");
     }

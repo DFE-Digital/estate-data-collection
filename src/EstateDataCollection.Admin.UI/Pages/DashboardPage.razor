@@ -53,6 +53,7 @@
                                 <th scope="col" class="govuk-table__header">Schema</th>
                                 <th scope="col" class="govuk-table__header">State</th>
                                 <th scope="col" class="govuk-table__header">Fixtures / Rules</th>
+                                <th scope="col" class="govuk-table__header">Engines</th>
                                 <th scope="col" class="govuk-table__header">Result</th>
                                 <th scope="col" class="govuk-table__header">Details</th>
                             </tr>
@@ -69,6 +70,16 @@
                                     <td class="govuk-table__cell"><LifecycleTag Model="item.StateTag" /></td>
                                     <td class="govuk-table__cell govuk-body-s">
                                         @item.CountsSummary
+                                    </td>
+                                    <td class="govuk-table__cell govuk-body-s">
+                                        @if (item.HasEngineTracesSummary)
+                                        {
+                                            <code class="dfe-code-badge">@item.EngineTracesSummary</code>
+                                        }
+                                        else
+                                        {
+                                            <span class="govuk-hint">&mdash;</span>
+                                        }
                                     </td>
                                     <td class="govuk-table__cell">
                                         <strong class="@item.ResultTagCssClass">@item.ResultTagText</strong>

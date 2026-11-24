@@ -1,3 +1,4 @@
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
@@ -8,7 +9,8 @@ public sealed record SchemaVerificationResult(
     IReadOnlyList<ValidationMessage> FixtureErrors,
     SchemaIdentifierConfig? ResolvedIdentifierConfig = null,
     IReadOnlyList<InvalidFixtureOutcome>? InvalidFixtureOutcomes = null,
-    IReadOnlyList<ValidationMessage>? Warnings = null
+    IReadOnlyList<ValidationMessage>? Warnings = null,
+    IReadOnlyList<ValidationEngineTrace>? EngineTraces = null
 )
 {
     public bool IsSuccessful

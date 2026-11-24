@@ -8,7 +8,8 @@ namespace EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 
 public sealed class GetSchemaDetailUseCase(
     ISchemaRegistry schemaRegistry,
-    GetSchemaDetailUseCaseInstrumentation? instrumentation = null
+    GetSchemaDetailUseCaseInstrumentation? instrumentation = null,
+    IPayloadValidationService? validationService = null
 ) : IUseCase<SchemaVersionDetail, GetSchemaDetailRequest>
 {
     private readonly GetSchemaDetailUseCaseInstrumentation _instrumentation =
@@ -49,6 +50,9 @@ public sealed class GetSchemaDetailUseCase(
                 Description: r.Description))
             .ToList();
 
+        var lastRunEngineTraces = ValidationEngineTraceMapper.ToApplicationTraces(metadata.LastTestRunEngineTraces);
+        var registeredEngines = validationService?.GetRegisteredEngines() ?? [];
+
         return new SchemaVersionDetail(
             SchemaName: metadata.Name,
             Version: metadata.Version,
@@ -70,6 +74,8 @@ public sealed class GetSchemaDetailUseCase(
             LastTestRunPassed: metadata.LastTestRunPassed,
             LastTestRunErrors: metadata.LastTestRunErrors ?? [],
             LastTestRunInvalidFixtures: metadata.LastTestRunInvalidFixtures ?? [],
-            LastTestRunWarnings: metadata.LastTestRunWarnings ?? []);
+            LastTestRunWarnings: metadata.LastTestRunWarnings ?? [],
+            LastTestRunEngineTraces: lastRunEngineTraces,
+            RegisteredEngines: registeredEngines);
     }
 }

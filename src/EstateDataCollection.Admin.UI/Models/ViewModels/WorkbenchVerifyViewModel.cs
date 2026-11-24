@@ -64,6 +64,19 @@ public sealed record WorkbenchVerifyViewModel(
 
     private IReadOnlyList<VerifyInvalidOutcomeViewModel>? _invalidFixtureOutcomes;
 
+    public ValidationEngineDiagnosticsViewModel EngineDiagnostics
+    {
+        get
+        {
+            return _engineDiagnostics ??= ValidationEngineDiagnosticsViewModel.FromTraces(
+                Result?.EngineTraces,
+                heading: "Validation Engine Diagnostics",
+                subtitle: "Per-engine execution outcomes across schema syntax, quality rules, identifier extraction, and golden fixtures.");
+        }
+    }
+
+    private ValidationEngineDiagnosticsViewModel? _engineDiagnostics;
+
     public bool HasResolvedIdentifierConfig
     {
         get { return Result?.ResolvedIdentifierConfig is not null; }

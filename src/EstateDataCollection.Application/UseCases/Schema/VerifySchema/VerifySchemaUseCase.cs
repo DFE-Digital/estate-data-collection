@@ -79,6 +79,7 @@ public class VerifySchemaUseCase(
             "Schema verified successfully",
             verification.Value.ResolvedIdentifierConfig,
             verification.Value.InvalidFixtureOutcomes,
-            verification.Value.WarningMessages);
+            verification.Value.WarningMessages,
+            verification.Value.EngineTraces);
     }
 }

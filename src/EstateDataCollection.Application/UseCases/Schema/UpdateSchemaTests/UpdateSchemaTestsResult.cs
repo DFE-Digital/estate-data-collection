@@ -1,3 +1,4 @@
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
@@ -11,4 +12,5 @@ public sealed record UpdateSchemaTestsResult(
     DateTimeOffset ExecutedAtUtc,
     string AppVersion,
     IReadOnlyList<InvalidFixtureOutcome>? InvalidFixtureOutcomes = null,
-    IReadOnlyList<string>? Warnings = null);
+    IReadOnlyList<string>? Warnings = null,
+    IReadOnlyList<ValidationEngineTrace>? EngineTraces = null);

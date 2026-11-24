@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -99,12 +100,14 @@ public sealed class UpdateSchemaTestsUseCase(
         var now = DateTimeOffset.UtcNow;
         var appVersion = AppVersionProvider.InformativeVersion;
         var warnings = verification.Value.WarningMessages;
+        var engineTraces = verification.Value.EngineTraces;
         meta.RecordTestRun(
             true,
             appVersion,
             errors: null,
             invalidFixtureOutcomes: verification.Value.InvalidFixtureOutcomes,
-            warnings: warnings);
+            warnings: warnings,
+            engineTraces: ValidationEngineTraceMapper.ToDomainRecords(engineTraces));
 
         var metaUpdateResult = await schemaRegistry.UpdateSchemaMetadataAsync(meta, cancellationToken);
         if (metaUpdateResult.IsFailure)
@@ -123,6 +126,7 @@ public sealed class UpdateSchemaTestsUseCase(
             ExecutedAtUtc: now,
             AppVersion: appVersion,
             InvalidFixtureOutcomes: verification.Value.InvalidFixtureOutcomes,
-            Warnings: warnings);
+            Warnings: warnings,
+            EngineTraces: engineTraces);
     }
 }

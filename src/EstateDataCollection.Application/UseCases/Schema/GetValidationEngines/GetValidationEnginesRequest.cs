@@ -1,0 +1,3 @@
+namespace EstateDataCollection.Application.UseCases.Schema.GetValidationEngines;
+
+public sealed record GetValidationEnginesRequest;

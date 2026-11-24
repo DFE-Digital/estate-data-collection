@@ -8,4 +8,11 @@ public sealed record DashboardTestRunItemViewModel(
     string ResultTagText,
     string ResultTagCssClass,
     bool HasDetailsText,
-    string? DetailsText);
+    string? DetailsText,
+    string? EngineTracesSummary = null)
+{
+    public bool HasEngineTracesSummary
+    {
+        get { return !string.IsNullOrWhiteSpace(EngineTracesSummary); }
+    }
+}

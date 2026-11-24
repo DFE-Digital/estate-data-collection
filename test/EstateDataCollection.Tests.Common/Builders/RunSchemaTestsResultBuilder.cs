@@ -1,3 +1,4 @@
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.Domain.Schema;
 
@@ -51,7 +52,8 @@ public sealed class RunSchemaTestsResultBuilder
         string? identifierType = null,
         string? identifierPointer = null,
         IReadOnlyList<InvalidFixtureOutcome>? invalidFixtureOutcomes = null,
-        IReadOnlyList<string>? warnings = null)
+        IReadOnlyList<string>? warnings = null,
+        IReadOnlyList<ValidationEngineTrace>? engineTraces = null)
     {
         _results.Add(new SchemaTestSuiteItemResult(
             SchemaName: schemaName,
@@ -66,7 +68,8 @@ public sealed class RunSchemaTestsResultBuilder
             IdentifierType: identifierType,
             IdentifierPointer: identifierPointer,
             InvalidFixtureOutcomes: invalidFixtureOutcomes,
-            Warnings: warnings));
+            Warnings: warnings,
+            EngineTraces: engineTraces));
         return this;
     }
 

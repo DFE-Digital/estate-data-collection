@@ -133,6 +133,19 @@ public sealed record SchemaTestsViewModel(
         get { return QualityRulesViewerViewModel.From(Detail?.QualityRules); }
     }
 
+    public ValidationEngineDiagnosticsViewModel EngineDiagnostics
+    {
+        get
+        {
+            return _engineDiagnostics ??= ValidationEngineDiagnosticsViewModel.FromTraces(
+                LatestItem?.EngineTraces ?? Detail?.LastTestRunEngineTraces,
+                heading: "Validation Engine Diagnostics",
+                subtitle: "Per-engine execution metrics and outcomes from the latest regression test run.");
+        }
+    }
+
+    private ValidationEngineDiagnosticsViewModel? _engineDiagnostics;
+
     public bool ShowLatestRunPassedBanner
     {
         get { return LatestItem is { Passed: true }; }

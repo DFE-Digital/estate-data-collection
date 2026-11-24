@@ -110,6 +110,8 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
         fullPageHtml.ContentType.Should().Be("text/html; charset=utf-8");
         fullPageHtml.Content.Should().Contain("<!DOCTYPE html>");
         fullPageHtml.Content.Should().Contain("Verification passed");
+        fullPageHtml.Content.Should().Contain("id=\"validation-engine-diagnostics\"");
+        fullPageHtml.Content.Should().Contain("json-schema");
 
         var badReq = await CreateFormRequestAsync(
             new Dictionary<string, string?>
@@ -239,6 +241,8 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
         detailHtml.StatusCode.Should().Be(StatusCodes.Status200OK);
         detailHtml.Content.Should().Contain("passed verification and was saved as Validated");
         detailHtml.Content.Should().Contain(schemaName);
+        detailHtml.Content.Should().Contain("id=\"registered-validation-engines\"");
+        detailHtml.Content.Should().Contain("json-schema");
 
         var schedulePageRes = await _harness.Get<GetScheduleSchemaPage>().HandleAsync(
             HttpRequestBuilder.Empty(),
@@ -334,6 +338,7 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
         var detailHtml = detailRes.Should().BeOfType<ContentResult>().Subject;
         detailHtml.Content.Should().Contain("View Stored Tests (2)");
         detailHtml.Content.Should().Contain($"/manage/schemas/{schemaName}/1/tests/run");
+        detailHtml.Content.Should().Contain("Active (1 rule)");
 
         var schemaTestsPage = _harness.Get<GetSchemaTestsPage>();
         var testsPageRes = await schemaTestsPage.HandleAsync(
@@ -358,10 +363,20 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
         runSingleHtml.StatusCode.Should().Be(StatusCodes.Status200OK);
         runSingleHtml.Content.Should().Contain("Schema tests passed");
         runSingleHtml.Content.Should().Contain("Evaluated 1 valid fixture(s), 1 invalid fixture(s), and 1 business rule(s)");
+        runSingleHtml.Content.Should().Contain("id=\"validation-engine-diagnostics\"");
         var decodedSingle = WebUtility.HtmlDecode(runSingleHtml.Content!);
         decodedSingle.Should().Contain("1 invalid fixture(s) failed validation");
         decodedSingle.Should().Contain("Failed — unknown if expected");
         decodedSingle.Should().Contain("[Rule:positive-capacity]");
+
+        // Subsequent GET of SchemaDetailPage shows persisted LastTestRunEngineTraces
+        var detailAfterRunRes = await _harness.Get<GetSchemaDetailPage>().HandleAsync(
+            HttpRequestBuilder.Empty(),
+            schemaName,
+            1,
+            CancellationToken.None);
+        var detailAfterRunHtml = detailAfterRunRes.Should().BeOfType<ContentResult>().Subject;
+        detailAfterRunHtml.Content.Should().Contain("id=\"validation-engine-diagnostics\"");
 
         var runAllRes = await _harness.Get<PostRunAllSchemaTestsEndpoint>().HandleAsync(
             HttpRequestBuilder.Empty(),
@@ -371,6 +386,7 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
         runAllHtml.Content.Should().Contain("id=\"schema-test-run-summary\"");
         runAllHtml.Content.Should().Contain($"{schemaName} v1");
         runAllHtml.Content.Should().Contain("Passed (warnings)");
+        runAllHtml.Content.Should().Contain("jsonlogic: Succeeded");
 
         var updateSchemaVersionTests = _harness.Get<PostUpdateSchemaVersionTestsEndpoint>();
 

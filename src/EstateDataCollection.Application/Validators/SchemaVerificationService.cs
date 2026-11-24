@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models;
@@ -17,12 +19,22 @@ public sealed class SchemaVerificationService(
     IBusinessLogicValidator logicValidator,
     IOdcsContractParser? odcsParser = null,
     IOptions<ValidationOptions>? validationOptions = null,
-    SchemaVerificationServiceInstrumentation? instrumentation = null
+    SchemaVerificationServiceInstrumentation? instrumentation = null,
+    ISchemaValidator? schemaValidator = null
 ) : ISchemaVerificationService
 {
+    private static readonly JsonSerializerOptions RuleJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     private readonly ValidationOptions _validationOptions = validationOptions?.Value ?? new ValidationOptions();
     private readonly SchemaVerificationServiceInstrumentation _instrumentation =
         instrumentation ?? new SchemaVerificationServiceInstrumentation(NullLogger<SchemaVerificationService>.Instance);
+
+    private readonly ValidationEngineDescriptor _schemaEngineDescriptor =
+        schemaValidator?.Descriptor ?? new ValidationEngineDescriptor(
+            EngineId: "json-schema",
+            DisplayName: "JSON Schema Validator",
+            Kind: ValidationEngineKinds.StructuralSchema,
+            Description: "Structural JSON Schema validator.");
 
     public async Task<Result<SchemaVerificationResult>> VerifyCandidateSchemaAsync(
         string? rawSchemaJson,
@@ -36,6 +48,32 @@ public sealed class SchemaVerificationService(
         var fixtureErrors = new List<ValidationMessage>();
         var warnings = new List<ValidationMessage>();
 
+        var registeredRuleEngines = logicValidator.GetRegisteredEngines() ?? [];
+        var schemaTrace = new EngineRunState(_schemaEngineDescriptor);
+        var ruleTraces = new Dictionary<string, EngineRunState>(StringComparer.OrdinalIgnoreCase);
+        foreach (var descriptor in registeredRuleEngines)
+        {
+            ruleTraces[descriptor.EngineId] = new EngineRunState(descriptor);
+        }
+
+        var identifierTrace = new EngineRunState(PayloadIdentifierExtractor.Descriptor);
+
+        EngineRunState GetOrCreateRuleTrace(string engineId)
+        {
+            if (!ruleTraces.TryGetValue(engineId, out var state))
+            {
+                var descriptor = new ValidationEngineDescriptor(
+                    EngineId: engineId,
+                    DisplayName: engineId,
+                    Kind: ValidationEngineKinds.QualityRule,
+                    Description: $"Quality rule engine '{engineId}'.");
+                state = new EngineRunState(descriptor);
+                ruleTraces[engineId] = state;
+            }
+
+            return state;
+        }
+
         JsonSchema? candidateSchema = null;
         IReadOnlyList<BusinessRule>? candidateRules = null;
 
@@ -43,7 +81,17 @@ public sealed class SchemaVerificationService(
         {
             return new SchemaVerificationResult(
                 [ValidationMessage.For(ValidationSources.Verification, "Either Schema JSON/YAML or Rules JSON must be provided.", identifier: "schema", engineType: typeof(SchemaVerificationService))],
-                []);
+                [],
+                EngineTraces: BuildEngineTraces(
+                    schemaTrace,
+                    ruleTraces.Values,
+                    identifierTrace,
+                    hasSchema: false,
+                    hasRules: false,
+                    identifierEnabled: false,
+                    validFixtureCount: 0,
+                    invalidFixtureCount: 0,
+                    identifierLabel: null));
         }
 
         // Route Detection: If rawSchemaJson is an ODCS YAML contract, parse it into Schema JSON + Rules JSON
@@ -56,7 +104,17 @@ public sealed class SchemaVerificationService(
                 _instrumentation.CandidateVerificationCompleted(false, 1, 0);
                 return new SchemaVerificationResult(
                     [ValidationMessage.For(ValidationSources.Odcs, msg, identifier: "odcs", engineType: odcsParser.GetType())],
-                    []);
+                    [],
+                    EngineTraces: BuildEngineTraces(
+                        schemaTrace,
+                        ruleTraces.Values,
+                        identifierTrace,
+                        hasSchema: false,
+                        hasRules: false,
+                        identifierEnabled: false,
+                        validFixtureCount: 0,
+                        invalidFixtureCount: 0,
+                        identifierLabel: null));
             }
 
             rawSchemaJson = odcsResult.Value.GeneratedSchemaJson;
@@ -66,15 +124,22 @@ public sealed class SchemaVerificationService(
             }
         }
 
+        var hasSchemaInput = !string.IsNullOrWhiteSpace(rawSchemaJson);
+        var hasRulesInput = !string.IsNullOrWhiteSpace(rawRulesJson);
+
         // Phase One A: Syntax & Meta-Schema Evaluation (Draft 2020-12 & Draft-07)
-        if (!string.IsNullOrWhiteSpace(rawSchemaJson))
+        if (hasSchemaInput)
         {
+            var schemaPhaseStart = Stopwatch.GetTimestamp();
+            schemaTrace.ItemsEvaluated++;
             try
             {
-                var node = JsonNode.Parse(rawSchemaJson);
+                var node = JsonNode.Parse(rawSchemaJson!);
 
                 if (node is null)
                 {
+                    schemaTrace.ViolationCount++;
+                    schemaTrace.FirstIssue ??= "Schema JSON was empty or null.";
                     syntaxErrors.Add(ValidationMessage.For(
                         ValidationSources.Schema,
                         "Schema JSON was empty or null.",
@@ -105,30 +170,80 @@ public sealed class SchemaVerificationService(
                                         engineType: typeof(JsonSchema),
                                         metadata: new Dictionary<string, object?> { ["keyword"] = err.Key }));
                                 })
-                                .Distinct();
+                                .Distinct()
+                                .ToList();
 
+                            schemaTrace.ViolationCount += errors.Count;
+                            schemaTrace.FirstIssue ??= errors.FirstOrDefault()?.Message;
                             syntaxErrors.AddRange(errors);
                         }
                     }
+                    else
+                    {
+                        schemaTrace.ViolationCount++;
+                        schemaTrace.FirstIssue ??= syntaxErrors.LastOrDefault()?.Message;
+                    }
 
-                    candidateSchema = JsonSchema.FromText(rawSchemaJson);
+                    candidateSchema = JsonSchema.FromText(rawSchemaJson!);
                 }
             }
             catch (Exception ex)
             {
+                schemaTrace.ElapsedTicks += Stopwatch.GetTimestamp() - schemaPhaseStart;
+                schemaTrace.HasFailure = true;
+                schemaTrace.ViolationCount++;
+                schemaTrace.FirstIssue ??= ex.Message;
+
                 return new SchemaVerificationResult(
                     [
                         ValidationMessage.For(ValidationSources.Schema, "Malformed JSON Schema syntax", identifier: "schema", engineType: typeof(JsonSchema)),
                         ValidationMessage.For(ValidationSources.Schema, ex.Message, identifier: "schema", engineType: typeof(JsonSchema))
                     ],
-                    []);
+                    [],
+                    EngineTraces: BuildEngineTraces(
+                        schemaTrace,
+                        ruleTraces.Values,
+                        identifierTrace,
+                        hasSchema: true,
+                        hasRules: hasRulesInput,
+                        identifierEnabled: false,
+                        validFixtureCount: 0,
+                        invalidFixtureCount: 0,
+                        identifierLabel: null));
             }
+
+            schemaTrace.ElapsedTicks += Stopwatch.GetTimestamp() - schemaPhaseStart;
         }
 
         // Phase One B: Syntax & Engine Validation for Quality Rules
-        if (!string.IsNullOrWhiteSpace(rawRulesJson))
+        if (hasRulesInput)
         {
-            var logicSyntaxResult = logicValidator.ValidateRulesSyntax(rawRulesJson, out candidateRules);
+            var rulesSyntaxStart = Stopwatch.GetTimestamp();
+            var logicSyntaxResult = logicValidator.ValidateRulesSyntax(rawRulesJson!, out candidateRules);
+            var rulesSyntaxTicks = Stopwatch.GetTimestamp() - rulesSyntaxStart;
+
+            if (candidateRules is { Count: > 0 })
+            {
+                foreach (var ruleGroup in candidateRules.GroupBy(
+                             r => r.ResolveEngine(_validationOptions.DefaultEngine),
+                             StringComparer.OrdinalIgnoreCase))
+                {
+                    var engineState = GetOrCreateRuleTrace(ruleGroup.Key);
+                    engineState.RuleCount = ruleGroup.Count();
+                    engineState.ItemsEvaluated += engineState.RuleCount;
+                    engineState.ElapsedTicks += rulesSyntaxTicks;
+                }
+            }
+            else if (logicSyntaxResult.IsSuccess && logicSyntaxResult.Value.Count > 0)
+            {
+                RecordRuleSyntaxErrors(
+                    rawRulesJson!,
+                    logicSyntaxResult.Value,
+                    rulesSyntaxTicks,
+                    GetOrCreateRuleTrace,
+                    ruleTraces.Values);
+            }
+
             if (logicSyntaxResult.IsSuccess && logicSyntaxResult.Value.Count > 0)
             {
                 syntaxErrors.AddRange(logicSyntaxResult.Value);
@@ -136,21 +251,46 @@ public sealed class SchemaVerificationService(
         }
 
         // Phase One C: Identifier Config Alignment Against Schema AST & Derived Requiredness
+        var idAlignStart = Stopwatch.GetTimestamp();
         var identifierAlignment = IdentifierSchemaValidator.ValidateAndAlign(
             candidateSchema is not null ? rawSchemaJson : null,
             identifierConfig,
             _validationOptions.UrnJsonPaths,
             _validationOptions.RequireUrnOnFinalise);
+        identifierTrace.ElapsedTicks += Stopwatch.GetTimestamp() - idAlignStart;
+
+        if (identifierAlignment.IsEnabled && candidateSchema is not null)
+        {
+            identifierTrace.ItemsEvaluated++;
+        }
 
         if (!identifierAlignment.IsValid)
         {
+            identifierTrace.ViolationCount += identifierAlignment.Errors.Count;
+            identifierTrace.FirstIssue ??= identifierAlignment.Errors.FirstOrDefault()?.Message;
             syntaxErrors.AddRange(identifierAlignment.Errors);
         }
+
+        var effectiveIdentifierType = identifierAlignment.EffectiveConfig?.Type ?? SchemaIdentifierConfig.DefaultUrnType;
+        var effectiveIdentifierLabel = FormatIdentifierLabel(identifierAlignment, effectiveIdentifierType);
 
         if (syntaxErrors.Count > 0)
         {
             _instrumentation.CandidateVerificationCompleted(false, syntaxErrors.Count, 0);
-            return new SchemaVerificationResult(syntaxErrors, [], ResolvedIdentifierConfig: identifierAlignment.EffectiveConfig);
+            return new SchemaVerificationResult(
+                syntaxErrors,
+                [],
+                ResolvedIdentifierConfig: identifierAlignment.EffectiveConfig,
+                EngineTraces: BuildEngineTraces(
+                    schemaTrace,
+                    ruleTraces.Values,
+                    identifierTrace,
+                    hasSchema: candidateSchema is not null || hasSchemaInput,
+                    hasRules: hasRulesInput,
+                    identifierEnabled: identifierAlignment.IsEnabled && candidateSchema is not null,
+                    validFixtureCount: 0,
+                    invalidFixtureCount: 0,
+                    identifierLabel: effectiveIdentifierLabel));
         }
 
         // Phase Two: In-Flight Golden Fixture Dry-Runs (against Schema, Quality Rules, and Identifier Extraction)
@@ -159,8 +299,6 @@ public sealed class SchemaVerificationService(
             OutputFormat = OutputFormat.List,
             RequireFormatValidation = _validationOptions.RequireFormatValidation
         };
-
-        var effectiveIdentifierType = identifierAlignment.EffectiveConfig?.Type ?? SchemaIdentifierConfig.DefaultUrnType;
 
         // Ensure valid fixtures pass schema, quality rules, and identifier extraction
         for (var i = 0; i < sampleValidPayloads.Count; i++)
@@ -171,6 +309,8 @@ public sealed class SchemaVerificationService(
 
             if (candidateSchema is not null)
             {
+                var schemaFixtureStart = Stopwatch.GetTimestamp();
+                schemaTrace.ItemsEvaluated++;
                 try
                 {
                     var validNode = JsonNode.Parse(payload);
@@ -178,6 +318,9 @@ public sealed class SchemaVerificationService(
 
                     if (!eval.IsValid)
                     {
+                        schemaTrace.ViolationCount++;
+                        schemaTrace.FirstIssue ??= $"{fixtureId} rejected by schema.";
+
                         fixtureErrors.Add(ValidationMessage.For(
                             ValidationSources.Schema,
                             $"{fixtureId} was expected to pass, but was rejected by the schema.",
@@ -205,19 +348,37 @@ public sealed class SchemaVerificationService(
                 catch (Exception ex)
                 {
                     payloadParsed = false;
+                    schemaTrace.ViolationCount++;
+                    schemaTrace.FirstIssue ??= $"{fixtureId} could not be parsed: {ex.Message}";
+
                     fixtureErrors.Add(ValidationMessage.For(
                         ValidationSources.Json,
                         $"{fixtureId} could not be parsed: {ex.Message}",
                         identifier: fixtureId,
                         engineType: typeof(JsonSchema)));
                 }
+                finally
+                {
+                    schemaTrace.ElapsedTicks += Stopwatch.GetTimestamp() - schemaFixtureStart;
+                }
             }
 
             if (candidateRules is { Count: > 0 })
             {
+                var rulesStart = Stopwatch.GetTimestamp();
                 var logicResult = await logicValidator.ValidateAsync(payload, candidateRules, cancellationToken);
+                var rulesTicks = Stopwatch.GetTimestamp() - rulesStart;
+
                 if (logicResult.IsFailure)
                 {
+                    foreach (var state in ruleTraces.Values.Where(s => s.RuleCount > 0))
+                    {
+                        state.HasFailure = true;
+                        state.ViolationCount++;
+                        state.FirstIssue ??= logicResult.Error.Description ?? logicResult.Error.Code;
+                        state.ElapsedTicks += rulesTicks;
+                    }
+
                     fixtureErrors.Add(ValidationMessage.For(
                         ValidationSources.Rule,
                         $"{fixtureId} quality rule evaluation failed: {logicResult.Error.Description}",
@@ -225,34 +386,49 @@ public sealed class SchemaVerificationService(
                         engineType: logicValidator.GetType(),
                         metadata: new Dictionary<string, object?> { ["errorCode"] = logicResult.Error.Code }));
                 }
-                else if (!logicResult.Value.IsValid)
+                else
                 {
-                    var errors = logicResult.Value.Errors ?? [];
-                    var ruleErrors = string.Join("; ", errors.Select(e => $"{e.PropertyPath}: {e.Message}"));
-                    var ruleIds = errors.Select(e => e.RuleId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).ToArray();
-                    fixtureErrors.Add(ValidationMessage.For(
-                        ValidationSources.Rule,
-                        $"{fixtureId} violated quality rules: {ruleErrors}",
-                        identifier: fixtureId,
-                        ruleId: ruleIds.Length == 1 ? ruleIds[0] : null,
-                        engineType: logicValidator.GetType(),
-                        metadata: ruleIds.Length > 0
-                            ? new Dictionary<string, object?> { ["ruleIds"] = ruleIds }
-                            : null));
+                    MergeRuleEngineTracesForValidFixture(
+                        logicResult.Value,
+                        candidateRules,
+                        rulesTicks,
+                        GetOrCreateRuleTrace);
+
+                    if (!logicResult.Value.IsValid)
+                    {
+                        var errors = logicResult.Value.Errors ?? [];
+                        var ruleErrors = string.Join("; ", errors.Select(e => $"{e.PropertyPath}: {e.Message}"));
+                        var ruleIds = errors.Select(e => e.RuleId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).ToArray();
+                        fixtureErrors.Add(ValidationMessage.For(
+                            ValidationSources.Rule,
+                            $"{fixtureId} violated quality rules: {ruleErrors}",
+                            identifier: fixtureId,
+                            ruleId: ruleIds.Length == 1 ? ruleIds[0] : null,
+                            engineType: logicValidator.GetType(),
+                            metadata: ruleIds.Length > 0
+                                ? new Dictionary<string, object?> { ["ruleIds"] = ruleIds }
+                                : null));
+                    }
                 }
             }
 
             if (payloadParsed && identifierAlignment.IsEnabled && candidateSchema is not null)
             {
+                var idStart = Stopwatch.GetTimestamp();
+                identifierTrace.ItemsEvaluated++;
                 var idInspect = SubmissionIdentifier.InspectPayload(
                     payload,
                     identifierAlignment.ResolvedPaths,
                     effectiveIdentifierType);
+                identifierTrace.ElapsedTicks += Stopwatch.GetTimestamp() - idStart;
 
                 if (idInspect.IsSuccess)
                 {
                     if (idInspect.Value.Status == IdentifierExtractionStatus.Invalid)
                     {
+                        identifierTrace.ViolationCount++;
+                        identifierTrace.FirstIssue ??= $"{fixtureId} failed identifier extraction: {idInspect.Value.ErrorMessage}";
+
                         fixtureErrors.Add(ValidationMessage.For(
                             ValidationSources.Identifier,
                             $"{fixtureId} failed identifier extraction: {idInspect.Value.ErrorMessage}",
@@ -266,9 +442,13 @@ public sealed class SchemaVerificationService(
                         var expectedPath = idInspect.Value.MatchedPath
                             ?? identifierAlignment.ResolvedPaths.FirstOrDefault()
                             ?? "/urn";
+                        var msg = $"{fixtureId} is missing required '{effectiveIdentifierType}' identifier at '{expectedPath}'.";
+                        identifierTrace.ViolationCount++;
+                        identifierTrace.FirstIssue ??= msg;
+
                         fixtureErrors.Add(ValidationMessage.For(
                             ValidationSources.Identifier,
-                            $"{fixtureId} is missing required '{effectiveIdentifierType}' identifier at '{expectedPath}'.",
+                            msg,
                             identifier: fixtureId,
                             path: expectedPath,
                             engineType: typeof(SubmissionIdentifier),
@@ -297,6 +477,8 @@ public sealed class SchemaVerificationService(
 
             if (candidateSchema is not null)
             {
+                var schemaFixtureStart = Stopwatch.GetTimestamp();
+                schemaTrace.ItemsEvaluated++;
                 try
                 {
                     var invalidNode = JsonNode.Parse(payload);
@@ -304,6 +486,7 @@ public sealed class SchemaVerificationService(
                     if (!eval.IsValid)
                     {
                         schemaFailed = true;
+                        schemaTrace.InvalidTriggers++;
                         CollectSchemaErrors(eval, fixtureId, triggeredErrors);
                     }
                 }
@@ -318,20 +501,34 @@ public sealed class SchemaVerificationService(
                             engineType: typeof(JsonSchema)));
                     }
                     schemaFailed = true;
+                    schemaTrace.InvalidTriggers++;
                     triggeredErrors.Add(ValidationMessage.For(
                         ValidationSources.Json,
                         $"Could not parse payload: {ex.Message}",
                         identifier: fixtureId,
                         engineType: typeof(JsonNode)));
                 }
+                finally
+                {
+                    schemaTrace.ElapsedTicks += Stopwatch.GetTimestamp() - schemaFixtureStart;
+                }
             }
 
             if (candidateRules is { Count: > 0 })
             {
+                var rulesStart = Stopwatch.GetTimestamp();
                 var logicResult = await logicValidator.ValidateAsync(payload, candidateRules, cancellationToken);
+                var rulesTicks = Stopwatch.GetTimestamp() - rulesStart;
+
                 if (logicResult.IsFailure)
                 {
                     rulesFailed = true;
+                    foreach (var state in ruleTraces.Values.Where(s => s.RuleCount > 0))
+                    {
+                        state.InvalidTriggers++;
+                        state.ElapsedTicks += rulesTicks;
+                    }
+
                     triggeredErrors.Add(ValidationMessage.For(
                         ValidationSources.Rule,
                         logicResult.Error.Description ?? logicResult.Error.Code,
@@ -339,36 +536,49 @@ public sealed class SchemaVerificationService(
                         engineType: logicValidator.GetType(),
                         metadata: new Dictionary<string, object?> { ["errorCode"] = logicResult.Error.Code }));
                 }
-                else if (!logicResult.Value.IsValid)
+                else
                 {
-                    rulesFailed = true;
-                    foreach (var err in logicResult.Value.Errors ?? [])
+                    MergeRuleEngineTracesForInvalidFixture(
+                        logicResult.Value,
+                        candidateRules,
+                        rulesTicks,
+                        GetOrCreateRuleTrace);
+
+                    if (!logicResult.Value.IsValid)
                     {
-                        var path = string.IsNullOrWhiteSpace(err.PropertyPath) ? "/" : err.PropertyPath;
-                        var ruleId = string.IsNullOrWhiteSpace(err.RuleId) ? null : err.RuleId;
-                        triggeredErrors.Add(ValidationMessage.For(
-                            ValidationSources.Rule,
-                            err.Message,
-                            identifier: fixtureId,
-                            path: path,
-                            ruleId: ruleId,
-                            engineType: logicValidator.GetType()));
+                        rulesFailed = true;
+                        foreach (var err in logicResult.Value.Errors ?? [])
+                        {
+                            var path = string.IsNullOrWhiteSpace(err.PropertyPath) ? "/" : err.PropertyPath;
+                            var ruleId = string.IsNullOrWhiteSpace(err.RuleId) ? null : err.RuleId;
+                            triggeredErrors.Add(ValidationMessage.For(
+                                ValidationSources.Rule,
+                                err.Message,
+                                identifier: fixtureId,
+                                path: path,
+                                ruleId: ruleId,
+                                engineType: logicValidator.GetType()));
+                        }
                     }
                 }
             }
 
             if (identifierAlignment.IsEnabled && candidateSchema is not null)
             {
+                var idStart = Stopwatch.GetTimestamp();
+                identifierTrace.ItemsEvaluated++;
                 var idInspect = SubmissionIdentifier.InspectPayload(
                     payload,
                     identifierAlignment.ResolvedPaths,
                     effectiveIdentifierType);
+                identifierTrace.ElapsedTicks += Stopwatch.GetTimestamp() - idStart;
 
                 if (idInspect.IsSuccess)
                 {
                     if (idInspect.Value.Status == IdentifierExtractionStatus.Invalid)
                     {
                         identifierFailed = true;
+                        identifierTrace.InvalidTriggers++;
                         triggeredErrors.Add(ValidationMessage.For(
                             ValidationSources.Identifier,
                             idInspect.Value.ErrorMessage ?? "Invalid identifier.",
@@ -380,6 +590,7 @@ public sealed class SchemaVerificationService(
                     else if (idInspect.Value.Status == IdentifierExtractionStatus.NotPresent && identifierAlignment.IsRequiredInSchema)
                     {
                         identifierFailed = true;
+                        identifierTrace.InvalidTriggers++;
                         var expectedPath = idInspect.Value.MatchedPath
                             ?? identifierAlignment.ResolvedPaths.FirstOrDefault()
                             ?? "/urn";
@@ -464,12 +675,351 @@ public sealed class SchemaVerificationService(
 
         var isSuccess = syntaxErrors.Count == 0 && fixtureErrors.Count == 0;
         _instrumentation.CandidateVerificationCompleted(isSuccess, syntaxErrors.Count, fixtureErrors.Count);
+
+        var traces = BuildEngineTraces(
+            schemaTrace,
+            ruleTraces.Values,
+            identifierTrace,
+            hasSchema: candidateSchema is not null,
+            hasRules: hasRulesInput && candidateRules is { Count: > 0 },
+            identifierEnabled: identifierAlignment.IsEnabled && candidateSchema is not null,
+            validFixtureCount: sampleValidPayloads.Count,
+            invalidFixtureCount: sampleInvalidPayloads.Count,
+            identifierLabel: effectiveIdentifierLabel);
+
         return new SchemaVerificationResult(
             syntaxErrors,
             fixtureErrors,
             ResolvedIdentifierConfig: identifierAlignment.EffectiveConfig,
             InvalidFixtureOutcomes: invalidFixtureOutcomes,
-            Warnings: warnings);
+            Warnings: warnings,
+            EngineTraces: traces);
+    }
+
+    private void RecordRuleSyntaxErrors(
+        string rawRulesJson,
+        IReadOnlyList<ValidationMessage> syntaxErrors,
+        long elapsedTicks,
+        Func<string, EngineRunState> getOrCreateRuleTrace,
+        IEnumerable<EngineRunState> registeredStates)
+    {
+        List<BusinessRule>? parsed = null;
+        try
+        {
+            parsed = JsonSerializer.Deserialize<List<BusinessRule>>(rawRulesJson, RuleJsonOptions);
+        }
+        catch
+        {
+            // Malformed JSON array — handled below by applying syntax error to registered rule engines.
+        }
+
+        if (parsed is { Count: > 0 })
+        {
+            var rulesByEngine = parsed
+                .GroupBy(r => r.ResolveEngine(_validationOptions.DefaultEngine), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var group in rulesByEngine)
+            {
+                var state = getOrCreateRuleTrace(group.Key);
+                state.RuleCount = group.Count();
+                state.ItemsEvaluated += group.Count();
+                state.ElapsedTicks += elapsedTicks;
+
+                var ruleIds = group.Select(r => r.Id)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var matchingErrors = syntaxErrors
+                    .Where(e => !string.IsNullOrWhiteSpace(e.RuleId) && ruleIds.Contains(e.RuleId))
+                    .ToList();
+
+                if (matchingErrors.Count > 0)
+                {
+                    state.ViolationCount += matchingErrors.Count;
+                    state.FirstIssue ??= matchingErrors[0].Message;
+                }
+            }
+
+            if (syntaxErrors.All(e => string.IsNullOrWhiteSpace(e.RuleId)))
+            {
+                foreach (var state in registeredStates.Where(s => s.RuleCount > 0))
+                {
+                    state.ViolationCount += syntaxErrors.Count;
+                    state.FirstIssue ??= syntaxErrors[0].Message;
+                }
+            }
+
+            return;
+        }
+
+        var firstMessage = syntaxErrors[0].Message;
+        foreach (var state in registeredStates)
+        {
+            state.ItemsEvaluated++;
+            state.ElapsedTicks += elapsedTicks;
+            state.ViolationCount += syntaxErrors.Count;
+            state.FirstIssue ??= firstMessage;
+        }
+    }
+
+    private void MergeRuleEngineTracesForValidFixture(
+        BusinessRuleValidationResult validationResult,
+        IReadOnlyList<BusinessRule> candidateRules,
+        long fallbackTicks,
+        Func<string, EngineRunState> getOrCreateRuleTrace)
+    {
+        if (validationResult.EngineTraces is { Count: > 0 } traces)
+        {
+            foreach (var trace in traces)
+            {
+                var state = getOrCreateRuleTrace(trace.Descriptor.EngineId);
+                state.ItemsEvaluated += trace.ItemsEvaluated;
+                state.ViolationCount += trace.ViolationCount;
+                state.ExplicitDurationMs += trace.DurationMs;
+
+                if (string.Equals(trace.Outcome, nameof(SubmissionProcessOutcome.Failed), StringComparison.Ordinal))
+                {
+                    state.HasFailure = true;
+                    state.FirstIssue ??= trace.Summary;
+                }
+                else if (trace.ViolationCount > 0)
+                {
+                    state.FirstIssue ??= trace.Summary;
+                }
+            }
+
+            return;
+        }
+
+        foreach (var group in candidateRules.GroupBy(
+                     r => r.ResolveEngine(_validationOptions.DefaultEngine),
+                     StringComparer.OrdinalIgnoreCase))
+        {
+            var state = getOrCreateRuleTrace(group.Key);
+            state.ItemsEvaluated += group.Count();
+            state.ElapsedTicks += fallbackTicks;
+        }
+
+        if (!validationResult.IsValid && validationResult.Errors is { Count: > 0 })
+        {
+            foreach (var state in candidateRules
+                         .Select(r => r.ResolveEngine(_validationOptions.DefaultEngine))
+                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                         .Select(getOrCreateRuleTrace))
+            {
+                state.ViolationCount += validationResult.Errors.Count;
+                state.FirstIssue ??= validationResult.Errors[0].Message;
+            }
+        }
+    }
+
+    private void MergeRuleEngineTracesForInvalidFixture(
+        BusinessRuleValidationResult validationResult,
+        IReadOnlyList<BusinessRule> candidateRules,
+        long fallbackTicks,
+        Func<string, EngineRunState> getOrCreateRuleTrace)
+    {
+        if (validationResult.EngineTraces is { Count: > 0 } traces)
+        {
+            foreach (var trace in traces)
+            {
+                var state = getOrCreateRuleTrace(trace.Descriptor.EngineId);
+                state.ItemsEvaluated += trace.ItemsEvaluated;
+                state.ExplicitDurationMs += trace.DurationMs;
+                if (trace.ViolationCount > 0)
+                {
+                    state.InvalidTriggers++;
+                }
+            }
+
+            return;
+        }
+
+        foreach (var group in candidateRules.GroupBy(
+                     r => r.ResolveEngine(_validationOptions.DefaultEngine),
+                     StringComparer.OrdinalIgnoreCase))
+        {
+            var state = getOrCreateRuleTrace(group.Key);
+            state.ItemsEvaluated += group.Count();
+            state.ElapsedTicks += fallbackTicks;
+            if (!validationResult.IsValid)
+            {
+                state.InvalidTriggers++;
+            }
+        }
+    }
+
+    private static string? FormatIdentifierLabel(
+        IdentifierSchemaAlignmentResult alignment,
+        string effectiveType)
+    {
+        if (!alignment.IsEnabled)
+        {
+            return null;
+        }
+
+        var ptr = alignment.EffectiveConfig?.JsonPointer
+                  ?? alignment.ResolvedPaths.FirstOrDefault()
+                  ?? string.Empty;
+        return $"Type '{effectiveType}' at '{ptr}' (required: {alignment.IsRequiredInSchema})";
+    }
+
+    private static IReadOnlyList<ValidationEngineTrace> BuildEngineTraces(
+        EngineRunState schemaState,
+        IEnumerable<EngineRunState> ruleStates,
+        EngineRunState identifierState,
+        bool hasSchema,
+        bool hasRules,
+        bool identifierEnabled,
+        int validFixtureCount,
+        int invalidFixtureCount,
+        string? identifierLabel)
+    {
+        var traces = new List<ValidationEngineTrace>();
+
+        // 1. Structural JSON Schema Engine
+        if (!hasSchema && !schemaState.HasFailure && schemaState.ViolationCount == 0)
+        {
+            traces.Add(new ValidationEngineTrace(
+                schemaState.Descriptor,
+                nameof(SubmissionProcessOutcome.Skipped),
+                ItemsEvaluated: 0,
+                ViolationCount: 0,
+                DurationMs: 0,
+                Summary: "No JSON Schema provided"));
+        }
+        else
+        {
+            var schemaOutcome = schemaState.HasFailure
+                ? nameof(SubmissionProcessOutcome.Failed)
+                : schemaState.ViolationCount > 0
+                    ? nameof(SubmissionProcessOutcome.ValidationErrorsFound)
+                    : nameof(SubmissionProcessOutcome.Succeeded);
+
+            var schemaSummary = schemaState.HasFailure
+                ? schemaState.FirstIssue ?? "Malformed JSON Schema"
+                : schemaState.ViolationCount > 0
+                    ? schemaState.FirstIssue ?? $"{schemaState.ViolationCount} schema error(s)"
+                    : BuildFixtureSummary("Schema valid", validFixtureCount, invalidFixtureCount, schemaState.InvalidTriggers);
+
+            traces.Add(new ValidationEngineTrace(
+                schemaState.Descriptor,
+                schemaOutcome,
+                ItemsEvaluated: schemaState.ItemsEvaluated,
+                ViolationCount: schemaState.ViolationCount,
+                DurationMs: schemaState.TotalDurationMs,
+                Summary: schemaSummary));
+        }
+
+        // 2. Registered & Ad-Hoc Quality Rule Engines
+        foreach (var ruleState in ruleStates)
+        {
+            if (ruleState.RuleCount == 0 && !ruleState.HasFailure && ruleState.ViolationCount == 0)
+            {
+                traces.Add(new ValidationEngineTrace(
+                    ruleState.Descriptor,
+                    nameof(SubmissionProcessOutcome.Skipped),
+                    ItemsEvaluated: 0,
+                    ViolationCount: 0,
+                    DurationMs: ruleState.TotalDurationMs,
+                    Summary: hasRules
+                        ? $"No quality rules targeting '{ruleState.Descriptor.EngineId}'"
+                        : "No quality rules configured"));
+                continue;
+            }
+
+            var ruleOutcome = ruleState.HasFailure
+                ? nameof(SubmissionProcessOutcome.Failed)
+                : ruleState.ViolationCount > 0
+                    ? nameof(SubmissionProcessOutcome.ValidationErrorsFound)
+                    : nameof(SubmissionProcessOutcome.Succeeded);
+
+            var ruleSummary = ruleState.HasFailure
+                ? ruleState.FirstIssue ?? "Quality rule engine evaluation failed"
+                : ruleState.ViolationCount > 0
+                    ? ruleState.FirstIssue ?? $"{ruleState.RuleCount} rule(s); {ruleState.ViolationCount} violation(s)"
+                    : BuildFixtureSummary(
+                        $"{ruleState.RuleCount} rule(s) verified",
+                        validFixtureCount,
+                        invalidFixtureCount,
+                        ruleState.InvalidTriggers);
+
+            traces.Add(new ValidationEngineTrace(
+                ruleState.Descriptor,
+                ruleOutcome,
+                ItemsEvaluated: ruleState.ItemsEvaluated,
+                ViolationCount: ruleState.ViolationCount,
+                DurationMs: ruleState.TotalDurationMs,
+                Summary: ruleSummary));
+        }
+
+        // 3. Identifier Extraction Engine
+        if (!identifierEnabled && identifierState.ViolationCount == 0)
+        {
+            traces.Add(new ValidationEngineTrace(
+                identifierState.Descriptor,
+                nameof(SubmissionProcessOutcome.Skipped),
+                ItemsEvaluated: 0,
+                ViolationCount: 0,
+                DurationMs: identifierState.TotalDurationMs,
+                Summary: hasSchema
+                    ? "Identifier extraction disabled by schema"
+                    : "No JSON Schema provided for identifier alignment"));
+        }
+        else
+        {
+            var idOutcome = identifierState.ViolationCount > 0
+                ? nameof(SubmissionProcessOutcome.ValidationErrorsFound)
+                : nameof(SubmissionProcessOutcome.Succeeded);
+
+            var idSummary = identifierState.ViolationCount > 0
+                ? identifierState.FirstIssue ?? $"{identifierState.ViolationCount} identifier error(s)"
+                : BuildFixtureSummary(
+                    identifierLabel ?? "Identifier config aligned",
+                    validFixtureCount,
+                    invalidFixtureCount,
+                    identifierState.InvalidTriggers);
+
+            traces.Add(new ValidationEngineTrace(
+                identifierState.Descriptor,
+                idOutcome,
+                ItemsEvaluated: identifierState.ItemsEvaluated,
+                ViolationCount: identifierState.ViolationCount,
+                DurationMs: identifierState.TotalDurationMs,
+                Summary: idSummary));
+        }
+
+        return traces;
+    }
+
+    private static string BuildFixtureSummary(
+        string prefix,
+        int validFixtureCount,
+        int invalidFixtureCount,
+        int invalidTriggers)
+    {
+        var baseSummary = $"{prefix}; checked {validFixtureCount} valid and {invalidFixtureCount} invalid fixture(s)";
+        return invalidTriggers > 0
+            ? $"{baseSummary} (triggered {invalidTriggers} invalid fixture(s))"
+            : baseSummary;
+    }
+
+    private sealed class EngineRunState(ValidationEngineDescriptor descriptor)
+    {
+        public ValidationEngineDescriptor Descriptor { get; } = descriptor;
+        public int RuleCount { get; set; }
+        public int ItemsEvaluated { get; set; }
+        public int ViolationCount { get; set; }
+        public int InvalidTriggers { get; set; }
+        public long ElapsedTicks { get; set; }
+        public long ExplicitDurationMs { get; set; }
+        public bool HasFailure { get; set; }
+        public string? FirstIssue { get; set; }
+
+        public long TotalDurationMs
+        {
+            get { return (long)Stopwatch.GetElapsedTime(0, ElapsedTicks).TotalMilliseconds + ExplicitDurationMs; }
+        }
     }
 
     private static void CollectSchemaErrors(

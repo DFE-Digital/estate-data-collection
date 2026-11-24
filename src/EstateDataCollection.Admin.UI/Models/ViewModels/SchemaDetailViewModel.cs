@@ -209,6 +209,20 @@ public sealed record SchemaDetailViewModel(
 
     private QualityRulesViewerViewModel? _qualityRulesViewer;
 
+    public ValidationEngineDiagnosticsViewModel EngineDiagnostics
+    {
+        get
+        {
+            return _engineDiagnostics ??= ValidationEngineDiagnosticsViewModel.FromDetail(
+                Detail?.LastTestRunEngineTraces,
+                Detail?.RegisteredEngines,
+                Detail?.QualityRules,
+                Detail?.IdentifierConfig);
+        }
+    }
+
+    private ValidationEngineDiagnosticsViewModel? _engineDiagnostics;
+
     public bool HasRawJsonSchema
     {
         get { return !string.IsNullOrWhiteSpace(Detail?.RawJsonSchema); }

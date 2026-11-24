@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using EstateDataCollection.Admin.UI.Models;
 using EstateDataCollection.Admin.UI.Models.ViewModels;
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
@@ -93,11 +94,33 @@ public sealed class ViewModelPresentationTests
     }
 
     [Fact]
-    public void DashboardViewModel_Should_Compute_Warning_And_Failure_States()
+    public void DashboardViewModel_Should_Compute_Warning_Failure_And_Engine_Trace_Summaries()
     {
         var run = new RunSchemaTestsResultBuilder()
             .WithAppVersion("v1")
-            .WithItem("a", version: 1, state: "Active", passed: true, hasFixtures: true, validFixtureCount: 1, invalidFixtureCount: 0)
+            .WithItem(
+                "a",
+                version: 1,
+                state: "Active",
+                passed: true,
+                hasFixtures: true,
+                validFixtureCount: 1,
+                invalidFixtureCount: 0,
+                engineTraces:
+                [
+                    new ValidationEngineTrace(
+                        new ValidationEngineDescriptor("json-schema", "JSON Schema", ValidationEngineKinds.StructuralSchema, "Schema"),
+                        "Succeeded",
+                        2,
+                        0,
+                        1),
+                    new ValidationEngineTrace(
+                        new ValidationEngineDescriptor("jsonlogic", "JsonLogic", ValidationEngineKinds.QualityRule, "Rules"),
+                        "Skipped",
+                        0,
+                        0,
+                        0)
+                ])
             .WithItem("b", version: 2, state: "Validated", passed: true, hasFixtures: true, validFixtureCount: 0, invalidFixtureCount: 1, warnings: ["warn-1"])
             .Build();
 
@@ -107,8 +130,11 @@ public sealed class ViewModelPresentationTests
         vm.TestRunSummary!.SummaryTagText.Should().Be("2 / 2 Passed (warnings)");
         vm.TestRunSummary.SummaryTagCssClass.Should().Be("govuk-tag govuk-tag--yellow");
         vm.TestRunSummary.Results[0].ResultTagText.Should().Be("Passed");
+        vm.TestRunSummary.Results[0].HasEngineTracesSummary.Should().BeTrue();
+        vm.TestRunSummary.Results[0].EngineTracesSummary.Should().Be("json-schema: Succeeded");
         vm.TestRunSummary.Results[1].ResultTagText.Should().Be("Passed (warnings)");
         vm.TestRunSummary.Results[1].DetailsText.Should().Be("warn-1");
+        vm.TestRunSummary.Results[1].HasEngineTracesSummary.Should().BeFalse();
     }
 
     [Fact]
@@ -194,7 +220,7 @@ public sealed class ViewModelPresentationTests
     }
 
     [Fact]
-    public void WorkbenchVerifyViewModel_Should_Project_Outcome_Statuses_And_Identifier()
+    public void WorkbenchVerifyViewModel_And_SchemaDetailViewModel_Should_Project_Engine_Diagnostics()
     {
         var vm = new WorkbenchVerifyViewModel(
             HasRun: true,
@@ -206,7 +232,17 @@ public sealed class ViewModelPresentationTests
                     new InvalidFixtureOutcome(0, true, ["err-a"], ExpectedErrors: ["RULE-1"]),
                     new InvalidFixtureOutcome(1, true, ["err-b"], ExpectedErrors: [])
                 ],
-                Warnings: ["SampleInvalidFixtures:1 failed validation"]));
+                Warnings: ["SampleInvalidFixtures:1 failed validation"],
+                EngineTraces:
+                [
+                    new ValidationEngineTrace(
+                        new ValidationEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates structure"),
+                        "Succeeded",
+                        3,
+                        0,
+                        2,
+                        "Schema valid")
+                ]));
 
         vm.ShowPanel.Should().BeTrue();
         vm.HasResult.Should().BeTrue();
@@ -215,5 +251,21 @@ public sealed class ViewModelPresentationTests
         vm.InvalidFixtureOutcomes[0].StatusTagCssClass.Should().Be("govuk-tag govuk-tag--green");
         vm.InvalidFixtureOutcomes[1].StatusTagText.Should().Be("Failed \u2014 unknown if expected");
         vm.InvalidFixtureOutcomes[1].StatusTagCssClass.Should().Be("govuk-tag govuk-tag--yellow");
+        vm.EngineDiagnostics.HasTraces.Should().BeTrue();
+        vm.EngineDiagnostics.TraceRows.Should().ContainSingle(r => r.EngineId == "json-schema" && r.KindLabel == "Structural Schema");
+
+        var detail = new SchemaVersionDetailBuilder()
+            .WithQualityRule("r1", "Bad", engine: "cel")
+            .WithIdentifier("None")
+            .WithRegisteredEngine("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema)
+            .WithRegisteredEngine("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule)
+            .WithRegisteredEngine("jsonlogic", "JsonLogic Engine", ValidationEngineKinds.QualityRule)
+            .WithRegisteredEngine("identifier-extractor", "Submission Identifier Extractor", ValidationEngineKinds.IdentifierExtraction)
+            .Build();
+
+        var detailVm = new SchemaDetailViewModel(CreateMeta(), detail);
+        detailVm.EngineDiagnostics.HasRegisteredEngines.Should().BeTrue();
+        detailVm.EngineDiagnostics.RegisteredEngines.Select(e => e.ApplicabilityText)
+            .Should().Equal("Applicable", "Active (1 rule)", "Idle (0 rules)", "Disabled");
     }
 }

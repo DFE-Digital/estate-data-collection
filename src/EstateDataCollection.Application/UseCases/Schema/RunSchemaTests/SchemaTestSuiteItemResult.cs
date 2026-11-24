@@ -1,3 +1,4 @@
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
@@ -15,4 +16,5 @@ public sealed record SchemaTestSuiteItemResult(
     string? IdentifierType = null,
     string? IdentifierPointer = null,
     IReadOnlyList<InvalidFixtureOutcome>? InvalidFixtureOutcomes = null,
-    IReadOnlyList<string>? Warnings = null);
+    IReadOnlyList<string>? Warnings = null,
+    IReadOnlyList<ValidationEngineTrace>? EngineTraces = null);

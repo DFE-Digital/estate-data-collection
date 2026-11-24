@@ -168,6 +168,7 @@ public static class AppRoutes
         public static class Templates
         {
             public const string Schemas = $"{Prefix}/schemas";
+            public const string ValidationEngines = $"{Prefix}/schemas/engines";
             public const string VerifySchema = $"{Prefix}/schemas/verify";
             public const string RunSchemaTests = $"{Prefix}/schemas/tests/run";
             public const string VerifyLogic = $"{Prefix}/logic/verify";
@@ -178,6 +179,7 @@ public static class AppRoutes
         }
 
         public const string Schemas = $"/{Templates.Schemas}";
+        public const string ValidationEngines = $"/{Templates.ValidationEngines}";
         public const string VerifySchema = $"/{Templates.VerifySchema}";
         public const string RunSchemaTests = $"/{Templates.RunSchemaTests}";
         public const string VerifyLogic = $"/{Templates.VerifyLogic}";

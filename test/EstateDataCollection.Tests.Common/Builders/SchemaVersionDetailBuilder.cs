@@ -1,3 +1,4 @@
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
@@ -28,6 +29,8 @@ public sealed class SchemaVersionDetailBuilder
     private IReadOnlyList<string>? _lastTestRunErrors;
     private List<InvalidFixtureOutcome>? _lastTestRunInvalidFixtures;
     private List<string>? _lastTestRunWarnings;
+    private List<ValidationEngineTrace>? _lastTestRunEngineTraces;
+    private List<ValidationEngineDescriptor>? _registeredEngines;
 
     public SchemaVersionDetailBuilder WithSchema(string schemaName, int version = 1)
     {
@@ -239,6 +242,54 @@ public sealed class SchemaVersionDetailBuilder
         return this;
     }
 
+    public SchemaVersionDetailBuilder WithEngineTrace(ValidationEngineTrace trace)
+    {
+        _lastTestRunEngineTraces ??= [];
+        _lastTestRunEngineTraces.Add(trace);
+        return this;
+    }
+
+    public SchemaVersionDetailBuilder WithEngineTrace(
+        string engineId,
+        string displayName,
+        string kind,
+        string outcome = "Succeeded",
+        int itemsEvaluated = 1,
+        int violationCount = 0,
+        long durationMs = 1,
+        string? summary = null,
+        string? description = null)
+    {
+        _lastTestRunEngineTraces ??= [];
+        _lastTestRunEngineTraces.Add(new ValidationEngineTrace(
+            new ValidationEngineDescriptor(
+                engineId,
+                displayName,
+                kind,
+                description ?? $"{displayName} engine"),
+            outcome,
+            itemsEvaluated,
+            violationCount,
+            durationMs,
+            summary));
+        return this;
+    }
+
+    public SchemaVersionDetailBuilder WithRegisteredEngine(
+        string engineId,
+        string displayName,
+        string kind,
+        string? description = null)
+    {
+        _registeredEngines ??= [];
+        _registeredEngines.Add(new ValidationEngineDescriptor(
+            engineId,
+            displayName,
+            kind,
+            description ?? $"{displayName} engine"));
+        return this;
+    }
+
     public SchemaVersionDetail Build()
     {
         return new SchemaVersionDetail(
@@ -262,6 +313,8 @@ public sealed class SchemaVersionDetailBuilder
             LastTestRunPassed: _lastTestRunPassed,
             LastTestRunErrors: _lastTestRunErrors,
             LastTestRunInvalidFixtures: _lastTestRunInvalidFixtures?.ToArray(),
-            LastTestRunWarnings: _lastTestRunWarnings?.ToArray());
+            LastTestRunWarnings: _lastTestRunWarnings?.ToArray(),
+            LastTestRunEngineTraces: _lastTestRunEngineTraces?.ToArray(),
+            RegisteredEngines: _registeredEngines?.ToArray());
     }
 }

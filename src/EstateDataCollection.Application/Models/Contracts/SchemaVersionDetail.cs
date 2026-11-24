@@ -1,3 +1,4 @@
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Common;
 using EstateDataCollection.Domain.Schema;
 
@@ -27,5 +28,7 @@ public sealed record SchemaVersionDetail(
     bool? LastTestRunPassed = null,
     IReadOnlyList<string>? LastTestRunErrors = null,
     IReadOnlyList<InvalidFixtureOutcome>? LastTestRunInvalidFixtures = null,
-    IReadOnlyList<string>? LastTestRunWarnings = null
+    IReadOnlyList<string>? LastTestRunWarnings = null,
+    IReadOnlyList<ValidationEngineTrace>? LastTestRunEngineTraces = null,
+    IReadOnlyList<ValidationEngineDescriptor>? RegisteredEngines = null
 );

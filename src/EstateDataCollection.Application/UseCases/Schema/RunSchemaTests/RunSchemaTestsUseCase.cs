@@ -123,8 +123,17 @@ public sealed class RunSchemaTestsUseCase(
             var invalidOutcomes = verification.IsSuccess
                 ? verification.Value.InvalidFixtureOutcomes
                 : null;
+            var engineTraces = verification.IsSuccess
+                ? verification.Value.EngineTraces
+                : null;
 
-            meta.RecordTestRun(passed, appVersion, errors, invalidOutcomes, warnings);
+            meta.RecordTestRun(
+                passed,
+                appVersion,
+                errors,
+                invalidOutcomes,
+                warnings,
+                ValidationEngineTraceMapper.ToDomainRecords(engineTraces));
             await schemaRegistry.UpdateSchemaMetadataAsync(meta, cancellationToken);
 
             var effectiveId = verification.IsSuccess
@@ -144,7 +153,8 @@ public sealed class RunSchemaTestsUseCase(
                 IdentifierType: effectiveId?.Type,
                 IdentifierPointer: effectiveId?.JsonPointer,
                 InvalidFixtureOutcomes: invalidOutcomes,
-                Warnings: warnings));
+                Warnings: warnings,
+                EngineTraces: engineTraces));
         }
 
         var passedCount = itemResults.Count(r => r.Passed);

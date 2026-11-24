@@ -1,6 +1,5 @@
 using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.Application.Validators.Logic;
@@ -47,6 +46,17 @@ public sealed class RunSchemaTestsUseCaseTests
         _registry.GetExplicitSchemaAsync("school-site", 1, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Success(resolved));
 
+        ValidationEngineTrace[] traces =
+        [
+            new(
+                new ValidationEngineDescriptor("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule, "CEL expressions"),
+                "Succeeded",
+                ItemsEvaluated: 3,
+                ViolationCount: 0,
+                DurationMs: 4,
+                Summary: "1 rule(s) verified; checked 1 valid and 1 invalid fixture(s)")
+        ];
+
         _verifier.VerifyCandidateSchemaAsync(
                 metadata.RawJsonSchema,
                 resolved.RawRulesJson,
@@ -54,7 +64,7 @@ public sealed class RunSchemaTestsUseCaseTests
                 Arg.Is<IReadOnlyList<string>>(inv => inv.Count == 1),
                 metadata.IdentifierConfig,
                 Arg.Any<CancellationToken>())
-            .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [])));
+            .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [], EngineTraces: traces)));
 
         _registry.UpdateSchemaMetadataAsync(metadata, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
@@ -71,11 +81,14 @@ public sealed class RunSchemaTestsUseCaseTests
         item.ValidFixtureCount.Should().Be(1);
         item.InvalidFixtureCount.Should().Be(1);
         item.BusinessRuleCount.Should().Be(1);
+        item.EngineTraces.Should().ContainSingle(t => t.Descriptor.EngineId == "cel");
 
         metadata.LastTestRunPassed.Should().BeTrue();
         metadata.LastTestRunAppVersion.Should().Be(AppVersionProvider.InformativeVersion);
         metadata.LastTestRunAtUtc.Should().NotBeNull();
         metadata.LastTestRunErrors.Should().BeEmpty();
+        metadata.LastTestRunEngineTraces.Should().ContainSingle(t =>
+            t.EngineId == "cel" && t.Outcome == "Succeeded" && t.ItemsEvaluated == 3);
 
         await _registry.Received(1).UpdateSchemaMetadataAsync(metadata, Arg.Any<CancellationToken>());
     }

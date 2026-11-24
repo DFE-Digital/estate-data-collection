@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using EstateDataCollection.Application.UseCases.Schema.GetValidationEngines;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
@@ -17,6 +18,18 @@ namespace EstateDataCollection.Tests.Integration.Admin;
 public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
 {
     private readonly IntegrationEndpointHarness<PostVerifySchemaEndpoint> _harness = new(fixture);
+
+    [Fact]
+    public async Task GetValidationEnginesEndpoint_Should_Expose_Registered_Engines()
+    {
+        var enginesHarness = new IntegrationEndpointHarness(fixture);
+        var result = await enginesHarness.Get<GetValidationEnginesEndpoint>()
+            .HandleAsync(HttpRequestBuilder.Empty(), CancellationToken.None);
+
+        var data = result.ShouldBeApiSuccess<GetValidationEnginesResult>(StatusCodes.Status200OK);
+        data.Engines.Select(e => e.EngineId).Should().BeEquivalentTo(
+            ["json-schema", "jsonlogic", "cel", "identifier-extractor"]);
+    }
 
     [Theory]
     [InlineData("")]
@@ -46,7 +59,10 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
 
         var result = await _harness.Endpoint.HandleAsync(http, CancellationToken.None);
 
-        result.ShouldHaveStatusCode(StatusCodes.Status200OK);
+        var data = result.ShouldBeApiSuccess<VerifySchemaResult>(StatusCodes.Status200OK);
+        data.EngineTraces.Should().NotBeNull();
+        data.EngineTraces!.Select(t => t.Descriptor.EngineId).Should().BeEquivalentTo(
+            ["json-schema", "jsonlogic", "cel", "identifier-extractor"]);
     }
 
     [Fact]
@@ -104,6 +120,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
         data.ResolvedIdentifierConfig!.Type.Should().Be("LAEstab");
         data.ResolvedIdentifierConfig.JsonPointer.Should().Be("/establishment/laestab");
         data.ResolvedIdentifierConfig.Required.Should().BeTrue();
+        data.EngineTraces.Should().NotBeNull().And.Contain(t => t.Descriptor.EngineId == "identifier-extractor");
     }
 
     [Fact]

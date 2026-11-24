@@ -71,6 +71,8 @@ public sealed record DashboardTestRunSummaryViewModel(
                     detailsText = string.Join("; ", item.Warnings!);
                 }
 
+                var engineSummary = ValidationEngineDiagnosticsViewModel.FormatCompactSummary(item.EngineTraces);
+
                 return new DashboardTestRunItemViewModel(
                     SchemaDisplayName: $"{item.SchemaName} v{item.Version}",
                     TestsUrl: AppRoutes.AdminUi.SchemaTests(item.SchemaName, item.Version),
@@ -79,7 +81,8 @@ public sealed record DashboardTestRunSummaryViewModel(
                     ResultTagText: resultTagText,
                     ResultTagCssClass: resultTagCssClass,
                     HasDetailsText: detailsText is not null,
-                    DetailsText: detailsText);
+                    DetailsText: detailsText,
+                    EngineTracesSummary: engineSummary);
             })
             .ToList();
 

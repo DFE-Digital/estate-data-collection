@@ -41,6 +41,9 @@ public class SchemaMetadata
     [JsonInclude]
     public IReadOnlyList<string>? LastTestRunWarnings { get; private set; }
 
+    [JsonInclude]
+    public IReadOnlyList<SchemaEngineTraceRecord>? LastTestRunEngineTraces { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     
     #region Domain Factories
@@ -194,7 +197,8 @@ public class SchemaMetadata
         string appVersion,
         IReadOnlyList<string>? errors = null,
         IReadOnlyList<InvalidFixtureOutcome>? invalidFixtureOutcomes = null,
-        IReadOnlyList<string>? warnings = null)
+        IReadOnlyList<string>? warnings = null,
+        IReadOnlyList<SchemaEngineTraceRecord>? engineTraces = null)
     {
         LastTestRunAtUtc = DateTimeOffset.UtcNow;
         LastTestRunAppVersion = string.IsNullOrWhiteSpace(appVersion) ? null : appVersion.Trim();
@@ -204,6 +208,7 @@ public class SchemaMetadata
             ? invalidFixtureOutcomes.ToArray()
             : [];
         LastTestRunWarnings = warnings is { Count: > 0 } ? warnings.ToArray() : [];
+        LastTestRunEngineTraces = engineTraces is { Count: > 0 } ? engineTraces.ToArray() : [];
     }
 
     private static SchemaIdentifierConfig? ValidateAndNormalizeIdentifier(SchemaIdentifierConfig? identifierConfig)
