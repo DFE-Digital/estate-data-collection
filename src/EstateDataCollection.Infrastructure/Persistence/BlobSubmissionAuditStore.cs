@@ -102,7 +102,7 @@ public sealed class BlobSubmissionAuditStore(
             var prefix = ResolvePrefix(submissionId);
             var entries = new List<SubmissionAuditEntry>();
 
-            await foreach (var blobItem in container.GetBlobsAsync(prefix: prefix, cancellationToken: cancellationToken))
+            await foreach (var blobItem in container.GetBlobsAsync(traits: BlobTraits.None, states: BlobStates.None, prefix: prefix, cancellationToken: cancellationToken))
             {
                 if (!blobItem.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 {

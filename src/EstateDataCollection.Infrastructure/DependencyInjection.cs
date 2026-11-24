@@ -11,6 +11,9 @@ namespace EstateDataCollection.Infrastructure;
 
 public static class DependencyInjection
 {
+    private const BlobClientOptions.ServiceVersion AzuriteMaxSupportedServiceVersion =
+        BlobClientOptions.ServiceVersion.V2025_11_05;
+
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         var localAssembly = typeof(DependencyInjection).Assembly;
@@ -79,7 +82,7 @@ public static class DependencyInjection
         else if (!string.IsNullOrWhiteSpace(blobConnectionString))
         {
             // Explicit connection string
-            services.AddSingleton(new BlobServiceClient(blobConnectionString));
+            services.AddSingleton(CreateBlobServiceClient(blobConnectionString));
         }
         else
         {
@@ -91,12 +94,30 @@ public static class DependencyInjection
             if (azuriteStorage.StartsWith("DefaultEndpointsProtocol=", OrdinalIgnoreCase) ||
                 azuriteStorage.StartsWith("UseDevelopmentStorage=", OrdinalIgnoreCase))
             {
-                services.AddSingleton(new BlobServiceClient(azuriteStorage));
+                services.AddSingleton(CreateBlobServiceClient(azuriteStorage));
             }
             else
             {
-                services.AddSingleton(new BlobServiceClient("UseDevelopmentStorage=true"));
+                services.AddSingleton(CreateBlobServiceClient("UseDevelopmentStorage=true"));
             }
         }
+    }
+
+    private static BlobServiceClient CreateBlobServiceClient(string connectionString)
+    {
+        if (IsAzuriteConnectionString(connectionString))
+        {
+            return new BlobServiceClient(connectionString, new BlobClientOptions(AzuriteMaxSupportedServiceVersion));
+        }
+
+        return new BlobServiceClient(connectionString);
+    }
+
+    private static bool IsAzuriteConnectionString(string connectionString)
+    {
+        return connectionString.Contains("UseDevelopmentStorage=true", OrdinalIgnoreCase) ||
+               connectionString.Contains("AccountName=devstoreaccount1", OrdinalIgnoreCase) ||
+               connectionString.Contains("127.0.0.1:10000", OrdinalIgnoreCase) ||
+               connectionString.Contains("localhost:10000", OrdinalIgnoreCase);
     }
 }

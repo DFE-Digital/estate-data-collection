@@ -85,7 +85,7 @@ public sealed class BlobSchemaRegistry(
             var prefix = string.IsNullOrWhiteSpace(schemaNameFilter) ? null : $"{schemaNameFilter.Trim().Trim('/')}/";
             var discoveredVersions = new Dictionary<(string Name, int Version), (bool HasSchema, bool HasMeta)>();
 
-            await foreach (var item in schemasContainer.GetBlobsAsync(prefix: prefix, cancellationToken: cancellationToken))
+            await foreach (var item in schemasContainer.GetBlobsAsync(traits: BlobTraits.None, states: BlobStates.None, prefix: prefix, cancellationToken: cancellationToken))
             {
                 if (item.Name.EndsWith(".schema.json", StringComparison.OrdinalIgnoreCase))
                 {

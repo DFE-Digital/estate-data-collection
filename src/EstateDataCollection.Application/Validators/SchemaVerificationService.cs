@@ -151,12 +151,28 @@ public sealed class SchemaVerificationService(
                     var meta = ResolveMetaSchema(node, syntaxErrors);
                     if (meta is not null)
                     {
-                        var metaResult = meta.Evaluate(node, new EvaluationOptions { OutputFormat = OutputFormat.List });
+                        using var schemaDoc = JsonDocument.Parse(rawSchemaJson!);
+                        var metaResult = meta.Evaluate(schemaDoc.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
 
                         if (!metaResult.IsValid)
                         {
-                            var errors = metaResult.Details
-                                .Where(x => x.HasErrors && x.Errors is { Count: > 0 })
+                            var rootErrors = metaResult.Errors?
+                                .Select(err =>
+                                {
+                                    var loc = metaResult.InstanceLocation.ToString();
+                                    var id = string.IsNullOrWhiteSpace(loc) ? "schema" : loc;
+                                    var path = string.IsNullOrWhiteSpace(loc) ? null : loc;
+                                    return ValidationMessage.For(
+                                        ValidationSources.Schema,
+                                        err.Value,
+                                        identifier: id,
+                                        path: path,
+                                        engineType: typeof(JsonSchema),
+                                        metadata: new Dictionary<string, object?> { ["keyword"] = err.Key });
+                                }) ?? [];
+
+                            var detailErrors = (metaResult.Details ?? [])
+                                .Where(x => x.Errors is { Count: > 0 })
                                 .SelectMany(x =>
                                 {
                                     var loc = x.InstanceLocation.ToString();
@@ -169,9 +185,9 @@ public sealed class SchemaVerificationService(
                                         path: path,
                                         engineType: typeof(JsonSchema),
                                         metadata: new Dictionary<string, object?> { ["keyword"] = err.Key }));
-                                })
-                                .Distinct()
-                                .ToList();
+                                });
+
+                            var errors = rootErrors.Concat(detailErrors).Distinct().ToList();
 
                             schemaTrace.ViolationCount += errors.Count;
                             schemaTrace.FirstIssue ??= errors.FirstOrDefault()?.Message;
@@ -313,8 +329,8 @@ public sealed class SchemaVerificationService(
                 schemaTrace.ItemsEvaluated++;
                 try
                 {
-                    var validNode = JsonNode.Parse(payload);
-                    var eval = candidateSchema.Evaluate(validNode, evalOptions);
+                    using var validDoc = JsonDocument.Parse(payload);
+                    var eval = candidateSchema.Evaluate(validDoc.RootElement, evalOptions);
 
                     if (!eval.IsValid)
                     {
@@ -327,7 +343,7 @@ public sealed class SchemaVerificationService(
                             identifier: fixtureId,
                             engineType: typeof(JsonSchema)));
 
-                        fixtureErrors.AddRange((eval.Details?.Where(x => x.HasErrors && x.Errors is { Count: > 0 }) ?? [])
+                        fixtureErrors.AddRange((eval.Details?.Where(x => x.Errors is { Count: > 0 }) ?? [])
                             .Select(detail => ValidationMessage.For(
                                 ValidationSources.Schema,
                                 $"{fixtureId} {string.Join(", ", detail.Errors!.Values)}",
@@ -481,8 +497,8 @@ public sealed class SchemaVerificationService(
                 schemaTrace.ItemsEvaluated++;
                 try
                 {
-                    var invalidNode = JsonNode.Parse(payload);
-                    var eval = candidateSchema.Evaluate(invalidNode, evalOptions);
+                    using var invalidDoc = JsonDocument.Parse(payload);
+                    var eval = candidateSchema.Evaluate(invalidDoc.RootElement, evalOptions);
                     if (!eval.IsValid)
                     {
                         schemaFailed = true;
@@ -1047,7 +1063,7 @@ public sealed class SchemaVerificationService(
 
         if (eval.Details is { Count: > 0 })
         {
-            foreach (var detail in eval.Details.Where(d => d.HasErrors && d.Errors is { Count: > 0 }))
+            foreach (var detail in eval.Details.Where(d => d.Errors is { Count: > 0 }))
             {
                 var loc = string.IsNullOrWhiteSpace(detail.InstanceLocation.ToString()) ? "/" : detail.InstanceLocation.ToString();
                 foreach (var (keyword, msg) in detail.Errors!)

@@ -387,7 +387,7 @@ public class BlobSubmissionInfrastructure(
         CancellationToken cancellationToken)
     {
         var prefix = SubmissionBlobPathResolver.ResolveDraftPrefix(options.Value.DraftBlobPrefixFormat, submissionId);
-        var blobs = container.GetBlobsAsync(traits: BlobTraits.Metadata, prefix: prefix, cancellationToken: cancellationToken);
+        var blobs = container.GetBlobsAsync(traits: BlobTraits.Metadata, states: BlobStates.None, prefix: prefix, cancellationToken: cancellationToken);
         if (blobs is null)
         {
             return [];
