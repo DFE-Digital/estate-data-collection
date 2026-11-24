@@ -104,7 +104,7 @@ public sealed class SubmissionAuditUseCaseTests
             .Returns(Result<SubmissionSession>.Success(session));
         _registry.GetExplicitSchemaAsync(session.SchemaName, session.SchemaVersion, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Success(resolved));
-        _infrastructure.SaveDraftPayloadAsync(session.SubmissionId, null, SurveyPayloadFixtures.MissingUrnJson, Arg.Any<CancellationToken>())
+        _infrastructure.SaveDraftPayloadAsync(session.SubmissionId, SurveyPayloadFixtures.MissingUrnJson, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
         List<ValidationError> errs = [new ValidationError("$.urn", "Missing URN", "RULE-URN")];
@@ -146,7 +146,7 @@ public sealed class SubmissionAuditUseCaseTests
     [Fact]
     public async Task FinaliseSubmission_When_Already_Finalised_Should_Audit_Rejected_403()
     {
-        var session = new SubmissionSessionBuilder().WithUrn(104521).Finalised().Build();
+        var session = new SubmissionSessionBuilder().WithIdentifier("URN", "104521").Finalised().Build();
         _infrastructure.GetSessionAsync(session.SubmissionId, Arg.Any<CancellationToken>())
             .Returns(Result<SubmissionSession>.Success(session));
 
@@ -165,13 +165,14 @@ public sealed class SubmissionAuditUseCaseTests
         recorded.Outcome.Status.Should().Be("Rejected");
         recorded.Outcome.HttpStatus.Should().Be(403);
         recorded.Outcome.ErrorCode.Should().Be("Submission.AlreadyFinalised");
-        recorded.Identifier?.Urn.Should().Be(104521);
+        recorded.Identifier?.Type.Should().Be("URN");
+        recorded.Identifier?.Value.Should().Be("104521");
     }
 
     [Fact]
     public async Task FinaliseSubmission_Should_Record_Per_Process_Errors_On_ProcessesConsumed()
     {
-        var session = new SubmissionSessionBuilder().WithUrn(104521).Build();
+        var session = new SubmissionSessionBuilder().WithIdentifier("URN", "104521").Build();
         var rule = new BusinessRule
         {
             Id = "RULE-CAP",

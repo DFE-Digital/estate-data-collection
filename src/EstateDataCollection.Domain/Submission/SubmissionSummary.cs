@@ -9,7 +9,6 @@ public sealed record SubmissionSummary(
     DateTimeOffset LastActivityAtUtc,
     bool IsFinalised,
     string LifecycleState,
-    int? Urn,
     string? IdentifierType,
     string? IdentifierValue,
     bool HasDraftPayload,

@@ -12,7 +12,6 @@ public sealed class SubmissionSummaryBuilder
     private DateTimeOffset _lastActivityAtUtc = DateTimeOffset.UtcNow;
     private bool _isFinalised;
     private string _lifecycleState = "Draft";
-    private int? _urn;
     private string? _identifierType;
     private string? _identifierValue;
     private bool _hasDraftPayload;
@@ -63,19 +62,10 @@ public sealed class SubmissionSummaryBuilder
         return this;
     }
 
-    public SubmissionSummaryBuilder WithUrn(int urn, string? identifierType = "URN", string? identifierValue = null)
-    {
-        _urn = urn;
-        _identifierType = identifierType;
-        _identifierValue = identifierValue ?? urn.ToString();
-        return this;
-    }
-
-    public SubmissionSummaryBuilder WithIdentifier(string? type, string? value, int? urn = null)
+    public SubmissionSummaryBuilder WithIdentifier(string? type, string? value)
     {
         _identifierType = type;
         _identifierValue = value;
-        _urn = urn;
         return this;
     }
 
@@ -113,7 +103,6 @@ public sealed class SubmissionSummaryBuilder
             LastActivityAtUtc: _lastActivityAtUtc,
             IsFinalised: _isFinalised,
             LifecycleState: _lifecycleState,
-            Urn: _urn,
             IdentifierType: _identifierType,
             IdentifierValue: _identifierValue,
             HasDraftPayload: _hasDraftPayload,

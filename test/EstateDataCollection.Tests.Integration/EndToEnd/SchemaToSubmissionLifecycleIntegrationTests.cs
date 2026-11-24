@@ -18,8 +18,10 @@ namespace EstateDataCollection.Tests.Integration.EndToEnd;
 
 [Collection("AzuriteCollection")]
 public sealed class SchemaToSubmissionLifecycleIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task Complete_Http_Pipeline_From_Schema_Verify_To_Submission_Finalisation_Should_Succeed()
@@ -96,7 +98,8 @@ public sealed class SchemaToSubmissionLifecycleIntegrationTests(AzuriteFixture f
         var finaliseData = (await finaliseSubmission.HandleAsync(
                 HttpRequestBuilder.Empty(), submissionId, CancellationToken.None))
             .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
-        finaliseData.Urn.Should().Be(104521);
+        finaliseData.Identifier.Should().Be("104521");
+        finaliseData.IdentifierType.Should().Be("URN");
         finaliseData.ProcessedBlobUri.Should().Contain("urn%3D104521");
     }
 }

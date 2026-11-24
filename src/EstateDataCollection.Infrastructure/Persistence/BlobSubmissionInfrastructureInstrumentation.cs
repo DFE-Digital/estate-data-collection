@@ -27,9 +27,9 @@ public sealed partial class BlobSubmissionInfrastructureInstrumentation(
 
     [LoggerMessage(
         Level = LogLevel.Information,
-        Message = "Draft payload blob saved for submission {SubmissionId} (URN: {Urn})"
+        Message = "Draft payload blob saved for submission {SubmissionId}"
     )]
-    public partial void DraftPayloadSaved(Guid submissionId, string urn);
+    public partial void DraftPayloadSaved(Guid submissionId);
 
     [LoggerMessage(
         Level = LogLevel.Debug,
@@ -45,15 +45,13 @@ public sealed partial class BlobSubmissionInfrastructureInstrumentation(
 
     [LoggerMessage(
         Level = LogLevel.Information,
-        Message = "Promoted submission {SubmissionId} (URN: {Urn}) to processed container at {TargetBlobUri}"
+        Message = "Promoted submission {SubmissionId} ({IdentifierType}: {IdentifierValue}) to processed container at {TargetBlobUri}"
     )]
-    public partial void PayloadPromotedToProcessed(Guid submissionId, int urn, string targetBlobUri);
-
-    [LoggerMessage(
-        Level = LogLevel.Information,
-        Message = "Direct submission envelope uploaded for {SubmissionId} (URN: {Urn})"
-    )]
-    public partial void SubmissionEnvelopeUploaded(Guid submissionId, int urn);
+    public partial void PayloadPromotedToProcessed(
+        Guid submissionId,
+        string? identifierType,
+        string? identifierValue,
+        string targetBlobUri);
 
     [LoggerMessage(
         Level = LogLevel.Error,

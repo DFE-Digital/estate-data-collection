@@ -73,7 +73,7 @@ public class UpdateSubmissionUseCaseTests
         result.Error.Code.Should().Be("Submission.AlreadyFinalised");
 
         await _infrastructure.DidNotReceive().SaveDraftPayloadAsync(
-            Arg.Any<Guid>(), Arg.Any<int?>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class UpdateSubmissionUseCaseTests
         _validator.ValidateAsync(SurveyPayloadFixtures.MissingUrnJson, compiledSchema, Arg.Any<CancellationToken>())
             .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult(pendingErrors)));
 
-        _infrastructure.SaveDraftPayloadAsync(submissionId, null, SurveyPayloadFixtures.MissingUrnJson, Arg.Any<CancellationToken>())
+        _infrastructure.SaveDraftPayloadAsync(submissionId, SurveyPayloadFixtures.MissingUrnJson, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
         var request = new UpdateSubmissionRequest(submissionId, SurveyPayloadFixtures.MissingUrnJson);
@@ -116,7 +116,7 @@ public class UpdateSubmissionUseCaseTests
 
         // Verify draft WAS saved to storage despite being incomplete
         await _infrastructure.Received(1).SaveDraftPayloadAsync(
-            submissionId, null, SurveyPayloadFixtures.MissingUrnJson, Arg.Any<CancellationToken>());
+            submissionId, SurveyPayloadFixtures.MissingUrnJson, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public class UpdateSubmissionUseCaseTests
             .Returns(Result<ResolvedSchema>.Success(resolved));
 
         const string invalidUnsafePayload = """{"establishment":{"laestab":"201/3614"}}""";
-        _infrastructure.SaveDraftPayloadAsync(submissionId, null, invalidUnsafePayload, Arg.Any<CancellationToken>())
+        _infrastructure.SaveDraftPayloadAsync(submissionId, invalidUnsafePayload, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
         var validationService = new PayloadValidationService(new JsonSchemaNetValidator(), new JsonLogicValidator());
@@ -190,7 +190,7 @@ public class UpdateSubmissionUseCaseTests
         _validator.ValidateAsync(SurveyPayloadFixtures.ValidPayloadJson, compiledSchema, Arg.Any<CancellationToken>())
             .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult([])));
 
-        _infrastructure.SaveDraftPayloadAsync(submissionId, null, SurveyPayloadFixtures.ValidPayloadJson, Arg.Any<CancellationToken>())
+        _infrastructure.SaveDraftPayloadAsync(submissionId, SurveyPayloadFixtures.ValidPayloadJson, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
         var request = new UpdateSubmissionRequest(submissionId, SurveyPayloadFixtures.ValidPayloadJson);

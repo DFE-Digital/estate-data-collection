@@ -12,8 +12,10 @@ namespace EstateDataCollection.Tests.Integration.Public;
 
 [Collection("AzuriteCollection")]
 public sealed class GetSubmissionStatusIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task Status_Check_Should_Return_404_For_Unknown_Submission()
@@ -81,8 +83,8 @@ public sealed class GetSubmissionStatusIntegrationTests(AzuriteFixture fixture)
         readyStatus.HasDraftPayload.Should().BeTrue();
         readyStatus.IsReadyToFinalise.Should().BeTrue();
         readyStatus.PendingErrors.Should().BeEmpty();
-        readyStatus.Urn.Should().Be(104521);
         readyStatus.Identifier.Should().Be("104521");
+        readyStatus.IdentifierType.Should().Be("URN");
 
         // 4. After finalisation -> status transitions to Finalised
         var finaliseRes = await finaliseSubmission.HandleAsync(
@@ -100,6 +102,7 @@ public sealed class GetSubmissionStatusIntegrationTests(AzuriteFixture fixture)
         finalisedStatus.FinalisedAtUtc.Should().NotBeNull();
         finalisedStatus.IsReadyToFinalise.Should().BeFalse();
         finalisedStatus.PendingErrors.Should().BeEmpty();
-        finalisedStatus.Urn.Should().Be(104521);
+        finalisedStatus.Identifier.Should().Be("104521");
+        finalisedStatus.IdentifierType.Should().Be("URN");
     }
 }

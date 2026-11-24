@@ -1,9 +1,7 @@
-using System.Text;
 using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using AwesomeAssertions;
-using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Persistence;
 using EstateDataCollection.Tests.Common.Extensions;
 using Microsoft.Extensions.Options;
@@ -15,7 +13,7 @@ namespace EstateDataCollection.Tests.Unit.Infrastructure;
 public class BlobSubmissionInfrastructureTests
 {
     [Fact]
-    public async Task PromoteToProcessedAsync_When_Urn_Is_Zero_Should_Omit_Urn_Segment_From_Processed_Blob_Path()
+    public async Task PromoteToProcessedAsync_When_Identifier_Is_Unassigned_Should_Omit_Identifier_Segment_From_Processed_Blob_Path()
     {
         var submissionId = Guid.NewGuid();
         var blobServiceClient = Substitute.For<BlobServiceClient>();
@@ -38,7 +36,7 @@ public class BlobSubmissionInfrastructureTests
                 ProcessedBlobNameFormat = "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
             }));
 
-        await infra.PromoteToProcessedAsync(submissionId, 0, "edc-survey-elements", 1, CancellationToken.None);
+        await infra.PromoteToProcessedAsync(submissionId, null, null, "edc-survey-elements", 1, CancellationToken.None);
 
         processedContainer.Received(1).GetBlobClient($"schema=edc-survey-elements/v=1/{submissionId}.json");
         processedContainer.DidNotReceive().GetBlobClient($"urn=0/schema=edc-survey-elements/v=1/{submissionId}.json");

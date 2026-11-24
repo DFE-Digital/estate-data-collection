@@ -25,7 +25,7 @@ public sealed class SubmissionViewModelPresentationTests
             .WithSchema("cdc_survey", 2)
             .CreatedAt(now)
             .LastActivityAt(now)
-            .WithUrn(104521)
+            .WithIdentifier("URN", "104521")
             .WithDrafts(count: 2, lastDraftAtUtc: now)
             .WithLastAudit("CheckSubmission", "ReadyToFinalise", 200, now, totalEvents: 3)
             .Build();
@@ -66,7 +66,7 @@ public sealed class SubmissionViewModelPresentationTests
     public void SubmissionDetailViewModel_Should_Format_Draft_Chunks_And_Audit_Processes()
     {
         var session = SubmissionSession.Create("edc_payload", 1);
-        session.AssignUrn(123456);
+        session.AssignIdentifier("URN", "123456");
         var now = DateTimeOffset.UtcNow;
 
         var detail = new GetSubmissionDetailResultBuilder()
@@ -76,7 +76,7 @@ public sealed class SubmissionViewModelPresentationTests
             .ReadyToFinalise(false)
             .WithPendingError("#/school_name", "Required", "REQ-1")
             .WithNextSteps("1 pending issue", "Resolve [REQ-1] #/school_name: Required")
-            .WithIdentifier("URN", "123456", urn: 123456)
+            .WithIdentifier("URN", "123456")
             .WithAuditEntry(entry => entry
                 .WithTimestamp(now)
                 .WithAction("CheckSubmission")

@@ -44,19 +44,15 @@ internal static class SubmissionBlobPathResolver
         string processedBlobNameFormat,
         string? identifierType,
         string? identifierValue,
-        int legacyUrn,
         string schemaName,
         int schemaVersion,
         Guid submissionId)
     {
+        var safeSchemaName = SanitiseBlobPathSegment(schemaName);
         var format = processedBlobNameFormat;
-        var effectiveValue = !string.IsNullOrWhiteSpace(identifierValue)
-            ? identifierValue.Trim()
-            : legacyUrn > 0
-                ? legacyUrn.ToString(CultureInfo.InvariantCulture)
-                : null;
+        var effectiveValue = string.IsNullOrWhiteSpace(identifierValue) ? null : identifierValue.Trim();
 
-        if (string.IsNullOrWhiteSpace(effectiveValue))
+        if (effectiveValue is null)
         {
             format = format
                 .Replace("urn={urn}/", string.Empty, StringComparison.OrdinalIgnoreCase)
@@ -65,8 +61,9 @@ internal static class SubmissionBlobPathResolver
 
             return format.FormatWith(new
             {
-                urn = legacyUrn,
-                schemaName,
+                urn = string.Empty,
+                identifier = string.Empty,
+                schemaName = safeSchemaName,
                 schemaVersion,
                 submissionId
             });
@@ -87,7 +84,7 @@ internal static class SubmissionBlobPathResolver
         {
             urn = safeValue,
             identifier = safeValue,
-            schemaName,
+            schemaName = safeSchemaName,
             schemaVersion,
             submissionId
         });
@@ -95,9 +92,12 @@ internal static class SubmissionBlobPathResolver
 
     public static string SanitiseBlobPathSegment(string value)
     {
-        return value.Trim()
+        var sanitised = value.Trim()
             .Replace('/', '-')
             .Replace('\\', '-')
+            .Replace('%', '_')
             .Replace("..", "_", StringComparison.Ordinal);
+
+        return sanitised is "." or "" ? "_" : sanitised;
     }
 }

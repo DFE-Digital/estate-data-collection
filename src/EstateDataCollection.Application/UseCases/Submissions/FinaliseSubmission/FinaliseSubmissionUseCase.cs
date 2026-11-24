@@ -1,7 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Common.Results;
-using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -63,6 +62,18 @@ public class FinaliseSubmissionUseCase(
             return evaluation.Error;
         }
 
+        if (evaluation.Value.Schema.Metadata.IsRetired)
+        {
+            return Error.Validation(
+                ErrorCodes.SchemaRetired,
+                new
+                {
+                    evaluation.Value.Schema.Metadata.Name,
+                    evaluation.Value.Schema.Metadata.Version,
+                    Message = $"Schema '{evaluation.Value.Schema.Metadata.Name}' v{evaluation.Value.Schema.Metadata.Version} is retired and no longer accepts finalisation."
+                });
+        }
+
         var validationErrors = evaluation.Value.ValidationErrors;
         if (validationErrors.Count > 0)
         {
@@ -77,7 +88,11 @@ public class FinaliseSubmissionUseCase(
         var identifierEval = evaluation.Value.IdentifierEvaluation;
         if (!identifierEval.IsValid)
         {
-            _instrumentation.InvalidUrn(request.SubmissionId, 0);
+            var reason = identifierEval.ValidationError?.Message
+                         ?? identifierEval.FailureError?.Description
+                         ?? identifierEval.FailureError?.Code
+                         ?? "Identifier invalid";
+            _instrumentation.InvalidIdentifier(request.SubmissionId, reason);
             if (identifierEval.ValidationError is not null)
             {
                 SubmissionExecutionScope.Current?.SetAuditContext(validationErrors: [identifierEval.ValidationError]);
@@ -87,30 +102,19 @@ public class FinaliseSubmissionUseCase(
         }
 
         var extractedIdentifier = identifierEval.Identifier;
-        var resolvedUrn = extractedIdentifier?.AsPositiveInt ?? 0;
         var auditIdentifier = evaluation.Value.AuditIdentifier;
 
         SubmissionExecutionScope.Current?.SetAuditContext(identifier: auditIdentifier);
 
-        var isLegacyCompatibleUrnCall = extractedIdentifier is null ||
-            (resolvedUrn > 0 && string.Equals(extractedIdentifier.Value.Type, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase));
-
         var promotion = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.PromoteToProcessed,
-            () => isLegacyCompatibleUrnCall
-                ? infrastructure.PromoteToProcessedAsync(
-                    session.Value.SubmissionId,
-                    resolvedUrn,
-                    session.Value.SchemaName,
-                    session.Value.SchemaVersion,
-                    cancellationToken)
-                : infrastructure.PromoteToProcessedAsync(
-                    session.Value.SubmissionId,
-                    extractedIdentifier!.Value.Type,
-                    extractedIdentifier.Value.Value,
-                    session.Value.SchemaName,
-                    session.Value.SchemaVersion,
-                    cancellationToken),
+            () => infrastructure.PromoteToProcessedAsync(
+                session.Value.SubmissionId,
+                extractedIdentifier?.Type,
+                extractedIdentifier?.Value,
+                session.Value.SchemaName,
+                session.Value.SchemaVersion,
+                cancellationToken),
             _ => new ProcessStepDetails(Summary: "Promoted merged draft payload to processed container"));
 
         if (promotion.IsFailure)
@@ -131,17 +135,17 @@ public class FinaliseSubmissionUseCase(
 
         _instrumentation.SubmissionFinalisedAndPromoted(
             session.Value.SubmissionId,
-            resolvedUrn,
+            extractedIdentifier?.Type ?? "none",
+            extractedIdentifier?.Value ?? "unassigned",
             session.Value.SchemaName,
             session.Value.SchemaVersion,
             promotion.Value);
 
         return new FinaliseSubmissionResult(
             session.Value.SubmissionId,
-            resolvedUrn,
             session.Value.SchemaName,
             session.Value.SchemaVersion,
-            string.Empty,
+            "Finalised",
             promotion.Value,
             DateTimeOffset.UtcNow,
             Identifier: extractedIdentifier?.Value,

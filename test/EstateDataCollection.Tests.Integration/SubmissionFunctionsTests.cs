@@ -65,14 +65,14 @@ public class SubmissionFunctionsTests
     }
 
     [Fact]
-    public async Task When_Updating_With_Empty_Payload_Body_It_Should_Return_403_Forbidden_Payload_Empty()
+    public async Task When_Updating_With_Empty_Payload_Body_It_Should_Return_400_BadRequest_Payload_Empty()
     {
         var actionResult = await _updateEndpoint.HandleAsync(
             HttpRequestBuilder.FromRaw("   "),
             Guid.NewGuid(),
             CancellationToken.None);
 
-        actionResult.ShouldHaveStatusCode(StatusCodes.Status403Forbidden);
+        actionResult.ShouldBeApiFailure<UpdateSubmissionResult>(StatusCodes.Status400BadRequest, "Payload.Empty");
         await _updateUseCase.DidNotReceive().ExecuteAsync(
             Arg.Any<UpdateSubmissionRequest>(), Arg.Any<CancellationToken>());
     }
@@ -108,12 +108,13 @@ public class SubmissionFunctionsTests
         var submissionId = Guid.NewGuid();
         var finaliseResult = new FinaliseSubmissionResult(
             SubmissionId: submissionId,
-            Urn: 104521,
             SchemaName: "edc_payload",
             SchemaVersion: 1,
-            Status: "ReadyForCde",
+            Status: "Finalised",
             ProcessedBlobUri: "https://storage/processed/urn=104521/final.json",
-            FinalisedAtUtc: DateTimeOffset.UtcNow);
+            FinalisedAtUtc: DateTimeOffset.UtcNow,
+            Identifier: "104521",
+            IdentifierType: "URN");
 
         _finaliseUseCase.ExecuteAsync(
             Arg.Is<FinaliseSubmissionRequest>(r => r.SubmissionId == submissionId),
@@ -123,7 +124,8 @@ public class SubmissionFunctionsTests
         var actionResult = await _finaliseEndpoint.HandleAsync(HttpRequestBuilder.Empty(), submissionId, CancellationToken.None);
 
         var data = actionResult.ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
-        data.Urn.Should().Be(104521);
+        data.Identifier.Should().Be("104521");
+        data.IdentifierType.Should().Be("URN");
         data.ProcessedBlobUri.Should().Contain("urn=104521");
     }
 

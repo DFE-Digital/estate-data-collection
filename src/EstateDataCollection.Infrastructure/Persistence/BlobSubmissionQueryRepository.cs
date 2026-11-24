@@ -5,9 +5,7 @@ using System.Text.Json;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Common.Extensions;
 using EstateDataCollection.Common.Results;
-using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -84,7 +82,7 @@ public sealed class BlobSubmissionQueryRepository(
                 else if (string.Equals(relative, "draft.json", StringComparison.OrdinalIgnoreCase))
                 {
                     acc.HasDraftJson = true;
-                    var draftTs = TryParseTimestamp(blobItem.Metadata, "last_saved_at_utc")
+                    var draftTs = SubmissionBlobPathResolver.TryReadTimestampFromMetadata(blobItem.Metadata, "last_saved_at_utc")
                                   ?? blobItem.Properties.LastModified
                                   ?? blobItem.Properties.CreatedOn;
                     if (draftTs.HasValue && (!acc.LastDraftAtUtc.HasValue || draftTs > acc.LastDraftAtUtc))
@@ -96,7 +94,7 @@ public sealed class BlobSubmissionQueryRepository(
                          relative.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 {
                     acc.DraftChunkCount++;
-                    var chunkTs = TryParseTimestamp(blobItem.Metadata, "created_at_utc")
+                    var chunkTs = SubmissionBlobPathResolver.TryReadTimestampFromMetadata(blobItem.Metadata, "created_at_utc")
                                   ?? blobItem.Properties.CreatedOn
                                   ?? blobItem.Properties.LastModified;
                     if (chunkTs.HasValue && (!acc.LastDraftAtUtc.HasValue || chunkTs > acc.LastDraftAtUtc))
@@ -108,7 +106,7 @@ public sealed class BlobSubmissionQueryRepository(
                          relative.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 {
                     acc.AuditCount++;
-                    var auditTs = TryParseTimestamp(blobItem.Metadata, "timestamp_utc")
+                    var auditTs = SubmissionBlobPathResolver.TryReadTimestampFromMetadata(blobItem.Metadata, "timestamp_utc")
                                   ?? blobItem.Properties.CreatedOn
                                   ?? blobItem.Properties.LastModified;
 
@@ -191,7 +189,6 @@ public sealed class BlobSubmissionQueryRepository(
                     LastActivityAtUtc: lastActivity,
                     IsFinalised: session.IsFinalised,
                     LifecycleState: lifecycleState,
-                    Urn: session.Urn,
                     IdentifierType: session.IdentifierType,
                     IdentifierValue: session.IdentifierValue,
                     HasDraftPayload: hasDraftPayload,
@@ -242,10 +239,10 @@ public sealed class BlobSubmissionQueryRepository(
                 return (SubmissionProcessedArtifact?)null;
             }
 
-            var expectedName = ResolveProcessedBlobName(
+            var expectedName = SubmissionBlobPathResolver.ResolveProcessedBlobName(
+                options.Value.ProcessedBlobNameFormat,
                 session.IdentifierType,
                 session.IdentifierValue,
-                session.Urn ?? 0,
                 session.SchemaName,
                 session.SchemaVersion,
                 session.SubmissionId);
@@ -292,7 +289,7 @@ public sealed class BlobSubmissionQueryRepository(
         {
             props.Value.Metadata.TryGetValue("payload_sha256", out sha256);
             props.Value.Metadata.TryGetValue("status", out status);
-            finalisedAtUtc = TryParseTimestamp(props.Value.Metadata, "finalized_at_utc");
+            finalisedAtUtc = SubmissionBlobPathResolver.TryReadTimestampFromMetadata(props.Value.Metadata, "finalized_at_utc");
         }
 
         sha256 ??= Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
@@ -305,66 +302,6 @@ public sealed class BlobSubmissionQueryRepository(
             SizeBytes: props.Value.ContentLength,
             FinalisedAtUtc: finalisedAtUtc ?? props.Value.LastModified,
             Status: status);
-    }
-
-    private string ResolveProcessedBlobName(
-        string? identifierType,
-        string? identifierValue,
-        int legacyUrn,
-        string schemaName,
-        int schemaVersion,
-        Guid submissionId)
-    {
-        var format = options.Value.ProcessedBlobNameFormat;
-        var effectiveValue = !string.IsNullOrWhiteSpace(identifierValue)
-            ? identifierValue.Trim()
-            : legacyUrn > 0
-                ? legacyUrn.ToString(CultureInfo.InvariantCulture)
-                : null;
-
-        if (string.IsNullOrWhiteSpace(effectiveValue))
-        {
-            format = format
-                .Replace("urn={urn}/", string.Empty, StringComparison.OrdinalIgnoreCase)
-                .Replace("/urn={urn}", string.Empty, StringComparison.OrdinalIgnoreCase)
-                .TrimStart('/');
-
-            return format.FormatWith(new
-            {
-                urn = legacyUrn,
-                schemaName,
-                schemaVersion,
-                submissionId
-            });
-        }
-
-        var safeValue = SanitiseBlobPathSegment(effectiveValue);
-        var effectiveType = string.IsNullOrWhiteSpace(identifierType)
-            ? SchemaIdentifierConfig.DefaultUrnType
-            : identifierType.Trim();
-
-        if (!string.Equals(effectiveType, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase))
-        {
-            var safeType = SanitiseBlobPathSegment(effectiveType.ToLowerInvariant());
-            format = format.Replace("urn={urn}", $"{safeType}={safeValue}", StringComparison.OrdinalIgnoreCase);
-        }
-
-        return format.FormatWith(new
-        {
-            urn = safeValue,
-            identifier = safeValue,
-            schemaName,
-            schemaVersion,
-            submissionId
-        });
-    }
-
-    private static string SanitiseBlobPathSegment(string value)
-    {
-        return value.Trim()
-            .Replace('/', '-')
-            .Replace('\\', '-')
-            .Replace("..", "_", StringComparison.Ordinal);
     }
 
     private static bool MatchesMetadataSchemaFilter(
@@ -438,21 +375,8 @@ public sealed class BlobSubmissionQueryRepository(
                summary.SchemaName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
                (summary.IdentifierValue?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
                (summary.IdentifierType?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-               (summary.Urn?.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
                (summary.LastAuditOutcome?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
                (summary.LastAuditAction?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false);
-    }
-
-    private static DateTimeOffset? TryParseTimestamp(IDictionary<string, string>? metadata, string key)
-    {
-        if (metadata is null || !metadata.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        return DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
-            ? parsed
-            : null;
     }
 
     private static DateTimeOffset MaxTimestamp(

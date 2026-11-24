@@ -19,8 +19,10 @@ namespace EstateDataCollection.Tests.Integration.Public;
 
 [Collection("AzuriteCollection")]
 public sealed class SubmissionAuditTrailIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task Every_Submission_Interaction_Should_Create_Timestamped_Audit_Json_Blobs_With_Outcomes_And_Processes()
@@ -165,7 +167,8 @@ public sealed class SubmissionAuditTrailIntegrationTests(AzuriteFixture fixture)
         entries[3].Outcome.ErrorCode.Should().Be("Schema.ContractViolation");
 
         entries[5].Outcome.Status.Should().Be("ReadyToFinalise");
-        entries[5].Identifier?.Urn.Should().Be(104521);
+        entries[5].Identifier?.Type.Should().Be("URN");
+        entries[5].Identifier?.Value.Should().Be("104521");
 
         entries[6].Outcome.Status.Should().Be("Succeeded");
         entries[6].Outcome.HttpStatus.Should().Be(200);

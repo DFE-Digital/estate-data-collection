@@ -128,7 +128,7 @@ public class InstrumentationTests
 
         // Act
         regInstrumentation.SchemaLoadedFromBlob("school-workforce", 1);
-        subInstrumentation.DraftPayloadSaved(subId, "123456");
+        subInstrumentation.DraftPayloadSaved(subId);
         valInstrumentation.ValidationPassed();
 
         // Assert
@@ -143,7 +143,7 @@ public class InstrumentationTests
         mockSubLogger.Received(1).Log(
             LogLevel.Information,
             Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString()!.Contains("123456")),
+            Arg.Is<object>(o => o.ToString()!.Contains(subId.ToString())),
             null,
             Arg.Any<Func<object, Exception?, string>>()
         );

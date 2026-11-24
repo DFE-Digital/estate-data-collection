@@ -51,6 +51,18 @@ public class UpdateSubmissionUseCase(
             return schema.Error;
         }
 
+        if (schema.Value.Metadata.IsRetired)
+        {
+            return Error.Validation(
+                ErrorCodes.SchemaRetired,
+                new
+                {
+                    schema.Value.Metadata.Name,
+                    schema.Value.Metadata.Version,
+                    Message = $"Schema '{schema.Value.Metadata.Name}' v{schema.Value.Metadata.Version} is retired and no longer accepts updates."
+                });
+        }
+
         var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, cancellationToken);
         var candidateResult = evaluationService.AssembleCandidateDraft(inventory, request.Payload);
         if (candidateResult.IsFailure)
@@ -80,7 +92,7 @@ public class UpdateSubmissionUseCase(
 
         var save = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.SaveDraftPayload,
-            () => infrastructure.SaveDraftPayloadAsync(request.SubmissionId, null, request.Payload, cancellationToken),
+            () => infrastructure.SaveDraftPayloadAsync(request.SubmissionId, request.Payload, cancellationToken),
             () => new ProcessStepDetails(
                 ItemCount: draftCountAfterSave,
                 Summary: $"Saved timestamped draft chunk #{draftCountAfterSave} ({request.Payload.Length} chars)"));

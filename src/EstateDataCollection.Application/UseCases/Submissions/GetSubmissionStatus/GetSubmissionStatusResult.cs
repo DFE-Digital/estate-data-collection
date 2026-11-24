@@ -12,7 +12,6 @@ public sealed record GetSubmissionStatusResult(
     bool HasDraftPayload,
     bool IsReadyToFinalise,
     IReadOnlyList<ValidationError> PendingErrors,
-    int? Urn = null,
     string? Identifier = null,
     string? IdentifierType = null,
     int DraftCount = 0,
