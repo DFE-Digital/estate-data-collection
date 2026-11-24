@@ -1,5 +1,6 @@
 using Azure.Identity;
 using Azure.Storage.Blobs;
+using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Common.Markers;
 using EstateDataCollection.Infrastructure.Configuration;
 using Microsoft.Extensions.Configuration;
@@ -17,12 +18,27 @@ public static class DependencyInjection
 
         services.AddMemoryCache();
         services.AddAzureBlobStorage(configuration);
-        
+
         services
             .AddConfigOptions(localAssembly, appAssembly)
             .Scan(scan => scan
                 .FromAssemblies(localAssembly)
-                .AddClasses(classes => classes.AssignableTo<IInfrastructure>())
+                .AddClasses(classes => classes.AssignableToAny(
+                    typeof(ISchemaValidator),
+                    typeof(IQualityRuleEngine),
+                    typeof(IRuleContextEnricher),
+                    typeof(IOdcsContractParser),
+                    typeof(IBusinessLogicValidator)))
+                .AsImplementedInterfaces()
+                .WithSingletonLifetime()
+                .AddClasses(classes => classes
+                    .AssignableTo<IInfrastructure>()
+                    .Where(t =>
+                        !typeof(ISchemaValidator).IsAssignableFrom(t) &&
+                        !typeof(IQualityRuleEngine).IsAssignableFrom(t) &&
+                        !typeof(IRuleContextEnricher).IsAssignableFrom(t) &&
+                        !typeof(IOdcsContractParser).IsAssignableFrom(t) &&
+                        !typeof(IBusinessLogicValidator).IsAssignableFrom(t)))
                 .AsImplementedInterfaces()
                 .WithScopedLifetime()
                 .AddClasses(classes => classes.AssignableTo<IInstrumentation>())

@@ -10,13 +10,21 @@ namespace EstateDataCollection.Infrastructure.Registry;
 
 public sealed class OdcsContractParser : IOdcsContractParser
 {
+    private const int MaxYamlDepth = 64;
+
     private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder()
         .WithAttemptingUnquotedStringTypeDeserialization()
+        .WithMaximumRecursion(MaxYamlDepth)
         .Build();
 
     private static readonly ISerializer JsonCompatibleSerializer = new SerializerBuilder()
         .JsonCompatible()
         .Build();
+
+    private static readonly JsonDocumentOptions ParseDocumentOptions = new()
+    {
+        MaxDepth = MaxYamlDepth
+    };
 
     private static readonly JsonSerializerOptions IndentedJsonOptions = new()
     {
@@ -71,7 +79,7 @@ public sealed class OdcsContractParser : IOdcsContractParser
             }
 
             var jsonText = JsonCompatibleSerializer.Serialize(yamlObject);
-            rootDoc = JsonNode.Parse(jsonText);
+            rootDoc = JsonNode.Parse(jsonText, documentOptions: ParseDocumentOptions);
         }
         catch (Exception ex)
         {
@@ -107,7 +115,7 @@ public sealed class OdcsContractParser : IOdcsContractParser
         }
 
         var extractedRules = new List<BusinessRule>();
-        var jsonSchemaObj = BuildJsonSchemaObject(selectedSchemaObj, currentPath: string.Empty, isRoot: true, isNullable: false, extractedRules);
+        var jsonSchemaObj = BuildJsonSchemaObject(selectedSchemaObj, currentPath: string.Empty, isRoot: true, isNullable: false, extractedRules, depth: 0);
 
         var generatedSchemaJson = jsonSchemaObj.ToJsonString(IndentedJsonOptions);
         string? generatedRulesJson = null;
@@ -131,8 +139,14 @@ public sealed class OdcsContractParser : IOdcsContractParser
         string currentPath,
         bool isRoot,
         bool isNullable,
-        List<BusinessRule> extractedRules)
+        List<BusinessRule> extractedRules,
+        int depth)
     {
+        if (depth > MaxYamlDepth)
+        {
+            throw new InvalidOperationException($"ODCS schema nesting exceeds maximum depth of {MaxYamlDepth}.");
+        }
+
         var schemaNode = new JsonObject();
         if (isRoot)
         {
@@ -193,11 +207,11 @@ public sealed class OdcsContractParser : IOdcsContractParser
             {
                 if (item is JsonObject enumObj && enumObj.TryGetPropertyValue("value", out var valNode))
                 {
-                    jsonEnum.Add(valNode is not null ? JsonNode.Parse(valNode.ToJsonString()) : null);
+                    jsonEnum.Add(valNode?.DeepClone());
                 }
                 else if (item is JsonValue enumVal)
                 {
-                    jsonEnum.Add(JsonNode.Parse(enumVal.ToJsonString()));
+                    jsonEnum.Add(enumVal.DeepClone());
                 }
             }
 
@@ -234,7 +248,8 @@ public sealed class OdcsContractParser : IOdcsContractParser
                     childPath,
                     isRoot: false,
                     isNullable: !isRequired,
-                    extractedRules);
+                    extractedRules,
+                    depth + 1);
 
                 propertiesObj[propName] = childSchema;
             }
@@ -251,7 +266,8 @@ public sealed class OdcsContractParser : IOdcsContractParser
                 arrayItemPath,
                 isRoot: false,
                 isNullable: !itemRequired,
-                extractedRules);
+                extractedRules,
+                depth + 1);
         }
 
         if (GetString(odcsNode, "description") is { } desc && !string.IsNullOrWhiteSpace(desc))
@@ -293,11 +309,11 @@ public sealed class OdcsContractParser : IOdcsContractParser
             JsonNode? implementation = null;
             if (qObj.TryGetPropertyValue("implementation", out var implNode) && implNode is not null)
             {
-                implementation = JsonNode.Parse(implNode.ToJsonString());
+                implementation = implNode.DeepClone();
             }
             else if (qObj.TryGetPropertyValue("assert", out var assertNode) && assertNode is not null)
             {
-                implementation = JsonNode.Parse(assertNode.ToJsonString());
+                implementation = assertNode.DeepClone();
             }
 
             extractedRules.Add(new BusinessRule

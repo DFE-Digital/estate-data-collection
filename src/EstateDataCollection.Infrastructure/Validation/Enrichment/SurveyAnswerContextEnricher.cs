@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 
@@ -19,7 +20,8 @@ public sealed class SurveyAnswerContextEnricher : IRuleContextEnricher
             if (valNode is JsonValue val)
             {
                 if (val.TryGetValue<double>(out _) ||
-                    (val.TryGetValue<string>(out var sNum) && double.TryParse(sNum, out _)))
+                    (val.TryGetValue<string>(out var sNum) &&
+                     double.TryParse(sNum, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out _)))
                 {
                     isNumeric = true;
                 }

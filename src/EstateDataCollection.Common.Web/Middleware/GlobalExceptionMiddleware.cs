@@ -16,6 +16,29 @@ public class GlobalExceptionMiddleware(ILogger<GlobalExceptionMiddleware> logger
         {
             await next(context);
         }
+        catch (RequestBodyTooLargeException ex)
+        {
+            var httpContext = context.GetHttpContext();
+            if (httpContext is null)
+            {
+                throw;
+            }
+
+            logger.LogWarning(
+                "Streaming request payload exceeded configured limit of {MaxSizeMb} MB on path {Path}",
+                ex.MaxSizeMb,
+                httpContext.Request.Path);
+
+            var problem = HttpRequestExtensions.CreatePayloadTooLargeProblem(ex.MaxSizeBytes, httpContext.Request.Path);
+            problem.Extensions["traceId"] = context.InvocationId;
+
+            httpContext.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+            await httpContext.Response.WriteAsJsonAsync(
+                problem,
+                options: null,
+                contentType: "application/problem+json",
+                cancellationToken: httpContext.RequestAborted);
+        }
         catch (Exception ex)
         {
             var httpContext = context.GetHttpContext();

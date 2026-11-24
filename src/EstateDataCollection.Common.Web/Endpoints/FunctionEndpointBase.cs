@@ -2,6 +2,7 @@ using System.Text.Json;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Web.Extensions;
+using EstateDataCollection.Common.Web.Models.Results;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -54,7 +55,22 @@ public abstract class FunctionEndpointBase(
     {
         _instrumentation.EndpointInvoked(endpointName, context ?? "default");
 
-        var bindResult = await bindRequestAsync();
+        Result<TRequest> bindResult;
+        try
+        {
+            bindResult = await bindRequestAsync();
+        }
+        catch (RequestBodyTooLargeException ex)
+        {
+            _instrumentation.EndpointBindingFailed(endpointName, "Payload.TooLarge", ex.Message);
+            var problem = HttpRequestExtensions.CreatePayloadTooLargeProblem(ex.MaxSizeBytes, PathString.Empty);
+            _instrumentation.EndpointCompleted(endpointName, StatusCodes.Status413PayloadTooLarge);
+            return new ObjectResult(ApiResponse<TResponse>.Failure(problem))
+            {
+                StatusCode = StatusCodes.Status413PayloadTooLarge
+            };
+        }
+
         if (bindResult.IsFailure)
         {
             _instrumentation.EndpointBindingFailed(

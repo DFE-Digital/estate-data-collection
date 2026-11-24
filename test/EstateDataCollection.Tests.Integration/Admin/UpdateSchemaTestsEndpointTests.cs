@@ -15,8 +15,10 @@ namespace EstateDataCollection.Tests.Integration.Admin;
 
 [Collection("AzuriteCollection")]
 public sealed class UpdateSchemaTestsEndpointTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Fact]
     public async Task Put_UpdateSchemaTests_Should_Verify_Against_Schema_And_Business_Rules_Before_Saving()

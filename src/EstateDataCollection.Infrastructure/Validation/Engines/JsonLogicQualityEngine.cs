@@ -11,6 +11,8 @@ namespace EstateDataCollection.Infrastructure.Validation.Engines;
 
 public sealed class JsonLogicQualityEngine : IQualityRuleEngine
 {
+    private const int MaxAstDepth = 64;
+
     public static readonly ValidationEngineDescriptor EngineDescriptor = new(
         EngineId: "jsonlogic",
         DisplayName: "JsonLogic Quality Engine",
@@ -75,7 +77,7 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
             // Bind dynamic string/timestamp comparisons and .length properties against the current context
             var boundAst = BindContextAwareOperations(normalizedBase, enrichedContextNode);
             var logicRule = JsonSerializer.Deserialize<Rule>(boundAst.ToJsonString());
-            
+
             if (logicRule is null)
             {
                 return Error.Validation(ErrorCodes.SchemaVerificationFailed, $"Rule '{rule.Id}' could not be compiled.");
@@ -90,8 +92,13 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
         }
     }
 
-    private static JsonNode NormaliseRuleNode(JsonNode node)
+    private static JsonNode NormaliseRuleNode(JsonNode node, int depth = 0)
     {
+        if (depth > MaxAstDepth)
+        {
+            throw new InvalidOperationException($"JsonLogic rule exceeds maximum nesting depth of {MaxAstDepth}.");
+        }
+
         if (node is JsonObject obj)
         {
             var normalizedObj = new JsonObject();
@@ -101,12 +108,12 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
                 {
                     normalizedObj["!"] = new JsonObject
                     {
-                        ["in"] = NormaliseRuleNode(value)
+                        ["in"] = NormaliseRuleNode(value, depth + 1)
                     };
                 }
                 else if (value is not null)
                 {
-                    normalizedObj[key] = NormaliseRuleNode(value);
+                    normalizedObj[key] = NormaliseRuleNode(value, depth + 1);
                 }
                 else
                 {
@@ -121,12 +128,12 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
             var normalizedArr = new JsonArray();
             foreach (var item in arr)
             {
-                normalizedArr.Add(item is not null ? NormaliseRuleNode(item) : null);
+                normalizedArr.Add(item is not null ? NormaliseRuleNode(item, depth + 1) : null);
             }
             return normalizedArr;
         }
 
-        return JsonNode.Parse(node.ToJsonString())!;
+        return node.DeepClone();
     }
 
     /// <summary>
@@ -135,8 +142,13 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
     /// 2. Relational operators (&gt;, &gt;=, &lt;, &lt;=) comparing ISO-8601 timestamps or non-numeric strings
     ///    are converted into comparable numeric values (since Json.Logic 5.x only compares numeric values in &gt;, &gt;=, &lt;, &lt;=).
     /// </summary>
-    private static JsonNode BindContextAwareOperations(JsonNode node, JsonNode contextNode)
+    private static JsonNode BindContextAwareOperations(JsonNode node, JsonNode contextNode, int depth = 0)
     {
+        if (depth > MaxAstDepth)
+        {
+            throw new InvalidOperationException($"JsonLogic rule exceeds maximum nesting depth of {MaxAstDepth}.");
+        }
+
         if (node is JsonObject obj)
         {
             // Handle {"var": "..."} with .length suffix
@@ -166,21 +178,22 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
                 var op = kvp.Key;
                 if (op is ">" or ">=" or "<" or "<=" && kvp.Value is JsonArray operands && operands.Count == 2)
                 {
-                    var leftBound = BindContextAwareOperations(operands[0]!, contextNode);
-                    var rightBound = BindContextAwareOperations(operands[1]!, contextNode);
+                    var leftBound = BindContextAwareOperations(operands[0]!, contextNode, depth + 1);
+                    var rightBound = BindContextAwareOperations(operands[1]!, contextNode, depth + 1);
 
                     var leftStr = TryResolveStringOperand(leftBound, contextNode);
                     var rightStr = TryResolveStringOperand(rightBound, contextNode);
 
                     if (leftStr is not null && rightStr is not null)
                     {
-                        // 1. Try ISO-8601 DateTimeOffset comparison
+                        // 1. Try exact ISO-8601 DateTimeOffset comparison without losing sub-second precision
                         if (DateTimeOffset.TryParse(leftStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var leftDt) &&
                             DateTimeOffset.TryParse(rightStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var rightDt))
                         {
+                            var dtCmp = leftDt.CompareTo(rightDt);
                             return new JsonObject
                             {
-                                [op] = new JsonArray(JsonValue.Create(leftDt.UtcTicks), JsonValue.Create(rightDt.UtcTicks))
+                                [op] = new JsonArray(JsonValue.Create(dtCmp), JsonValue.Create(0))
                             };
                         }
 
@@ -206,7 +219,7 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
             var boundObj = new JsonObject();
             foreach (var (key, value) in obj)
             {
-                boundObj[key] = value is not null ? BindContextAwareOperations(value, contextNode) : null;
+                boundObj[key] = value is not null ? BindContextAwareOperations(value, contextNode, depth + 1) : null;
             }
             return boundObj;
         }
@@ -216,12 +229,12 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
             var boundArr = new JsonArray();
             foreach (var item in arr)
             {
-                boundArr.Add(item is not null ? BindContextAwareOperations(item, contextNode) : null);
+                boundArr.Add(item is not null ? BindContextAwareOperations(item, contextNode, depth + 1) : null);
             }
             return boundArr;
         }
 
-        return JsonNode.Parse(node.ToJsonString())!;
+        return node.DeepClone();
     }
 
     private static string? TryResolveStringOperand(JsonNode operandNode, JsonNode contextNode)
@@ -273,7 +286,7 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
                     return null;
                 }
             }
-            else if (current is JsonArray arr && int.TryParse(segment, out var index) && index >= 0 && index < arr.Count)
+            else if (current is JsonArray arr && int.TryParse(segment, NumberStyles.None, CultureInfo.InvariantCulture, out var index) && index >= 0 && index < arr.Count)
             {
                 current = arr[index];
             }

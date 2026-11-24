@@ -16,8 +16,10 @@ namespace EstateDataCollection.Tests.Integration.AdminUi;
 
 [Collection("AzuriteCollection")]
 public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     private static async Task<HttpRequest> CreateFormRequestAsync(
         Dictionary<string, string?> fields,

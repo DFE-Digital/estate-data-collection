@@ -14,8 +14,10 @@ namespace EstateDataCollection.Tests.Integration.Admin;
 
 [Collection("AzuriteCollection")]
 public sealed class SubmitSchemaEndpointTests(AzuriteFixture fixture)
+    : IDisposable
 {
     private readonly IntegrationEndpointHarness<PostSubmitSchemaEndpoint> _harness = new(fixture);
+    public void Dispose() => _harness.Dispose();
 
     [Theory]
     [InlineData("")]

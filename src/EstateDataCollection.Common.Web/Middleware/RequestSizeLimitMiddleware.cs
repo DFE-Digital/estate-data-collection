@@ -1,6 +1,6 @@
+using EstateDataCollection.Common.Web.Extensions;
 using EstateDataCollection.Common.Web.Models.Options;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Middleware;
 using Microsoft.Extensions.Logging;
@@ -23,6 +23,7 @@ public class RequestSizeLimitMiddleware(
         }
 
         var maxBytes = options.Value.MaxSizeBytes;
+        httpContext.Items[HttpRequestExtensions.MaxBodySizeItemKey] = maxBytes;
 
         // 1. Fast fail if Content-Length header exceeds the configured limit
         if (httpContext.Request.ContentLength.HasValue && httpContext.Request.ContentLength.Value > maxBytes)
@@ -33,15 +34,7 @@ public class RequestSizeLimitMiddleware(
                 options.Value.MaxSizeMb,
                 httpContext.Request.Path);
 
-            var problem = new ProblemDetails
-            {
-                Status = StatusCodes.Status413PayloadTooLarge,
-                Title = "Payload Too Large",
-                Detail = $"The request payload exceeds the configured maximum limit of {options.Value.MaxSizeMb} MB.",
-                Instance = httpContext.Request.Path
-            };
-            problem.Extensions["errorCode"] = "Payload.TooLarge";
-            problem.Extensions["maxSizeMb"] = options.Value.MaxSizeMb;
+            var problem = HttpRequestExtensions.CreatePayloadTooLargeProblem(maxBytes, httpContext.Request.Path);
 
             httpContext.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
             await httpContext.Response.WriteAsJsonAsync(
