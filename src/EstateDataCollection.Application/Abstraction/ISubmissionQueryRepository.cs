@@ -13,7 +13,7 @@ public interface ISubmissionQueryRepository : IInfrastructure
         string? searchQuery = null,
         CancellationToken cancellationToken = default);
 
-    Task<Result<SubmissionProcessedArtifact?>> GetProcessedArtifactAsync(
+    Task<Result<SubmissionProcessedArtifact?>> GetProcessedArtefactAsync(
         SubmissionSession session,
         CancellationToken cancellationToken = default);
 }

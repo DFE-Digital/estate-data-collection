@@ -72,14 +72,14 @@ internal static class SubmissionBlobPathResolver
             });
         }
 
-        var safeValue = SanitizeBlobPathSegment(effectiveValue);
+        var safeValue = SanitiseBlobPathSegment(effectiveValue);
         var effectiveType = string.IsNullOrWhiteSpace(identifierType)
             ? SchemaIdentifierConfig.DefaultUrnType
             : identifierType.Trim();
 
         if (!string.Equals(effectiveType, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase))
         {
-            var safeType = SanitizeBlobPathSegment(effectiveType.ToLowerInvariant());
+            var safeType = SanitiseBlobPathSegment(effectiveType.ToLowerInvariant());
             format = format.Replace("urn={urn}", $"{safeType}={safeValue}", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -93,7 +93,7 @@ internal static class SubmissionBlobPathResolver
         });
     }
 
-    public static string SanitizeBlobPathSegment(string value)
+    public static string SanitiseBlobPathSegment(string value)
     {
         return value.Trim()
             .Replace('/', '-')

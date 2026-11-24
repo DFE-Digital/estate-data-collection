@@ -61,7 +61,7 @@ public sealed class PostRunSchemaTestsEndpoint(
                 IncludeRetired: queryIncludeRetired);
         }
 
-        var dtoResult = DeserializeJson<RunSchemaTestsBodyDto>(rawBody, "Invalid run schema tests request JSON body.");
+        var dtoResult = DeserialiseJson<RunSchemaTestsBodyDto>(rawBody, "Invalid run schema tests request JSON body.");
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;

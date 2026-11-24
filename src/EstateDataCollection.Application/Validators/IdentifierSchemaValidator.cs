@@ -41,7 +41,7 @@ public static class IdentifierSchemaValidator
                     Errors: msgs);
             }
 
-            normalized = requestedConfig.Normalize();
+            normalized = requestedConfig.Normalise();
 
             if (normalized.IsDisabled)
             {

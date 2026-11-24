@@ -52,7 +52,7 @@ public sealed class PatchScheduleSchemaEndpoint(
             return Error.Failure(ErrorCodes.PayloadEmpty);
         }
 
-        var dtoResult = DeserializeJson<ScheduleSchemaBodyDto>(rawBody, "Invalid schedule request JSON body.");
+        var dtoResult = DeserialiseJson<ScheduleSchemaBodyDto>(rawBody, "Invalid schedule request JSON body.");
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;

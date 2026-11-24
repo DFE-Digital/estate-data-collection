@@ -236,7 +236,7 @@ public sealed class BlobSchemaRegistry(
 
             if (validFixtures.Count > 0)
             {
-                var validJson = DraftSchemaBlobPathParser.SerializeFixturesArray(validFixtures);
+                var validJson = DraftSchemaBlobPathParser.SerialiseFixturesArray(validFixtures);
                 using var validStream = new MemoryStream(Encoding.UTF8.GetBytes(validJson));
                 await validFixturesBlob.UploadAsync(validStream, new BlobUploadOptions
                 {
@@ -252,7 +252,7 @@ public sealed class BlobSchemaRegistry(
 
             if (invalidFixtures.Count > 0)
             {
-                var invalidJson = DraftSchemaBlobPathParser.SerializeFixturesArray(invalidFixtures);
+                var invalidJson = DraftSchemaBlobPathParser.SerialiseFixturesArray(invalidFixtures);
                 using var invalidStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
                 await invalidFixturesBlob.UploadAsync(invalidStream, new BlobUploadOptions
                 {
@@ -484,7 +484,7 @@ public sealed class BlobSchemaRegistry(
             // 4. Upload stored golden regression test fixtures if provided ({schemaName}/v{version}.valid.json / .invalid.json)
             if (sampleValidFixtures is { Count: > 0 })
             {
-                var validJson = DraftSchemaBlobPathParser.SerializeFixturesArray(sampleValidFixtures);
+                var validJson = DraftSchemaBlobPathParser.SerialiseFixturesArray(sampleValidFixtures);
                 using var validStream = new MemoryStream(Encoding.UTF8.GetBytes(validJson));
                 validFixturesUpload = await validFixturesBlob.UploadAsync(validStream, new BlobUploadOptions
                 {
@@ -494,7 +494,7 @@ public sealed class BlobSchemaRegistry(
 
             if (sampleInvalidFixtures is { Count: > 0 })
             {
-                var invalidJson = DraftSchemaBlobPathParser.SerializeFixturesArray(sampleInvalidFixtures);
+                var invalidJson = DraftSchemaBlobPathParser.SerialiseFixturesArray(sampleInvalidFixtures);
                 using var invalidStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
                 invalidFixturesUpload = await invalidFixturesBlob.UploadAsync(invalidStream, new BlobUploadOptions
                 {
@@ -560,7 +560,7 @@ public sealed class BlobSchemaRegistry(
         }
     }
 
-    public async Task<Result<DraftSchemaArtifact>> GetDraftArtifactAsync(
+    public async Task<Result<DraftSchemaArtifact>> GetDraftArtefactAsync(
         string blobPath,
         CancellationToken cancellationToken = default)
     {

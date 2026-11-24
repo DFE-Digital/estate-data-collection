@@ -30,7 +30,7 @@ public sealed partial class IngestDraftSchemaUseCase(
 
         _instrumentation.IngestingDraftBlob(request.BlobPath);
 
-        var artifactResult = await schemaRegistry.GetDraftArtifactAsync(request.BlobPath, cancellationToken);
+        var artifactResult = await schemaRegistry.GetDraftArtefactAsync(request.BlobPath, cancellationToken);
         if (artifactResult.IsFailure)
         {
             return artifactResult.Error;

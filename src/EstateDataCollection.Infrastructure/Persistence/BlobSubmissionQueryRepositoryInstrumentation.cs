@@ -15,7 +15,7 @@ public sealed partial class BlobSubmissionQueryRepositoryInstrumentation(
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "Failed to load processed artifact for submission {SubmissionId}: {Error}"
+        Message = "Failed to load processed artefact for submission {SubmissionId}: {Error}"
     )]
     public partial void ProcessedLookupFailed(Guid submissionId, string error);
 }

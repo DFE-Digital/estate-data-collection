@@ -44,7 +44,7 @@ public sealed class GetSubmissionStatisticsResultBuilder
         return this;
     }
 
-    public GetSubmissionStatisticsResultBuilder WithArtifactTotals(int totalDraftChunks, int totalAuditEvents)
+    public GetSubmissionStatisticsResultBuilder WithArtefactTotals(int totalDraftChunks, int totalAuditEvents)
     {
         _totalDraftChunks = totalDraftChunks;
         _totalAuditEvents = totalAuditEvents;

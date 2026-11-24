@@ -8,6 +8,11 @@ public sealed record QualityRulesViewerViewModel(
     bool NoRules,
     IReadOnlyList<QualityRuleCardViewModel> Rules)
 {
+    public string RuleSummaryText
+    {
+        get { return $"{RuleCount} active {(RuleCount == 1 ? "rule" : "rules")}"; }
+    }
+
     public static QualityRulesViewerViewModel From(IReadOnlyList<SchemaQualityRuleSummary>? rules)
     {
         var cards = (rules ?? [])

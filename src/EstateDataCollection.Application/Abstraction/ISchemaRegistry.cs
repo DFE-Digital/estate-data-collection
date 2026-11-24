@@ -80,7 +80,7 @@ public interface ISchemaRegistry : IInfrastructure
     /// Reads a newly uploaded contract (ODCS YAML, .schema.json, or .rules.json) and any companion files
     /// (.meta.json, .valid.json, .invalid.json) from the draft/staging schema container.
     /// </summary>
-    Task<Result<DraftSchemaArtifact>> GetDraftArtifactAsync(
+    Task<Result<DraftSchemaArtifact>> GetDraftArtefactAsync(
         string blobPath,
         CancellationToken cancellationToken = default)
     {

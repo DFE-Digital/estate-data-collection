@@ -86,7 +86,7 @@ public sealed record SchemaIdentifierConfig
         return Result.Success();
     }
 
-    public SchemaIdentifierConfig Normalize()
+    public SchemaIdentifierConfig Normalise()
     {
         var trimmedType = string.IsNullOrWhiteSpace(Type) ? DefaultUrnType : Type.Trim();
         if (string.Equals(trimmedType, NoneType, StringComparison.OrdinalIgnoreCase))

@@ -278,7 +278,7 @@ public sealed class SubmissionExecutionScopeTests
     }
 
     [Fact]
-    public void SubmissionProcessExecution_Should_Serialize_And_Deserialize_Outcome_As_PascalCase_String()
+    public void SubmissionProcessExecution_Should_Serialise_And_Deserialise_Outcome_As_PascalCase_String()
     {
         var entry = new SubmissionProcessExecutionBuilder()
             .For(SubmissionProcessCatalog.JsonSchemaValidator)

@@ -62,7 +62,7 @@ public class SchemaMetadata
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(version);
         ArgumentException.ThrowIfNullOrWhiteSpace(rawJsonSchema);
 
-        var normalizedConfig = ValidateAndNormalizeIdentifier(identifierConfig);
+        var normalizedConfig = ValidateAndNormaliseIdentifier(identifierConfig);
 
         return new SchemaMetadata
         {
@@ -185,7 +185,7 @@ public class SchemaMetadata
     /// </summary>
     public void ConfigureIdentifier(SchemaIdentifierConfig? identifierConfig)
     {
-        IdentifierConfig = ValidateAndNormalizeIdentifier(identifierConfig);
+        IdentifierConfig = ValidateAndNormaliseIdentifier(identifierConfig);
     }
 
     /// <summary>
@@ -211,7 +211,7 @@ public class SchemaMetadata
         LastTestRunEngineTraces = engineTraces is { Count: > 0 } ? engineTraces.ToArray() : [];
     }
 
-    private static SchemaIdentifierConfig? ValidateAndNormalizeIdentifier(SchemaIdentifierConfig? identifierConfig)
+    private static SchemaIdentifierConfig? ValidateAndNormaliseIdentifier(SchemaIdentifierConfig? identifierConfig)
     {
         if (identifierConfig is null)
         {
@@ -227,7 +227,7 @@ public class SchemaMetadata
             throw new ArgumentException(reason, nameof(identifierConfig));
         }
 
-        return identifierConfig.Normalize();
+        return identifierConfig.Normalise();
     }
 
     public void ScheduleActivation(DateTimeOffset effectiveFromUtc, DateTimeOffset? effectiveToUtc = null)

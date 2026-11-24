@@ -44,7 +44,7 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
 
         try
         {
-            var normalized = NormalizeRuleNode(assertion);
+            var normalized = NormaliseRuleNode(assertion);
             var logicRule = JsonSerializer.Deserialize<Rule>(normalized.ToJsonString());
             if (logicRule is null)
             {
@@ -70,7 +70,7 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
         try
         {
             var rawKey = assertion.ToJsonString();
-            var normalizedBase = _normalizedAstCache.GetOrAdd(rawKey, _ => NormalizeRuleNode(assertion));
+            var normalizedBase = _normalizedAstCache.GetOrAdd(rawKey, _ => NormaliseRuleNode(assertion));
 
             // Bind dynamic string/timestamp comparisons and .length properties against the current context
             var boundAst = BindContextAwareOperations(normalizedBase, enrichedContextNode);
@@ -90,7 +90,7 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
         }
     }
 
-    private static JsonNode NormalizeRuleNode(JsonNode node)
+    private static JsonNode NormaliseRuleNode(JsonNode node)
     {
         if (node is JsonObject obj)
         {
@@ -101,12 +101,12 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
                 {
                     normalizedObj["!"] = new JsonObject
                     {
-                        ["in"] = NormalizeRuleNode(value)
+                        ["in"] = NormaliseRuleNode(value)
                     };
                 }
                 else if (value is not null)
                 {
-                    normalizedObj[key] = NormalizeRuleNode(value);
+                    normalizedObj[key] = NormaliseRuleNode(value);
                 }
                 else
                 {
@@ -121,7 +121,7 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
             var normalizedArr = new JsonArray();
             foreach (var item in arr)
             {
-                normalizedArr.Add(item is not null ? NormalizeRuleNode(item) : null);
+                normalizedArr.Add(item is not null ? NormaliseRuleNode(item) : null);
             }
             return normalizedArr;
         }

@@ -187,6 +187,8 @@ public sealed class RazorComponentRenderingTests
         html.Should().Contain("min: 100000; max: 999999");
         html.Should().Contain("rule-1");
         html.Should().Contain("cel");
+        html.Should().Contain("1 active rule");
+        html.Should().Contain("1 top-level field");
         html.Should().Contain("Default");
         html.Should().Contain("View Stored Tests (2)");
         html.Should().Contain("/manage/schemas/academy-return/3/tests/run");

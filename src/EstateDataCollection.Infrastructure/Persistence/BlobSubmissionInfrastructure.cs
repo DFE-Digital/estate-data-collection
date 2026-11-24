@@ -117,7 +117,7 @@ public class BlobSubmissionInfrastructure(
 
             if (session is null)
             {
-                return Error.Failure(ErrorCodes.StorageSerialisationError, new { Message = "Failed to deserialize session metadata." });
+                return Error.Failure(ErrorCodes.StorageSerialisationError, new { Message = "Failed to deserialise session metadata." });
             }
 
             _instrumentation.SessionRetrieved(submissionId);

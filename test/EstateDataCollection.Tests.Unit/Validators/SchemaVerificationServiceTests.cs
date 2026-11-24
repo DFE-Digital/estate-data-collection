@@ -229,7 +229,7 @@ public sealed class SchemaVerificationServiceTests
     }
 
     [Fact]
-    public void ValidationMessage_JsonSerialization_Should_RoundTrip_Structured_And_Legacy_Strings()
+    public void ValidationMessage_JsonSerialisation_Should_RoundTrip_Structured_And_Legacy_Strings()
     {
         var structured = ValidationMessage.For(
             ValidationSources.Rule,

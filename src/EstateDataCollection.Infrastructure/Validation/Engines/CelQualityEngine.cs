@@ -51,7 +51,7 @@ public sealed partial class CelQualityEngine(
 
         try
         {
-            var normalized = NormalizeCelExpression(exprText);
+            var normalized = NormaliseCelExpression(exprText);
             _ = _compiledCache.GetOrAdd(normalized, static expr => SharedEnv.Compile(expr));
             return [];
         }
@@ -71,7 +71,7 @@ public sealed partial class CelQualityEngine(
 
         try
         {
-            var normalized = NormalizeCelExpression(exprText);
+            var normalized = NormaliseCelExpression(exprText);
             var program = _compiledCache.GetOrAdd(normalized, static expr => SharedEnv.Compile(expr));
 
             var bindings = BuildBindings(enrichedContextNode, rootNode);
@@ -132,7 +132,7 @@ public sealed partial class CelQualityEngine(
         return null;
     }
 
-    private static string NormalizeCelExpression(string expression)
+    private static string NormaliseCelExpression(string expression)
     {
         // Allow authors to write "this.field" in addition to "self.field" or direct "field"
         return ThisDotPrefixRegex().Replace(expression.Trim(), "self.");

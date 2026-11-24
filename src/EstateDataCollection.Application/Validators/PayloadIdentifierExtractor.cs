@@ -117,7 +117,7 @@ public static class PayloadIdentifierExtractor
             ValidationError: new ValidationError($"#{pointer}", message));
     }
 
-    internal static string NormalizePathForComparison(string? path)
+    internal static string NormalisePathForComparison(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {

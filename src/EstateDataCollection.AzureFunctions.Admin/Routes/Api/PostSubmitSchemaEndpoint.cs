@@ -64,7 +64,7 @@ public sealed class PostSubmitSchemaEndpoint(
                 IdentifierConfig: AdminRequestHelpers.GetIdentifierConfigHint(http));
         }
 
-        var dtoResult = DeserializeJson<SubmitSchemaBodyDto>(rawBody, "Invalid submit schema request JSON body.");
+        var dtoResult = DeserialiseJson<SubmitSchemaBodyDto>(rawBody, "Invalid submit schema request JSON body.");
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;

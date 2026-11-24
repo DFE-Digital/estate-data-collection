@@ -242,9 +242,9 @@ public sealed class PayloadValidationService(
 
             if (!identifierEval.IsValid && identifierEval.ValidationError is not null)
             {
-                var normalizedIdentifierPath = PayloadIdentifierExtractor.NormalizePathForComparison(identifierEval.ValidationError.PropertyPath);
+                var normalizedIdentifierPath = PayloadIdentifierExtractor.NormalisePathForComparison(identifierEval.ValidationError.PropertyPath);
                 var alreadyReportedOnSamePath = errors.Any(e =>
-                    string.Equals(PayloadIdentifierExtractor.NormalizePathForComparison(e.PropertyPath), normalizedIdentifierPath, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(PayloadIdentifierExtractor.NormalisePathForComparison(e.PropertyPath), normalizedIdentifierPath, StringComparison.OrdinalIgnoreCase));
 
                 if (!alreadyReportedOnSamePath)
                 {

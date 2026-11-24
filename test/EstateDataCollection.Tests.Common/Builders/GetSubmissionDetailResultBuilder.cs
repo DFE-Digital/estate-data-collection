@@ -53,7 +53,7 @@ public sealed class GetSubmissionDetailResultBuilder
         return this;
     }
 
-    public GetSubmissionDetailResultBuilder WithProcessedArtifact(SubmissionProcessedArtifact? processedArtifact)
+    public GetSubmissionDetailResultBuilder WithProcessedArtefact(SubmissionProcessedArtifact? processedArtifact)
     {
         _processedArtifact = processedArtifact;
         return this;

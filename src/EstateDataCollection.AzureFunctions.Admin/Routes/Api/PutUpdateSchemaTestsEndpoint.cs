@@ -56,7 +56,7 @@ public sealed class PutUpdateSchemaTestsEndpoint(
             return Error.Failure(ErrorCodes.PayloadEmpty);
         }
 
-        var dtoResult = DeserializeJson<UpdateSchemaTestsBodyDto>(rawBody, "Invalid update schema tests request JSON body.");
+        var dtoResult = DeserialiseJson<UpdateSchemaTestsBodyDto>(rawBody, "Invalid update schema tests request JSON body.");
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;

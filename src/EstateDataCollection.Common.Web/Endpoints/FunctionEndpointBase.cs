@@ -100,7 +100,7 @@ public abstract class FunctionEndpointBase(
         return actionResult;
     }
 
-    protected static Result<TDto> DeserializeJson<TDto>(
+    protected static Result<TDto> DeserialiseJson<TDto>(
         string rawBody,
         string malformedMessage,
         JsonSerializerOptions? jsonOptions = null) where TDto : class

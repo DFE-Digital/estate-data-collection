@@ -33,7 +33,7 @@ public class IngestDraftSchemaUseCaseTests
 
         var registry = Substitute.For<ISchemaRegistry>();
         var verifier = Substitute.For<ISchemaVerificationService>();
-        registry.GetDraftArtifactAsync(blobPath, Arg.Any<CancellationToken>())
+        registry.GetDraftArtefactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
         verifier.VerifyCandidateSchemaAsync(
                 Arg.Any<string?>(),
@@ -114,7 +114,7 @@ public class IngestDraftSchemaUseCaseTests
 
         var registry = Substitute.For<ISchemaRegistry>();
         var verifier = Substitute.For<ISchemaVerificationService>();
-        registry.GetDraftArtifactAsync(blobPath, Arg.Any<CancellationToken>())
+        registry.GetDraftArtefactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
         verifier.VerifyCandidateSchemaAsync(
                 schemaJson,
@@ -164,7 +164,7 @@ public class IngestDraftSchemaUseCaseTests
 
         var registry = Substitute.For<ISchemaRegistry>();
         var verifier = Substitute.For<ISchemaVerificationService>();
-        registry.GetDraftArtifactAsync(blobPath, Arg.Any<CancellationToken>())
+        registry.GetDraftArtefactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
         verifier.VerifyCandidateSchemaAsync(
                 schemaJson,

@@ -46,7 +46,7 @@ internal static partial class DraftSchemaBlobPathParser
         return content.TrimStart().StartsWith('[');
     }
 
-    public static string NormalizeDraftBlobPath(string blobPath, string draftContainerName)
+    public static string NormaliseDraftBlobPath(string blobPath, string draftContainerName)
     {
         var normalized = blobPath.Trim().TrimStart('/');
         var containerPrefix = $"{draftContainerName}/";
@@ -101,7 +101,7 @@ internal static partial class DraftSchemaBlobPathParser
         }
     }
 
-    public static string SerializeFixturesArray(IReadOnlyList<string> fixtures)
+    public static string SerialiseFixturesArray(IReadOnlyList<string> fixtures)
     {
         var array = new JsonArray();
         foreach (var fixture in fixtures.Where(f => !string.IsNullOrWhiteSpace(f)))

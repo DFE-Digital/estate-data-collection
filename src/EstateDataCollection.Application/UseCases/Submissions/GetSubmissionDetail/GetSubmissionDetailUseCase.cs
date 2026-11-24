@@ -36,7 +36,7 @@ public sealed class GetSubmissionDetailUseCase(
         SubmissionProcessedArtifact? processedArtifact = null;
         if (session.IsFinalised)
         {
-            var processedResult = await queryRepository.GetProcessedArtifactAsync(session, cancellationToken);
+            var processedResult = await queryRepository.GetProcessedArtefactAsync(session, cancellationToken);
             if (processedResult.IsSuccess)
             {
                 processedArtifact = processedResult.Value;

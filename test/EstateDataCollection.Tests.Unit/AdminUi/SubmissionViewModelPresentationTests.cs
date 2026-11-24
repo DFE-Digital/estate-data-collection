@@ -33,7 +33,7 @@ public sealed class SubmissionViewModelPresentationTests
         var statsResult = new GetSubmissionStatisticsResultBuilder()
             .WithSubmissionCounts(total: 1, draft: 1, draftWithPayload: 1, emptyDraft: 0, finalised: 0)
             .WithRecentActivity(last24Hours: 1, last7Days: 1)
-            .WithArtifactTotals(totalDraftChunks: 2, totalAuditEvents: 3)
+            .WithArtefactTotals(totalDraftChunks: 2, totalAuditEvents: 3)
             .WithSchemaStatistic(
                 "cdc_survey",
                 version: 2,

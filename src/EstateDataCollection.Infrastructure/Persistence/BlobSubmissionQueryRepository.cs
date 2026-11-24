@@ -228,7 +228,7 @@ public sealed class BlobSubmissionQueryRepository(
         }
     }
 
-    public async Task<Result<SubmissionProcessedArtifact?>> GetProcessedArtifactAsync(
+    public async Task<Result<SubmissionProcessedArtifact?>> GetProcessedArtefactAsync(
         SubmissionSession session,
         CancellationToken cancellationToken = default)
     {
@@ -253,7 +253,7 @@ public sealed class BlobSubmissionQueryRepository(
             var directBlob = processedContainer.GetBlobClient(expectedName);
             if ((await directBlob.ExistsAsync(cancellationToken)).Value)
             {
-                return await ReadProcessedArtifactAsync(directBlob, cancellationToken);
+                return await ReadProcessedArtefactAsync(directBlob, cancellationToken);
             }
 
             var suffix = $"/{session.SubmissionId}.json";
@@ -263,7 +263,7 @@ public sealed class BlobSubmissionQueryRepository(
                     string.Equals(blobItem.Name, $"{session.SubmissionId}.json", StringComparison.OrdinalIgnoreCase))
                 {
                     var matchBlob = processedContainer.GetBlobClient(blobItem.Name);
-                    return await ReadProcessedArtifactAsync(matchBlob, cancellationToken);
+                    return await ReadProcessedArtefactAsync(matchBlob, cancellationToken);
                 }
             }
 
@@ -276,7 +276,7 @@ public sealed class BlobSubmissionQueryRepository(
         }
     }
 
-    private static async Task<SubmissionProcessedArtifact> ReadProcessedArtifactAsync(
+    private static async Task<SubmissionProcessedArtifact> ReadProcessedArtefactAsync(
         BlobClient blobClient,
         CancellationToken cancellationToken)
     {
@@ -338,14 +338,14 @@ public sealed class BlobSubmissionQueryRepository(
             });
         }
 
-        var safeValue = SanitizeBlobPathSegment(effectiveValue);
+        var safeValue = SanitiseBlobPathSegment(effectiveValue);
         var effectiveType = string.IsNullOrWhiteSpace(identifierType)
             ? SchemaIdentifierConfig.DefaultUrnType
             : identifierType.Trim();
 
         if (!string.Equals(effectiveType, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase))
         {
-            var safeType = SanitizeBlobPathSegment(effectiveType.ToLowerInvariant());
+            var safeType = SanitiseBlobPathSegment(effectiveType.ToLowerInvariant());
             format = format.Replace("urn={urn}", $"{safeType}={safeValue}", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -359,7 +359,7 @@ public sealed class BlobSubmissionQueryRepository(
         });
     }
 
-    private static string SanitizeBlobPathSegment(string value)
+    private static string SanitiseBlobPathSegment(string value)
     {
         return value.Trim()
             .Replace('/', '-')
