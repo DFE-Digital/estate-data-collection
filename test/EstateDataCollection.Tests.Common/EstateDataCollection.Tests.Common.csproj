@@ -9,4 +9,9 @@
     <ProjectReference Include="..\..\src\EstateDataCollection.Domain\EstateDataCollection.Domain.csproj" />
     <ProjectReference Include="..\..\src\EstateDataCollection.Application\EstateDataCollection.Application.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="Fixtures\CdeContracts\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

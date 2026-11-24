@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <RootNamespace>EstateDataCollection.Admin.UI</RootNamespace>
+    <AddRazorSupportForMvc>false</AddRazorSupportForMvc>
+    <TypeScriptCompileBlocked>false</TypeScriptCompileBlocked>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.TypeScript.MSBuild">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="wwwroot\**" />
+  </ItemGroup>
+
+  <Target Name="EmbedCompiledTypeScriptAssets"
+          DependsOnTargets="SetTscExecutable;RunTscCompile"
+          BeforeTargets="PrepareResources;SplitResourcesByCulture;CreateManifestResourceNames">
+    <ItemGroup>
+      <_UiAssetFiles Include="wwwroot\**" Exclude="wwwroot\**\*.map" />
+      <EmbeddedResource Include="@(_UiAssetFiles)">
+        <LogicalName>$([System.String]::Copy('wwwroot/%(RecursiveDir)%(Filename)%(Extension)').Replace('\', '/'))</LogicalName>
+        <WithCulture>false</WithCulture>
+        <Type>Non-Resx</Type>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EstateDataCollection.Application\EstateDataCollection.Application.csproj" />
+    <ProjectReference Include="..\EstateDataCollection.Common\EstateDataCollection.Common.csproj" />
+    <ProjectReference Include="..\EstateDataCollection.Domain\EstateDataCollection.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

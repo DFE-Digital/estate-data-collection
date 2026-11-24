@@ -1,0 +1,197 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Pages
+
+<DfeAdminLayout Model="Model.Page">
+    <ErrorSummary Model="Model.ErrorSummary" />
+
+    <div class="govuk-grid-row">
+        <div class="govuk-grid-column-two-thirds">
+            <h1 class="govuk-heading-xl govuk-!-margin-bottom-3">Submission Statistics</h1>
+            <p class="govuk-body-l">
+                Monitor draft and finalised submissions across registered schemas, review upload activity, and inspect audit trails.
+            </p>
+        </div>
+        <div class="govuk-grid-column-one-third" style="text-align: right;">
+            <a href="@AppRoutes.AdminUi.Submissions" class="govuk-button" data-module="govuk-button">
+                Browse All Submissions
+            </a>
+        </div>
+    </div>
+
+    <form method="get" action="@AppRoutes.AdminUi.Statistics" class="dfe-pane govuk-!-margin-bottom-6">
+        <div class="govuk-grid-row" style="align-items: end;">
+            <div class="govuk-grid-column-two-thirds">
+                <div class="govuk-form-group govuk-!-margin-bottom-0">
+                    <label class="govuk-label" for="schemaName">Filter statistics by schema family</label>
+                    <select class="govuk-select" id="schemaName" name="schemaName" style="width: 100%;">
+                        <option value="">All schemas</option>
+                        @foreach (var opt in Model.SchemaOptions)
+                        {
+                            <option value="@opt.Value" selected="@opt.IsSelected">@opt.Label</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="govuk-grid-column-one-third">
+                <div class="dfe-actions-inline">
+                    <button type="submit" class="govuk-button govuk-!-margin-bottom-0" data-module="govuk-button">
+                        Apply Filter
+                    </button>
+                    @if (Model.HasSchemaFilter)
+                    {
+                        <a href="@AppRoutes.AdminUi.Statistics" class="govuk-link">Clear</a>
+                    }
+                </div>
+            </div>
+        </div>
+    </form>
+
+    @if (Model.HasStatistics)
+    {
+        <div class="dfe-stats-grid" aria-label="Submission metrics summary">
+            <div class="dfe-stat-card">
+                <span class="dfe-stat-card__value">@Model.TotalSubmissions</span>
+                <span class="dfe-stat-card__label">Total submissions</span>
+            </div>
+            <div class="dfe-stat-card dfe-stat-card--accent">
+                <span class="dfe-stat-card__value">@Model.DraftSubmissions</span>
+                <span class="dfe-stat-card__label">Drafts in progress (@Model.DraftWithPayloadSubmissions with data, @Model.EmptyDraftSubmissions empty)</span>
+            </div>
+            <div class="dfe-stat-card dfe-stat-card--success">
+                <span class="dfe-stat-card__value">@Model.FinalisedSubmissions</span>
+                <span class="dfe-stat-card__label">Finalised (@Model.FinalisationRateDisplay rate)</span>
+            </div>
+            <div class="dfe-stat-card dfe-stat-card--attention">
+                <span class="dfe-stat-card__value">@Model.SubmissionsLast24Hours</span>
+                <span class="dfe-stat-card__label">Created last 24h (@Model.SubmissionsLast7Days in 7d)</span>
+            </div>
+            <div class="dfe-stat-card">
+                <span class="dfe-stat-card__value">@Model.TotalDraftChunks</span>
+                <span class="dfe-stat-card__label">Timestamped draft uploads</span>
+            </div>
+            <div class="dfe-stat-card dfe-stat-card--accent">
+                <span class="dfe-stat-card__value">@Model.TotalAuditEvents</span>
+                <span class="dfe-stat-card__label">Recorded audit events</span>
+            </div>
+        </div>
+
+        <h2 class="govuk-heading-l">Submissions by Schema &amp; Version</h2>
+
+        @if (Model.HasSchemaRows)
+        {
+            <table class="govuk-table govuk-!-margin-bottom-7" id="schema-statistics-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Schema &amp; Version</th>
+                        <th scope="col" class="govuk-table__header">State</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Total</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Drafts</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Finalised</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Rate</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Draft Uploads</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Audit Events</th>
+                        <th scope="col" class="govuk-table__header">Last Activity</th>
+                        <th scope="col" class="govuk-table__header">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var row in Model.SchemaRows)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">
+                                <a href="@row.SchemaDetailUrl" class="govuk-link">@row.SchemaDisplayName</a>
+                            </td>
+                            <td class="govuk-table__cell">
+                                <LifecycleTag Model="row.SchemaStateTag" />
+                            </td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric">@row.TotalSubmissions</td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric">
+                                @if (row.DraftSubmissions > 0)
+                                {
+                                    <a href="@row.DraftSubmissionsUrl" class="govuk-link">@row.DraftSubmissions</a>
+                                }
+                                else
+                                {
+                                    <span>0</span>
+                                }
+                            </td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric">
+                                @if (row.FinalisedSubmissions > 0)
+                                {
+                                    <a href="@row.FinalisedSubmissionsUrl" class="govuk-link">@row.FinalisedSubmissions</a>
+                                }
+                                else
+                                {
+                                    <span>0</span>
+                                }
+                            </td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric">@row.FinalisationRateDisplay</td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric">@row.TotalDraftChunks</td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric">@row.TotalAuditEvents</td>
+                            <td class="govuk-table__cell govuk-body-s">@row.LastActivityDisplay</td>
+                            <td class="govuk-table__cell">
+                                <a href="@row.AllSubmissionsUrl" class="govuk-link">View submissions</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="govuk-inset-text">
+                No schemas matched the current filter.
+            </div>
+        }
+
+        <h2 class="govuk-heading-l">Recent Submission Activity</h2>
+        @if (Model.HasRecentSubmissions)
+        {
+            <table class="govuk-table" id="recent-submissions-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Submission ID</th>
+                        <th scope="col" class="govuk-table__header">Schema</th>
+                        <th scope="col" class="govuk-table__header">Identifier</th>
+                        <th scope="col" class="govuk-table__header">State</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Drafts</th>
+                        <th scope="col" class="govuk-table__header">Last Audit</th>
+                        <th scope="col" class="govuk-table__header">Last Activity</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var item in Model.RecentSubmissions)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">
+                                <a href="@item.DetailUrl" class="govuk-link">
+                                    <code class="dfe-code-badge">@item.ShortSubmissionId</code>
+                                </a>
+                            </td>
+                            <td class="govuk-table__cell">@item.SchemaVersionDisplay</td>
+                            <td class="govuk-table__cell govuk-body-s">@item.IdentifierDisplay</td>
+                            <td class="govuk-table__cell">
+                                <strong class="@item.LifecycleTagCssClass">@item.LifecycleStateText</strong>
+                            </td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric">@item.DraftCount</td>
+                            <td class="govuk-table__cell">
+                                <strong class="@item.LastAuditTagCssClass">@item.LastAuditSummaryDisplay</strong>
+                            </td>
+                            <td class="govuk-table__cell govuk-body-s">@item.LastActivityDisplay</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="govuk-inset-text">
+                No submissions have been recorded yet. Create a draft session via <code class="dfe-code-badge">POST @AppRoutes.PublicApi.CreateSubmissionTemplate</code> to see live activity and audit trails here.
+            </div>
+        }
+    }
+</DfeAdminLayout>
+
+@code {
+    [Parameter, EditorRequired] public StatisticsViewModel Model { get; set; } = default!;
+}

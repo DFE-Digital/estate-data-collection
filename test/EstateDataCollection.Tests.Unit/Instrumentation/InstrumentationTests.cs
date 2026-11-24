@@ -1,10 +1,14 @@
 using AwesomeAssertions;
 using EstateDataCollection.Application;
+using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
+using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
+using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
-using EstateDataCollection.Application.UseCases.Submissions.AutoSubmission;
+using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Application.UseCases.Submissions.CreateSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
+using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatus;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 using EstateDataCollection.Infrastructure.Persistence;
 using EstateDataCollection.Infrastructure.Registry;
@@ -34,12 +38,14 @@ public class InstrumentationTests
         // Act & Assert - Application Instrumentations
         provider.GetRequiredService<VerifySchemaUseCaseInstrumentation>().Should().NotBeNull();
         provider.GetRequiredService<SubmitSchemaUseCaseInstrumentation>().Should().NotBeNull();
+        provider.GetRequiredService<ScheduleSchemaUseCaseInstrumentation>().Should().NotBeNull();
+        provider.GetRequiredService<GetSchemasUseCaseInstrumentation>().Should().NotBeNull();
+        provider.GetRequiredService<GetSchemaDetailUseCaseInstrumentation>().Should().NotBeNull();
         provider.GetRequiredService<CreateSubmissionUseCaseInstrumentation>().Should().NotBeNull();
         provider.GetRequiredService<UpdateSubmissionUseCaseInstrumentation>().Should().NotBeNull();
         provider.GetRequiredService<FinaliseSubmissionUseCaseInstrumentation>().Should().NotBeNull();
-#pragma warning disable CS0612
-        provider.GetRequiredService<AutoSubmissionUseCaseInstrumentation>().Should().NotBeNull();
-#pragma warning restore CS0612
+        provider.GetRequiredService<GetSubmissionStatusUseCaseInstrumentation>().Should().NotBeNull();
+        provider.GetRequiredService<ProcessExecutionInstrumentation>().Should().NotBeNull();
     }
 
     [Fact]
@@ -153,8 +159,16 @@ public class InstrumentationTests
 
     private sealed class FakeLogger<T> : ILogger<T>
     {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            return null;
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return true;
+        }
+
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) { }
     }
 }

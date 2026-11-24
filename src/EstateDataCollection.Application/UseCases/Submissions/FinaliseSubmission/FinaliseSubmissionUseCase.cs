@@ -1,6 +1,7 @@
-using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -8,8 +9,7 @@ namespace EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmissi
 
 public class FinaliseSubmissionUseCase(
     ISubmissionInfrastructure infrastructure,
-    ISchemaRegistry registry,
-    ISchemaValidator validator,
+    ISubmissionEvaluationService evaluationService,
     FinaliseSubmissionUseCaseInstrumentation? instrumentation = null
 ) : IUseCase<FinaliseSubmissionResult, FinaliseSubmissionRequest>
 {
@@ -21,7 +21,11 @@ public class FinaliseSubmissionUseCase(
     {
         _instrumentation.FinalisingSubmission(request.SubmissionId);
 
-        var session = await infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken);
+        var session = await SubmissionExecutionScope.StepAsync(
+            SubmissionProcessCatalog.GetSession,
+            () => infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken),
+            loaded => new ProcessStepDetails(
+                Summary: loaded.IsFinalised ? "Session already finalised" : "Draft session loaded"));
 
         if (session.IsFailure)
         {
@@ -29,13 +33,18 @@ public class FinaliseSubmissionUseCase(
             return session.Error;
         }
 
+        SubmissionExecutionScope.Current?.SetSubmissionContext(
+            session.Value,
+            evaluationService.BuildAuditIdentifier(session.Value));
+
         if (session.Value.IsFinalised)
         {
             _instrumentation.SubmissionAlreadyFinalised(request.SubmissionId);
             return Error.Forbidden(ErrorCodes.SubmissionAlreadyFinalised);
         }
 
-        var draftPayload = await infrastructure.GetDraftPayloadAsync(request.SubmissionId, cancellationToken);
+        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, cancellationToken);
+        var draftPayload = await evaluationService.AssembleStoredDraftAsync(request.SubmissionId, inventory, cancellationToken);
 
         if (draftPayload.IsFailure)
         {
@@ -43,37 +52,66 @@ public class FinaliseSubmissionUseCase(
             return draftPayload.Error;
         }
 
-        var schema = await registry.GetExplicitSchemaAsync(session.Value.SchemaName, session.Value.SchemaVersion,
+        var evaluation = await evaluationService.EvaluatePayloadAsync(
+            draftPayload.Value,
+            session.Value,
+            isDraftUpdate: false,
             cancellationToken);
 
-        if (schema.IsFailure)
+        if (evaluation.IsFailure)
         {
-            return schema.Error;
+            return evaluation.Error;
         }
 
-        var validation = await validator.ValidateAsync(draftPayload.Value, schema.Value.Schema, cancellationToken);
-
-        if (validation.IsFailure)
+        var validationErrors = evaluation.Value.ValidationErrors;
+        if (validationErrors.Count > 0)
         {
-            return validation.Error;
+            _instrumentation.ValidationFailed(request.SubmissionId, validationErrors.Count);
+            SubmissionExecutionScope.Current?.SetAuditContext(
+                validationErrors: validationErrors,
+                message: $"Finalisation rejected with {validationErrors.Count} validation error(s)");
+
+            return Error.Validation(ErrorCodes.SchemaContractViolation, errors: validationErrors);
         }
 
-        if (!validation.Value.IsValid)
-        {
-            _instrumentation.ValidationFailed(request.SubmissionId, validation.Value.Errors?.Count ?? 0);
-            return Error.Validation(ErrorCodes.SchemaContractViolation, errors: validation.Value.Errors);
-        }
-
-        var urn = Urn.ExtractFromPayload(draftPayload.Value);
-
-        if (urn.IsFailure)
+        var identifierEval = evaluation.Value.IdentifierEvaluation;
+        if (!identifierEval.IsValid)
         {
             _instrumentation.InvalidUrn(request.SubmissionId, 0);
-            return urn.Error;
+            if (identifierEval.ValidationError is not null)
+            {
+                SubmissionExecutionScope.Current?.SetAuditContext(validationErrors: [identifierEval.ValidationError]);
+            }
+
+            return identifierEval.FailureError ?? Error.Validation(ErrorCodes.PayloadInvalidIdentifier);
         }
-        
-        var promotion = await infrastructure.PromoteToProcessedAsync(session.Value.SubmissionId, urn.Value,
-            session.Value.SchemaName, session.Value.SchemaVersion, cancellationToken);
+
+        var extractedIdentifier = identifierEval.Identifier;
+        var resolvedUrn = extractedIdentifier?.AsPositiveInt ?? 0;
+        var auditIdentifier = evaluation.Value.AuditIdentifier;
+
+        SubmissionExecutionScope.Current?.SetAuditContext(identifier: auditIdentifier);
+
+        var isLegacyCompatibleUrnCall = extractedIdentifier is null ||
+            (resolvedUrn > 0 && string.Equals(extractedIdentifier.Value.Type, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase));
+
+        var promotion = await SubmissionExecutionScope.StepAsync(
+            SubmissionProcessCatalog.PromoteToProcessed,
+            () => isLegacyCompatibleUrnCall
+                ? infrastructure.PromoteToProcessedAsync(
+                    session.Value.SubmissionId,
+                    resolvedUrn,
+                    session.Value.SchemaName,
+                    session.Value.SchemaVersion,
+                    cancellationToken)
+                : infrastructure.PromoteToProcessedAsync(
+                    session.Value.SubmissionId,
+                    extractedIdentifier!.Value.Type,
+                    extractedIdentifier.Value.Value,
+                    session.Value.SchemaName,
+                    session.Value.SchemaVersion,
+                    cancellationToken),
+            _ => new ProcessStepDetails(Summary: "Promoted merged draft payload to processed container"));
 
         if (promotion.IsFailure)
         {
@@ -81,21 +119,33 @@ public class FinaliseSubmissionUseCase(
             return promotion.Error;
         }
 
+        SubmissionExecutionScope.Current?.SetAuditOutcome(
+            outcomeStatus: "Succeeded",
+            httpStatus: 200,
+            message: "Submission finalised and promoted to processed storage",
+            identifier: auditIdentifier,
+            details: new Dictionary<string, string>
+            {
+                ["processedBlobUri"] = promotion.Value
+            });
+
         _instrumentation.SubmissionFinalisedAndPromoted(
             session.Value.SubmissionId,
-            urn.Value,
+            resolvedUrn,
             session.Value.SchemaName,
             session.Value.SchemaVersion,
             promotion.Value);
 
         return new FinaliseSubmissionResult(
             session.Value.SubmissionId,
-            urn.Value,
+            resolvedUrn,
             session.Value.SchemaName,
             session.Value.SchemaVersion,
             string.Empty,
             promotion.Value,
-            DateTimeOffset.UtcNow
+            DateTimeOffset.UtcNow,
+            Identifier: extractedIdentifier?.Value,
+            IdentifierType: extractedIdentifier?.Type
         );
     }
 }

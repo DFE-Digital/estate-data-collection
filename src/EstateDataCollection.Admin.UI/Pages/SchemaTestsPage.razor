@@ -1,0 +1,324 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Pages
+
+<DfeAdminLayout Model="Model.Page">
+    <a href="@Model.BackToDetailsUrl" class="govuk-back-link">
+        Back to Schema Details
+    </a>
+
+    <NotificationBanner Model="Model.SuccessBannerModel" />
+    <ErrorSummary Model="Model.ErrorSummary" />
+
+    @if (Model.HasDetail)
+    {
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-two-thirds">
+                <span class="govuk-caption-l">Schema Regression Tests</span>
+                <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">
+                    @Model.DetailSchemaName <span class="govuk-hint">@Model.DetailVersionDisplay</span>
+                </h1>
+                <p class="govuk-body">
+                    Stored valid and invalid JSON test payloads evaluated against the JSON Schema, attached Quality &amp; Business Rules (JsonLogic / CEL), and Identifier extraction config.
+                </p>
+            </div>
+            <div class="govuk-grid-column-one-third" style="text-align: right;">
+                <form method="post" action="@Model.RunTestsActionUrl">
+                    <button type="submit" class="govuk-button" data-module="govuk-button">
+                        Run Schema Tests
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        @if (Model.ShowLatestRunPassedBanner)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="test-run-banner-title" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title" id="test-run-banner-title">
+                        Schema tests passed
+                    </h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">
+                        All checks passed on build <code class="dfe-code-badge">@Model.LatestRunAppVersion</code>.
+                    </p>
+                    <p class="govuk-body">
+                        @Model.LatestRunEvaluationSummary
+                    </p>
+                </div>
+            </div>
+        }
+        else if (Model.ShowLatestRunFailedBanner)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">
+                        Schema tests failed (@Model.LatestRunErrorCount error(s)) on build @Model.LatestRunAppVersion
+                    </h2>
+                    <div class="govuk-error-summary__body">
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var err in Model.LatestRunErrors)
+                            {
+                                <li>@err</li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.ShowSoftWarningBanner)
+        {
+            <div class="govuk-warning-text govuk-!-margin-bottom-4" id="schema-test-soft-warnings">
+                <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                <strong class="govuk-warning-text__text">
+                    <span class="govuk-visually-hidden">Warning</span>
+                    @Model.SoftWarningCount invalid fixture(s) failed validation, but it is unknown if expected because <code class="dfe-code-badge">expectedErrors</code> was not configured. Review the triggered errors below or add <code class="dfe-code-badge">expectedErrors</code>.
+                </strong>
+            </div>
+        }
+
+        <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Lifecycle state</dt>
+                <dd class="govuk-summary-list__value"><LifecycleTag Model="Model.StateTag" /></dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Stored test JSONs</dt>
+                <dd class="govuk-summary-list__value">
+                    <strong>@Model.ValidFixturesCount</strong> valid fixture(s), <strong>@Model.InvalidFixturesCount</strong> invalid fixture(s)
+                </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Business logic rules covered</dt>
+                <dd class="govuk-summary-list__value">
+                    @Model.BusinessRuleCount rule(s)
+                    @if (Model.HasBusinessRules)
+                    {
+                        <span>@Model.BusinessRuleEnginesSummary</span>
+                    }
+                </dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Last recorded test run</dt>
+                <dd class="govuk-summary-list__value">
+                    @if (Model.HasLastRecordedRun)
+                    {
+                        @if (Model.LastRecordedRunPassed)
+                        {
+                            <strong class="govuk-tag govuk-tag--green">Passed</strong>
+                            @if (Model.ShowLastRunSoftWarningTag)
+                            {
+                                <strong class="govuk-tag govuk-tag--yellow govuk-!-margin-left-1">@Model.SoftWarningCount soft warning(s)</strong>
+                            }
+                        }
+                        else
+                        {
+                            <strong class="govuk-tag govuk-tag--red">Failed</strong>
+                        }
+                        <span class="govuk-!-margin-left-2">
+                            @Model.LastRunTimestampText
+                            @if (Model.HasLastRunAppVersion)
+                            {
+                                <span>(Build <code class="dfe-code-badge">@Model.LastRunAppVersion</code>)</span>
+                            }
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="govuk-hint">Not executed yet</span>
+                    }
+                </dd>
+            </div>
+        </dl>
+
+        <div class="govuk-tabs" data-module="govuk-tabs" id="@Model.Tabs.ContainerId" data-default-tab="@Model.Tabs.DefaultTabId">
+            <GovUkTabStrip Model="Model.Tabs" />
+
+            <GovUkTabPanel Tab="Model.ValidFixturesTab">
+                <h2 class="govuk-heading-m govuk-!-margin-bottom-2">
+                    Stored Valid Test Payloads (@Model.ValidFixturesCount)
+                </h2>
+                <p class="govuk-body">
+                    These payloads must pass JSON Schema validation, all attached business logic rules, and required identifier extraction.
+                </p>
+
+                @if (Model.NoValidFixtures)
+                {
+                    <div class="govuk-inset-text">
+                        No valid test JSON fixtures are stored for this schema version. Structural schema, business rule syntax, and identifier alignment checks still run when you click <strong>Run Schema Tests</strong>.
+                    </div>
+                }
+                else
+                {
+                    @foreach (var card in Model.ValidFixtures)
+                    {
+                        <div class="govuk-summary-card govuk-!-margin-bottom-4">
+                            <div class="govuk-summary-card__title-wrapper">
+                                <h3 class="govuk-summary-card__title">@card.Title</h3>
+                            </div>
+                            <div class="govuk-summary-card__content">
+                                <pre class="dfe-code-pre">@card.FormattedJson</pre>
+                            </div>
+                        </div>
+                    }
+                }
+            </GovUkTabPanel>
+
+            <GovUkTabPanel Tab="Model.InvalidFixturesTab">
+                <h2 class="govuk-heading-m govuk-!-margin-bottom-2">
+                    Stored Invalid Test Payloads (@Model.InvalidFixturesCount)
+                </h2>
+                <p class="govuk-body">
+                    These payloads must fail JSON Schema validation, attached business logic rules, or required identifier extraction &mdash; and match any configured <code class="dfe-code-badge">expectedErrors</code> checks.
+                </p>
+
+                @if (Model.NoInvalidFixtures)
+                {
+                    <div class="govuk-inset-text">
+                        No invalid test JSON fixtures are stored for this schema version.
+                    </div>
+                }
+                else
+                {
+                    @foreach (var card in Model.InvalidFixtures)
+                    {
+                        <div class="govuk-summary-card govuk-!-margin-bottom-4">
+                            <div class="govuk-summary-card__title-wrapper">
+                                <h3 class="govuk-summary-card__title">
+                                    @card.Title
+                                    @if (card.HasDescription)
+                                    {
+                                        <div>@card.Description</div>
+                                    }
+                                </h3>
+                                <ul class="govuk-summary-card__actions">
+                                    <li class="govuk-summary-card__action">
+                                        <strong class="@card.StatusTagCssClass">@card.StatusTagText</strong>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="govuk-summary-card__content">
+                                @if (card.ShowSoftWarningCallout)
+                                {
+                                    <div class="govuk-warning-text govuk-!-margin-bottom-3">
+                                        <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                                        <strong class="govuk-warning-text__text">
+                                            <span class="govuk-visually-hidden">Warning</span>
+                                            Failed validation, but unknown if expected (no <code class="dfe-code-badge">expectedErrors</code> configured). Review the triggered error(s) below or add <code class="dfe-code-badge">expectedErrors</code> to assert them.
+                                        </strong>
+                                    </div>
+                                }
+
+                                @if (card.HasExpectedAssertions)
+                                {
+                                    <h4 class="govuk-heading-s govuk-!-margin-bottom-1">Expected error assertions (@card.ExpectedAssertions.Count)</h4>
+                                    <ul class="govuk-list govuk-body-s govuk-!-margin-bottom-3">
+                                        @foreach (var assertion in card.ExpectedAssertions)
+                                        {
+                                            <li class="govuk-!-margin-bottom-1">
+                                                <strong class="@assertion.TagCssClass">@assertion.TagText</strong>
+                                                <code class="dfe-code-badge">@assertion.ExpectedError</code>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+
+                                @if (card.HasOutcome)
+                                {
+                                    <h4 class="govuk-heading-s govuk-!-margin-bottom-1">Triggered errors (@card.TriggeredErrorCount)</h4>
+                                    @if (card.PassedUnexpectedly)
+                                    {
+                                        <p class="govuk-body-s govuk-!-margin-bottom-3" style="color: #d4351c;">
+                                            No schema, business rule, or identifier errors were triggered — this payload unexpectedly passed validation.
+                                        </p>
+                                    }
+                                    else if (card.HasTriggeredErrors)
+                                    {
+                                        <ul class="govuk-list govuk-list--bullet govuk-body-s govuk-!-margin-bottom-3">
+                                            @foreach (var trigErr in card.TriggeredErrors)
+                                            {
+                                                <li><code class="dfe-code-badge">@trigErr.FormatDisplay()</code></li>
+                                            }
+                                        </ul>
+                                    }
+                                }
+
+                                <pre class="dfe-code-pre">@card.FormattedPayloadJson</pre>
+                            </div>
+                        </div>
+                    }
+                }
+            </GovUkTabPanel>
+
+            <GovUkTabPanel Tab="Model.EngineDiagnosticsTab">
+                <ValidationEngineDiagnostics Model="Model.EngineDiagnostics" />
+            </GovUkTabPanel>
+
+            <GovUkTabPanel Tab="Model.EditTestsTab">
+                <section class="govuk-!-margin-bottom-0">
+                    <h2 class="govuk-heading-m govuk-!-margin-bottom-2">
+                        Add or Update Stored Tests
+                    </h2>
+                    <p class="govuk-body">
+                        Provide a JSON object <code class="dfe-code-badge">{...}</code>, a JSON array <code class="dfe-code-badge">[{...}]</code>, or leave blank / <code class="dfe-code-badge">[]</code> to clear a fixture set. Every payload is verified against the immutable schema, attached business logic rules, and identifier configuration before saving.
+                    </p>
+
+                    <form method="post" action="@Model.UpdateTestsActionUrl">
+                        <div class="@Model.ValidFixtureField.FormGroupCssClass">
+                            <label class="govuk-label govuk-label--s" for="validFixtureJson">
+                                Valid test payload JSONs (must pass schema, quality rules, and required identifier)
+                            </label>
+                            <div id="validFixtureJson-hint" class="govuk-hint">
+                                Add or edit valid regression test JSON objects (single object or JSON array).
+                            </div>
+                            @if (Model.ValidFixtureField.HasError)
+                            {
+                                <p id="validFixtureJson-error" class="govuk-error-message">
+                                    <span class="govuk-visually-hidden">Error:</span> @Model.ValidFixtureField.ErrorMessage
+                                </p>
+                            }
+                            <textarea class="@Model.ValidFixtureField.TextareaCssClass"
+                                      id="validFixtureJson"
+                                      name="validFixtureJson"
+                                      rows="8"
+                                      aria-describedby="@Model.ValidFixtureField.AriaDescribedBy">@Model.ValidFixtureField.EditorText</textarea>
+                        </div>
+
+                        <div class="@Model.InvalidFixtureField.FormGroupCssClass">
+                            <label class="govuk-label govuk-label--s" for="invalidFixtureJson">
+                                Invalid test payload JSONs (must fail schema, quality rules, or required identifier)
+                            </label>
+                            <div id="invalidFixtureJson-hint" class="govuk-hint">
+                                Add or edit negative regression test JSON objects (single object or JSON array). Optionally wrap an entry as <code class="dfe-code-badge">{"payload": {...}, "expectedErrors": ["RULE-ID"]}</code> to assert specific rule IDs, paths, or error messages.
+                            </div>
+                            @if (Model.InvalidFixtureField.HasError)
+                            {
+                                <p id="invalidFixtureJson-error" class="govuk-error-message">
+                                    <span class="govuk-visually-hidden">Error:</span> @Model.InvalidFixtureField.ErrorMessage
+                                </p>
+                            }
+                            <textarea class="@Model.InvalidFixtureField.TextareaCssClass"
+                                      id="invalidFixtureJson"
+                                      name="invalidFixtureJson"
+                                      rows="8"
+                                      aria-describedby="@Model.InvalidFixtureField.AriaDescribedBy">@Model.InvalidFixtureField.EditorText</textarea>
+                        </div>
+
+                        <button type="submit" class="govuk-button" data-module="govuk-button">
+                            Save &amp; Verify Tests
+                        </button>
+                    </form>
+                </section>
+            </GovUkTabPanel>
+
+            <GovUkTabPanel Tab="Model.QualityRulesTab">
+                <QualityRulesViewer Model="Model.QualityRulesViewer" />
+            </GovUkTabPanel>
+        </div>
+    }
+</DfeAdminLayout>
+
+@code {
+    [Parameter, EditorRequired] public SchemaTestsViewModel Model { get; set; } = default!;
+}

@@ -1,0 +1,129 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Pages
+
+<DfeAdminLayout Model="Model.Page">
+    <a href="@Model.BackToDetailsUrl" class="govuk-back-link">
+        @Model.BackToDetailsText
+    </a>
+
+    <ErrorSummary Model="Model.ErrorSummary" />
+
+    <div class="govuk-grid-row">
+        <div class="govuk-grid-column-full">
+            <span class="govuk-caption-l">Lifecycle &amp; Boundary Configuration</span>
+            <h1 class="govuk-heading-xl">@Model.HeadingText</h1>
+            <p class="govuk-body-l">
+                Manage schema lifecycle state, activation effective window, and verified school / establishment identifier extraction rules.
+            </p>
+        </div>
+    </div>
+
+    <div class="govuk-grid-row">
+        <div class="govuk-grid-column-two-thirds">
+            @if (Model.HasDetail)
+            {
+                <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Current state
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            <LifecycleTag Model="Model.DetailStateTag" />
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            SHA-256
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @Model.ShortSha256Hash
+                        </dd>
+                    </div>
+                </dl>
+            }
+
+            <form method="post" action="@Model.FormActionUrl">
+                <div class="govuk-form-group">
+                    <fieldset class="govuk-fieldset">
+                        <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                            Lifecycle action
+                        </legend>
+                        <div class="govuk-radios" data-module="govuk-radios">
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="action-schedule" name="lifecycleAction" type="radio" value="Schedule"
+                                       checked="@Model.IsScheduleSelected" />
+                                <label class="govuk-label govuk-radios__label" for="action-schedule">
+                                    Schedule effective window
+                                </label>
+                                <div class="govuk-hint govuk-radios__hint">
+                                    Sets effective dates; becomes Active when the Effective From timestamp is reached.
+                                </div>
+                            </div>
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="action-activate" name="lifecycleAction" type="radio" value="Activate"
+                                       checked="@Model.IsActivateSelected" />
+                                <label class="govuk-label govuk-radios__label" for="action-activate">
+                                    Activate immediately
+                                </label>
+                                <div class="govuk-hint govuk-radios__hint">
+                                    Promotes this version to the live Public boundary now (or from the chosen Effective From time).
+                                </div>
+                            </div>
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="action-deprecate" name="lifecycleAction" type="radio" value="Deprecate"
+                                       checked="@Model.IsDeprecateSelected" />
+                                <label class="govuk-label govuk-radios__label" for="action-deprecate">
+                                    Deprecate (grace period for in-flight submissions)
+                                </label>
+                            </div>
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="action-retire" name="lifecycleAction" type="radio" value="Retire"
+                                       checked="@Model.IsRetireSelected" />
+                                <label class="govuk-label govuk-radios__label" for="action-retire">
+                                    Retire permanently (blocks new and in-flight submissions)
+                                </label>
+                            </div>
+                        </div>
+                    </fieldset>
+                </div>
+
+                <div class="govuk-form-group">
+                    <label class="govuk-label govuk-label--s" for="effectiveFromUtc">
+                        Effective from (UTC)
+                    </label>
+                    <div id="effectiveFrom-hint" class="govuk-hint">
+                        Optional for Deprecate/Retire. Required for future scheduling. Format: YYYY-MM-DDTHH:MM
+                    </div>
+                    <input class="govuk-input govuk-input--width-20" id="effectiveFromUtc" name="effectiveFromUtc"
+                           type="datetime-local" value="@Model.EffectiveFromInput" aria-describedby="effectiveFrom-hint" />
+                </div>
+
+                <div class="govuk-form-group">
+                    <label class="govuk-label govuk-label--s" for="effectiveToUtc">
+                        Effective to / Cut-off (UTC)
+                    </label>
+                    <div id="effectiveTo-hint" class="govuk-hint">
+                        Optional end of acceptance window. Must be later than Effective from.
+                    </div>
+                    <input class="govuk-input govuk-input--width-20" id="effectiveToUtc" name="effectiveToUtc"
+                           type="datetime-local" value="@Model.EffectiveToInput" aria-describedby="effectiveTo-hint" />
+                </div>
+
+                <IdentifierConfigFieldset Model="Model.IdentifierConfig" />
+
+                <div class="govuk-button-group">
+                    <button type="submit" class="govuk-button" data-module="govuk-button">
+                        Save Lifecycle &amp; Schedule
+                    </button>
+                    <a href="@Model.BackToDetailsUrl" class="govuk-link">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</DfeAdminLayout>
+
+@code {
+    [Parameter, EditorRequired] public ScheduleSchemaViewModel Model { get; set; } = default!;
+}

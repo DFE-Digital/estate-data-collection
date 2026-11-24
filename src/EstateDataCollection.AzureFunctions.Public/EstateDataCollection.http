@@ -1,0 +1,102 @@
+@baseUrl = http://localhost:7071/api
+@schemaName = edc_payload
+
+### =========================================================================
+### 1. SCHEMA MANAGEMENT (Data Team & CI/CD)
+### =========================================================================
+
+### 1.1 Verify / Dry-Run Schema Candidate (Draft 2020-12 Syntax & Fixture Test)
+# Does NOT write to Blob Storage. Validates schema and tests against sample payloads.
+POST {{baseUrl}}/schemas/verify
+Content-Type: application/json
+
+{
+  "schemaJson": "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"title\":\"edc_payload\",\"schemaVersion\":1,\"type\":\"object\",\"properties\":{\"urn\":{\"type\":\"integer\"},\"school_name\":{\"type\":\"string\"},\"school_address\":{\"type\":\"string\"},\"school_capacity\":{\"type\":[\"integer\",\"null\"]}},\"required\":[\"urn\",\"school_name\",\"school_address\"],\"additionalProperties\":false}",
+  "sampleValidFixtures": [
+    "{\"urn\":104521,\"school_name\":\"St Mary's High School\",\"school_address\":\"High Street, Leeds\",\"school_capacity\":450}"
+  ],
+  "sampleInvalidFixtures": [
+    "{\"school_name\":\"Missing URN and Address\"}"
+  ]
+}
+
+### 1.2 Submit & Schedule Schema v1 (Saves to "schemas" container)
+# Note: Route is /schemas/{schemaName}/versions/{version}
+POST {{baseUrl}}/schemas/{{schemaName}}/versions/1
+Content-Type: application/json
+
+{
+  "schemaJson": "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"title\":\"edc_payload\",\"schemaVersion\":1,\"type\":\"object\",\"properties\":{\"urn\":{\"type\":\"integer\"},\"school_name\":{\"type\":\"string\"},\"school_address\":{\"type\":\"string\"},\"school_capacity\":{\"type\":[\"integer\",\"null\"]}},\"required\":[\"urn\",\"school_name\",\"school_address\"],\"additionalProperties\":false}",
+  "effectiveFromUtc": "2026-10-01T00:00:00Z"
+}
+
+### 1.3 Submit & Schedule Schema v2 (e.g. school_capacity deprecated/removed)
+POST {{baseUrl}}/schemas/{{schemaName}}/versions/2
+Content-Type: application/json
+
+{
+  "schemaJson": "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"title\":\"edc_payload\",\"schemaVersion\":2,\"type\":\"object\",\"properties\":{\"urn\":{\"type\":\"integer\"},\"school_name\":{\"type\":\"string\"},\"school_address\":{\"type\":\"string\"},\"local_authority\":{\"type\":[\"string\",\"null\"]}},\"required\":[\"urn\",\"school_name\",\"school_address\"],\"additionalProperties\":false}",
+  "effectiveFromUtc": "2026-11-01T00:00:00Z"
+}
+
+
+### =========================================================================
+### 2. SURVEY INGESTION WORKFLOW (Surveyor / Mobile Client)
+### =========================================================================
+
+### 2.1 Create Submission Session (Auto-resolves current active schema schedule)
+# @name createSessionAuto
+POST {{baseUrl}}/submissions/{{schemaName}}
+
+### Store the submission ID from the creation response
+#@submissionId = {{createSessionAuto.response.body.submissionId}}
+
+### 2.2 Create Submission Session (Explicitly pinning Version 1)
+# @name createSessionExplicit
+POST {{baseUrl}}/submissions/{{schemaName}}?version=1
+
+### 
+@submissionId = 01a15aae-92f2-7267-9057-d28d7eaccf53
+
+### 2.3 Upload Partial Draft 1 (Incomplete: Missing required 'school_address')
+# Persists to "payloads" blob container and returns pending validation issues with 200 OK
+PUT {{baseUrl}}/submissions/{{submissionId}}
+Content-Type: application/json
+
+{
+  "urn": 104521,
+  "school_name": "St Mary's High School"
+}
+
+### 2.4 Upload Partial Draft 2 (Incomplete: Wrong data type on 'urn')
+PUT {{baseUrl}}/submissions/{{submissionId}}
+Content-Type: application/json
+
+{
+  "urn": "NOT_A_VALID_NUMBER",
+  "school_name": "St Mary's High School",
+  "school_address": "High Street, Leeds"
+}
+
+### 2.5 Upload Complete & Valid Draft
+# All required fields present and conforms to pinned Schema v1
+PUT {{baseUrl}}/submissions/{{submissionId}}
+Content-Type: application/json
+
+{
+  "urn": 104521,
+  "school_name": "St Mary's High School",
+  "school_address": "High Street, Leeds",
+  "school_capacity": 450
+}
+
+
+### 2.6 Attempt to Finalise when Invalid (Demonstrating 422 Rejection)
+# If called while draft is in state 2.3 or 2.4, this returns 422 Unprocessable Entity
+# and payload remains in "payloads" container.
+POST {{baseUrl}}/submissions/{{submissionId}}/finalise
+
+### 2.7 Finalise Submission (Success: Promotes from "payloads" to "processed")
+# Validates complete payload, tags with SHA-256 integrity hash, moves to "processed",
+# and flags status as ReadyForCde.
+POST {{baseUrl}}/submissions/{{submissionId}}/finalise

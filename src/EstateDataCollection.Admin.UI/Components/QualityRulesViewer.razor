@@ -1,0 +1,65 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Components
+
+<h2 class="govuk-heading-m govuk-!-margin-bottom-2">Quality &amp; Business Rules</h2>
+<p class="govuk-body-m">
+    A list of rules showing their error type and what will be returned to the consumer when triggered; this contract version contains <strong>@Model.RuleSummaryText</strong>.
+</p>
+
+@if (Model.NoRules)
+{
+    <p class="govuk-body govuk-hint">No business rules are attached to this contract version.</p>
+}
+else
+{
+    @foreach (var r in Model.Rules)
+    {
+        <div class="govuk-summary-card">
+            <div class="govuk-summary-card__title-wrapper">
+                <h2 class="govuk-summary-card__title">
+                    @r.Id
+                </h2>
+            </div>
+            <div class="govuk-summary-card__content">
+                <dl class="govuk-summary-list">
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Description
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @r.Description
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Engine
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @r.Engine
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Severity
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @r.Severity
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">
+                            Message
+                        </dt>
+                        <dd class="govuk-summary-list__value">
+                            @r.ErrorMessage
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public QualityRulesViewerViewModel Model { get; set; } = default!;
+}

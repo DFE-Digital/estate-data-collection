@@ -1,12 +1,13 @@
-using Azure.Storage.Blobs;
-using EstateDataCollection.Domain.Schema;
-using EstateDataCollection.Infrastructure.Registry;
-using EstateDataCollection.Tests.Common.Builders;
-using EstateDataCollection.Tests.Common.Fixtures;
-using EstateDataCollection.Tests.Integration.Fixtures;
+using System.Text;
 using AwesomeAssertions;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
+using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.UseCases;
+using EstateDataCollection.Application.UseCases.Schema.IngestDraftSchema;
+using EstateDataCollection.Tests.Common.Builders;
+using EstateDataCollection.Tests.Common.Extensions;
+using EstateDataCollection.Tests.Common.Fixtures;
+using EstateDataCollection.Tests.Integration.Builders;
+using EstateDataCollection.Tests.Integration.Fixtures;
 using Xunit;
 
 namespace EstateDataCollection.Tests.Integration;
@@ -14,58 +15,126 @@ namespace EstateDataCollection.Tests.Integration;
 [Collection("AzuriteCollection")]
 public class BlobSchemaRegistryIntegrationTests(AzuriteFixture fixture)
 {
-    private readonly BlobSchemaRegistry _sut = new(
-        fixture.Client,
-        Options.Create(new BlobSchemaRegistryOptions
-        {
-            ContainerName = "schemas",
-            CacheKey = "schema:{schemaName}:v{version}",
-            SchemaBlobDirectory = "{schemaName}/v{version}.schema.json",
-            MetaBlobDirectory = "{schemaName}/v{version}.meta.json"
-        }),
-        new MemoryCache(new MemoryCacheOptions())
-    );
+    private readonly IntegrationEndpointHarness _harness = new(fixture);
 
     [Fact]
     public async Task When_Saving_A_Schema_To_Azurite_It_Should_Roundtrip_Successfully_And_Be_Retrievable()
     {
-        // Arrange
+        var schemaRegistry = _harness.Get<ISchemaRegistry>();
         var metadata = new SchemaMetadataBuilder()
-            .WithName("integration_schema_" + Guid.NewGuid().ToString("N"))
+            .WithUniqueName("integration_schema")
             .WithVersion(1)
             .WithSchema(JsonSchemaFixtures.ValidV1Schema)
             .Build();
 
-        // 1. Check Exists before save -> should be false
-        var existsBefore = await _sut.ExistsAsync(metadata.Name, metadata.Version);
-        existsBefore.IsSuccess.Should().BeTrue();
-        existsBefore.Value.Should().BeFalse();
+        var existsBefore = (await schemaRegistry.ExistsAsync(metadata.Name, metadata.Version)).ShouldSucceed();
+        existsBefore.Should().BeFalse();
 
-        // 2. Save schema + metadata to Azurite
-        var saveResult = await _sut.SaveSchemaAsync(metadata);
-        saveResult.IsSuccess.Should().BeTrue();
+        (await schemaRegistry.SaveSchemaAsync(metadata)).ShouldSucceed();
 
-        // 3. Check Exists after save -> should be true
-        var existsAfter = await _sut.ExistsAsync(metadata.Name, metadata.Version);
-        existsAfter.IsSuccess.Should().BeTrue();
-        existsAfter.Value.Should().BeTrue();
+        var existsAfter = (await schemaRegistry.ExistsAsync(metadata.Name, metadata.Version)).ShouldSucceed();
+        existsAfter.Should().BeTrue();
 
-        // 4. Retrieve explicit schema
-        var getResult = await _sut.GetExplicitSchemaAsync(metadata.Name, metadata.Version);
-        getResult.IsSuccess.Should().BeTrue();
-        getResult.Value.Metadata.Name.Should().Be(metadata.Name);
-        getResult.Value.Metadata.Version.Should().Be(1);
-        getResult.Value.Schema.Should().NotBeNull();
+        var retrieved = (await schemaRegistry.GetExplicitSchemaAsync(metadata.Name, metadata.Version)).ShouldSucceed();
+        retrieved.Metadata.Name.Should().Be(metadata.Name);
+        retrieved.Metadata.Version.Should().Be(1);
+        retrieved.Schema.Should().NotBeNull();
     }
 
     [Fact]
     public async Task When_Requesting_A_Non_Existent_Schema_From_Azurite_It_Should_Return_Not_Found()
     {
-        // Act
-        var result = await _sut.GetExplicitSchemaAsync("definitely_not_here", 999);
+        var schemaRegistry = _harness.Get<ISchemaRegistry>();
+        var result = await schemaRegistry.GetExplicitSchemaAsync("definitely_not_here", 999);
+        result.ShouldFailWith("Schema.NotFound");
+    }
 
-        // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Schema.NotFound");
+    [Fact]
+    public async Task When_OdcsYaml_Uploaded_To_DraftContainer_In_Azurite_It_Should_Ingest_Promote_And_Delete_Draft()
+    {
+        var schemaRegistry = _harness.Get<ISchemaRegistry>();
+        var schemaName = IntegrationEndpointHarness.UniqueName("edc-sites");
+        var draftBlobPath = $"{schemaName}/v1.odcs.yaml";
+        var odcsYaml = CdeContractFixtureLoader.LoadFile("contracts/edc-school-site-jsonlogic.odcs.yaml");
+
+        var draftContainer = fixture.Client.GetBlobContainerClient(fixture.DraftSchemasContainerName);
+        await draftContainer.GetBlobClient(draftBlobPath)
+            .UploadAsync(new MemoryStream(Encoding.UTF8.GetBytes(odcsYaml)), overwrite: true);
+
+        var ingestUseCase = _harness.Get<IUseCase<IngestDraftSchemaResult, IngestDraftSchemaRequest>>();
+
+        var ingest = (await ingestUseCase.ExecuteAsync(new IngestDraftSchemaRequest(draftBlobPath))).ShouldSucceed();
+        ingest.Promoted.Should().BeTrue();
+        ingest.SchemaName.Should().Be(schemaName);
+        ingest.Version.Should().Be(1);
+
+        var draftStillExists = await draftContainer.GetBlobClient(draftBlobPath).ExistsAsync();
+        draftStillExists.Value.Should().BeFalse();
+
+        var resolved = (await schemaRegistry.GetExplicitSchemaAsync(schemaName, 1)).ShouldSucceed();
+        resolved.Rules.Should().ContainSingle(r => r.Id == "CDC-DQ1-JSONLogic");
+    }
+
+    [Fact]
+    public async Task When_AzuriteFixture_Disposes_Should_Isolate_And_Delete_All_Test_Containers()
+    {
+        var ephemeral = new AzuriteFixture();
+        await ephemeral.InitializeAsync();
+
+        var isolatedNames = ephemeral.ContainerNames;
+        isolatedNames.Should().AllSatisfy(name => AzuriteFixture.IsTestContainerName(name).Should().BeTrue());
+        isolatedNames.Should().NotContain(["schemas", "draft-schemas", "payloads", "processed"]);
+
+        foreach (var name in isolatedNames)
+        {
+            (await ephemeral.Client.GetBlobContainerClient(name).ExistsAsync()).Value.Should().BeTrue();
+        }
+
+        // Write a blob into the isolated schema container before disposing
+        var tempBlob = ephemeral.Client.GetBlobContainerClient(ephemeral.SchemasContainerName).GetBlobClient("cleanup-check/v1.schema.json");
+        await tempBlob.UploadAsync(BinaryData.FromString(JsonSchemaFixtures.ValidV1Schema), overwrite: true);
+
+        await ephemeral.DisposeAsync();
+
+        // Check via the active fixture client that all 4 isolated containers were removed
+        foreach (var name in isolatedNames)
+        {
+            (await fixture.Client.GetBlobContainerClient(name).ExistsAsync()).Value.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task When_Updating_Schema_Fixtures_In_Azurite_Should_Replace_Invalidate_Cache_And_Allow_Clearing()
+    {
+        var schemaRegistry = _harness.Get<ISchemaRegistry>();
+        var metadata = new SchemaMetadataBuilder()
+            .WithUniqueName("fixture_update_schema")
+            .WithVersion(1)
+            .WithSchema(JsonSchemaFixtures.ValidV1Schema)
+            .Build();
+
+        (await schemaRegistry.SaveSchemaAsync(
+            metadata,
+            rawRulesJson: null,
+            rawOdcsYaml: null,
+            sampleValidFixtures: ["""{"urn":100001,"schoolName":"Initial School"}"""],
+            sampleInvalidFixtures: ["""{"urn":"bad"}"""])).ShouldSucceed();
+
+        // Prime memory cache
+        var initial = (await schemaRegistry.GetExplicitSchemaAsync(metadata.Name, 1)).ShouldSucceed();
+        initial.ValidFixtures.Should().HaveCount(1);
+        initial.InvalidFixtures.Should().HaveCount(1);
+
+        // Replace fixtures
+        (await schemaRegistry.UpdateSchemaFixturesAsync(
+            metadata.Name,
+            1,
+            ["""{"urn":100001,"schoolName":"Updated A"}""", """{"urn":100002,"schoolName":"Updated B"}"""],
+            [])).ShouldSucceed();
+
+        var updated = (await schemaRegistry.GetExplicitSchemaAsync(metadata.Name, 1)).ShouldSucceed();
+        updated.ValidFixtures.Should().HaveCount(2);
+        updated.ValidFixtures![1].Should().Contain("Updated B");
+        updated.InvalidFixtures.Should().BeEmpty();
     }
 }

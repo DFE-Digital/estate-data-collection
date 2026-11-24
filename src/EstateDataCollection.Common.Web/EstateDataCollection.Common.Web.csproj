@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+        <PackageReference Include="Scrutor" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\EstateDataCollection.Common\EstateDataCollection.Common.csproj" />
+        <ProjectReference Include="..\EstateDataCollection.Infrastructure\EstateDataCollection.Infrastructure.csproj" />
+    </ItemGroup>
+
+</Project>

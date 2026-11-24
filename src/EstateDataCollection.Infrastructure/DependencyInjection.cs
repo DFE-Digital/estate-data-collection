@@ -13,12 +13,13 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         var localAssembly = typeof(DependencyInjection).Assembly;
+        var appAssembly = typeof(Application.DependencyInjection).Assembly;
 
         services.AddMemoryCache();
         services.AddAzureBlobStorage(configuration);
         
         services
-            .AddConfigOptions(localAssembly)
+            .AddConfigOptions(localAssembly, appAssembly)
             .Scan(scan => scan
                 .FromAssemblies(localAssembly)
                 .AddClasses(classes => classes.AssignableTo<IInfrastructure>())

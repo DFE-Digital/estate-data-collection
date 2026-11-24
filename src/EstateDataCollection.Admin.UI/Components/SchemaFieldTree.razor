@@ -1,0 +1,66 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Components
+
+@if (Model is not null)
+{
+    @if (Model.ShowFieldsTable)
+    {
+        <div class="@Model.ContainerCssClass">
+            <table class="govuk-table govuk-!-margin-bottom-3">
+                <thead class="@Model.HeadCssClass">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header" style="width: 600px;">Field</th>
+                        <th scope="col" class="govuk-table__header" style="width: 200px;">Type</th>
+                        <th scope="col" class="govuk-table__header" style="width: 70px;">Required</th>
+                        <th scope="col" class="govuk-table__header" style="width: 200px;">Constraints / Notes</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var field in Model.Fields)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell" style="@Model.FieldColumnStyle">
+                                <strong>@field.Name</strong><br />
+                                @if (field.HasDescription)
+                                {
+                                    <div class="govuk-hint govuk-!-font-size-14 govuk-!-margin-bottom-0">@field.Description</div>
+                                }
+                                <code class="dfe-code-badge">@field.Path</code>
+                            </td>
+                            <td class="govuk-table__cell" style="width: 200px;">@field.TypeDisplay</td>
+                            <td class="govuk-table__cell" style="width: 70px;">
+                                <strong class="@field.RequiredTagCssClass">@field.RequiredTagText</strong>
+                            </td>
+                            <td class="govuk-table__cell govuk-body-s" style="width: 200px;">
+                                @if (field.HasConstraints)
+                                {
+                                    @field.ConstraintsText
+                                }
+                                else
+                                {
+                                    <span class="govuk-hint">None</span>
+                                }
+                            </td>
+                        </tr>
+                        @if (field.HasChildren)
+                        {
+                            <tr class="govuk-table__row">
+                                <td colspan="5" class="govuk-table__cell">
+                                    <SchemaFieldTree Model="field.ChildrenTree" />
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (Model.ShowEmptyMessage)
+    {
+        <p class="govuk-body govuk-hint">No extracted properties were found on this schema.</p>
+    }
+}
+
+@code {
+    [Parameter] public SchemaFieldTreeViewModel? Model { get; set; }
+}

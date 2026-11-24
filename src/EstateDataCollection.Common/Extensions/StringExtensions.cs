@@ -43,6 +43,6 @@ public static partial class StringExtensions
         });
     }
 
-    [GeneratedRegex(@"\{(\w+)\}")]
+    [GeneratedRegex(@"\{\*?(\w+)(?::[^}]+)?\}")]
     private static partial Regex FormatWithNodeWrapperRegex();
 }

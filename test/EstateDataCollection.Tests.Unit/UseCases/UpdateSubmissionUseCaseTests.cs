@@ -1,13 +1,19 @@
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Contracts;
+using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Application.Models.Options;
+using EstateDataCollection.Application.UseCases.Submissions;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
+using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Schema;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
+using EstateDataCollection.Infrastructure.Validation;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
 using AwesomeAssertions;
 using Json.Schema;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
@@ -22,7 +28,10 @@ public class UpdateSubmissionUseCaseTests
 
     public UpdateSubmissionUseCaseTests()
     {
-        _sut = new UpdateSubmissionUseCase(_infrastructure, _registry, _validator);
+        var draftOptions = Options.Create(new ValidationOptions { ValidateIdentifierOnDraftUpdate = false });
+        var validationService = new PayloadValidationService(_validator, new JsonLogicValidator(), draftOptions);
+        var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService, draftOptions);
+        _sut = new UpdateSubmissionUseCase(_infrastructure, evaluationService);
     }
 
     [Fact]
@@ -108,6 +117,58 @@ public class UpdateSubmissionUseCaseTests
         // Verify draft WAS saved to storage despite being incomplete
         await _infrastructure.Received(1).SaveDraftPayloadAsync(
             submissionId, null, SurveyPayloadFixtures.MissingUrnJson, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task When_Draft_Payload_Has_Missing_Or_Invalid_Custom_Identifier_With_ValidationService_Should_Include_In_PendingErrors_And_Deduplicate()
+    {
+        const string laestabSchema = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["establishment"],
+          "properties": {
+            "establishment": {
+              "type": "object",
+              "required": ["laestab"],
+              "properties": { "laestab": { "type": "string" } }
+            }
+          }
+        }
+        """;
+
+        var submissionId = Guid.NewGuid();
+        var session = SubmissionSession.Create("edc-laestab", 1);
+
+        _infrastructure.GetSessionAsync(submissionId, Arg.Any<CancellationToken>())
+            .Returns(Result<SubmissionSession>.Success(session));
+
+        var resolved = new ResolvedSchemaBuilder()
+            .ConfigureMetadata(m => m
+                .WithName("edc-laestab")
+                .WithSchema(laestabSchema)
+                .WithIdentifierConfig(new SchemaIdentifierConfig { Type = "LAEstab", JsonPointer = "/establishment/laestab", Required = true }))
+            .WithSchemaJson(laestabSchema)
+            .Build();
+
+        _registry.GetExplicitSchemaAsync("edc-laestab", 1, Arg.Any<CancellationToken>())
+            .Returns(Result<ResolvedSchema>.Success(resolved));
+
+        const string invalidUnsafePayload = """{"establishment":{"laestab":"201/3614"}}""";
+        _infrastructure.SaveDraftPayloadAsync(submissionId, null, invalidUnsafePayload, Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+
+        var validationService = new PayloadValidationService(new JsonSchemaNetValidator(), new JsonLogicValidator());
+        var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService);
+        var sut = new UpdateSubmissionUseCase(_infrastructure, evaluationService);
+
+        var result = await sut.ExecuteAsync(new UpdateSubmissionRequest(submissionId, invalidUnsafePayload));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsSuccessful.Should().BeFalse();
+        result.Value.PendingErrors.Should().ContainSingle(e =>
+            e.PropertyPath == "#/establishment/laestab" &&
+            e.Message.Contains("LAEstab"));
     }
 
     [Fact]

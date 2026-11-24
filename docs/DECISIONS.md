@@ -26,6 +26,12 @@ We use the [Michael Nygard ADR format](http://thinkrelevance.com/blog/2011/11/15
 | [**0014**](decisions/0014-segregated-multi-workflow-ci-cd-with-composite-actions.md) | Segregated Multi-Workflow CI/CD with Reusable Composite Actions and Gated Promotion | `Accepted` | 2026-10 |
 | [**0015**](decisions/0015-calendar-versioning-calver-and-log-enrichment.md) | Calendar Versioning (CalVer) with Build-Once Artifact Stamping and Log Enrichment | `Accepted` | 2026-10 |
 | [**0016**](decisions/0016-self-healing-storage-container-initialisation.md) | Self-Healing Storage Container Initialisation on Application Startup | `Proposed` | 2026-10 |
+| [**0017**](decisions/0017-ssr-admin-portal-and-proxy-boundary.md) | Server-Side Rendered Admin Portal & Proxy-Only API Boundary | `Accepted` | 2026-11 |
+| [**0018**](decisions/0018-zero-logic-razor-views-and-presentation-viewmodels.md) | Zero-Logic Razor Views & Presentation ViewModel Pattern | `Accepted` | 2026-11 |
+| [**0019**](decisions/0019-configurable-schema-verified-identifier-partitioning.md) | Configurable Schema-Verified Identifier Extraction & Blob Partitioning | `Accepted` | 2026-11 |
+| [**0020**](decisions/0020-schema-regression-test-suites-and-soft-warnings.md) | Stored Schema Regression Test Suites, Expected-Error Assertions & Soft Warnings | `Accepted` | 2026-11 |
+| [**0021**](decisions/0021-isolated-ephemeral-azurite-test-containers.md) | Isolated Ephemeral Azurite Containers & Automatic Test Storage Cleanup | `Accepted` | 2026-11 |
+| [**0022**](decisions/0022-authoring-schema-test-fixtures-and-expected-errors.md) | Authoring Schema Regression Test Fixtures and Expected-Error Assertions | `Accepted` | 2026-11 |
 
 ---
 
@@ -39,4 +45,5 @@ Decisions initially explored in the historical spikes directory (`docs/adr/_hist
 - **Security & Large Binary Ingestion**: Direct-to-storage landing zone and User Delegation SAS generation (historic ADR 0008) is formalised in [**ADR 0010**](decisions/0010-direct-to-storage-landing-zone-and-user-delegation-sas.md).
 - **Layer Abstractions**: Core architectural marker interfaces and assembly scanning (historic ADR 0011) are formalised in [**ADR 0011**](decisions/0011-architectural-marker-interfaces-and-assembly-scanning.md).
 - **CI/CD & Versioning**: Segregated workflows and composite actions are recorded in [**ADR 0014**](decisions/0014-segregated-multi-workflow-ci-cd-with-composite-actions.md); CalVer stamping and observability enrichment are recorded in [**ADR 0015**](decisions/0015-calendar-versioning-calver-and-log-enrichment.md).
-- **Storage Resilience**: Self-healing storage container initialisation is proposed in [**ADR 0016**](decisions/0016-self-healing-storage-container-initialisation.md).
+- **Storage Resilience**: Self-healing storage container initialisation is proposed in [**ADR 0016**](decisions/0016-self-healing-storage-container-initialisation.md); isolated ephemeral test containers and fixture cleanup are recorded in [**ADR 0021**](decisions/0021-isolated-ephemeral-azurite-test-containers.md).
+- **Admin UI, Identifiers & Schema Regression Testing**: The SSR Admin Portal and HTTP proxy boundary are captured in [**ADR 0017**](decisions/0017-ssr-admin-portal-and-proxy-boundary.md); zero-logic Razor views and presentation ViewModels in [**ADR 0018**](decisions/0018-zero-logic-razor-views-and-presentation-viewmodels.md); configurable schema-verified identifier extraction in [**ADR 0019**](decisions/0019-configurable-schema-verified-identifier-partitioning.md); stored schema regression test suites with `expectedErrors` and soft warnings in [**ADR 0020**](decisions/0020-schema-regression-test-suites-and-soft-warnings.md); and concrete authoring conventions and examples for valid and invalid test fixtures in [**ADR 0022**](decisions/0022-authoring-schema-test-fixtures-and-expected-errors.md).

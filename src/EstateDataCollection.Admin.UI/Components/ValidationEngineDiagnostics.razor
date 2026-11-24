@@ -1,0 +1,89 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Components
+
+@if (Model is { HasContent: true })
+{
+    if (Model.HasTraces)
+    {
+        <section class="govuk-!-margin-top-4 govuk-!-margin-bottom-4" id="validation-engine-diagnostics">
+            <h2 class="govuk-heading-m govuk-!-margin-bottom-2">@Model.Heading</h2>
+            @if (Model.HasSubtitle)
+            {
+                <p class="govuk-body-m">@Model.Subtitle</p>
+            }
+            <table class="govuk-table govuk-!-margin-bottom-3">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Engine</th>
+                        <th scope="col" class="govuk-table__header">Kind</th>
+                        <th scope="col" class="govuk-table__header">Outcome</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Items</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Violations</th>
+                        <th scope="col" class="govuk-table__header govuk-table__header--numeric">Duration</th>
+                        <th scope="col" class="govuk-table__header">Summary</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var row in Model.TraceRows)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell govuk-body-s">
+                                <strong>@row.DisplayName</strong>
+                                <div><code class="dfe-code-badge">@row.EngineId</code></div>
+                            </td>
+                            <td class="govuk-table__cell govuk-body-s">@row.KindLabel</td>
+                            <td class="govuk-table__cell">
+                                <strong class="@row.OutcomeTagCssClass">@row.OutcomeText</strong>
+                            </td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s">@row.ItemsEvaluatedDisplay</td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s">@row.ViolationCountDisplay</td>
+                            <td class="govuk-table__cell govuk-table__cell--numeric govuk-body-s">@row.DurationDisplay</td>
+                            <td class="govuk-table__cell govuk-body-s">@row.SummaryDisplay</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
+
+    if (Model.HasRegisteredEngines)
+    {
+        <section class="govuk-!-margin-top-4 govuk-!-margin-bottom-4" id="registered-validation-engines">
+            <h2 class="govuk-heading-m govuk-!-margin-bottom-2">@Model.RegisteredHeading</h2>
+            @if (Model.HasRegisteredSubtitle)
+            {
+                <p class="govuk-body-m">@Model.RegisteredSubtitle</p>
+            }
+            <table class="govuk-table govuk-!-margin-bottom-3">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Engine</th>
+                        <th scope="col" class="govuk-table__header">Kind</th>
+                        <th scope="col" class="govuk-table__header">Applicability</th>
+                        <th scope="col" class="govuk-table__header">Description</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var eng in Model.RegisteredEngines)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell govuk-body-s">
+                                <strong>@eng.DisplayName</strong>
+                                <div><code class="dfe-code-badge">@eng.EngineId</code></div>
+                            </td>
+                            <td class="govuk-table__cell govuk-body-s">@eng.KindLabel</td>
+                            <td class="govuk-table__cell">
+                                <strong class="@eng.ApplicabilityTagCssClass">@eng.ApplicabilityText</strong>
+                            </td>
+                            <td class="govuk-table__cell govuk-body-s">@eng.Description</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public ValidationEngineDiagnosticsViewModel? Model { get; set; }
+}

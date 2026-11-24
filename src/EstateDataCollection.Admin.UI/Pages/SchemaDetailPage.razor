@@ -1,0 +1,123 @@
+@using EstateDataCollection.Admin.UI.Models.ViewModels
+@namespace EstateDataCollection.Admin.UI.Pages
+
+<DfeAdminLayout Model="Model.Page">
+    <a href="@Model.BackToSchemaUrl" class="govuk-back-link">Back to Schema Details</a>
+
+    <NotificationBanner Model="Model.SuccessBannerModel" />
+    <ErrorSummary Model="Model.ErrorSummary" />
+
+    @if (Model.HasDetail)
+    {
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-full">
+                <span class="govuk-caption-l">Schema Contract Version</span>
+                <h1 class="govuk-heading-xl govuk-!-margin-bottom-2">
+                    @Model.SchemaName <span class="govuk-hint">@Model.VersionDisplay</span>
+                </h1>
+            </div>
+        </div>
+
+        <div class="govuk-button-group govuk-!-margin-bottom-4">
+            <form method="post" action="@Model.RunTestsActionUrl" style="display: inline-block; margin: 0;">
+            @if (Model.CanModifyLifecycle)
+            {
+                <a href="@Model.ScheduleUrl"
+                   class="govuk-button" data-module="govuk-button">
+                    Manage Schedule &amp; Lifecycle
+                </a>
+            }
+            <a href="@Model.TestsUrl"
+               class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                View Stored Tests (@Model.StoredTestsCount)
+            </a>
+                <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                    Run Tests
+                </button>
+            </form>
+        </div>
+
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-full">
+                <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Lifecycle state</dt>
+                        <dd class="govuk-summary-list__value"><LifecycleTag Model="Model.StateTag" /></dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Accepts traffic now</dt>
+                        <dd class="govuk-summary-list__value">@Model.AcceptsTrafficDisplay</dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Effective from (UTC)</dt>
+                        <dd class="govuk-summary-list__value">@Model.EffectiveFromDisplay</dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Effective to (UTC)</dt>
+                        <dd class="govuk-summary-list__value">@Model.EffectiveToDisplay</dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Identifier / URN config</dt>
+                        <dd class="govuk-summary-list__value">
+                            @if (Model.NoIdentifierConfig)
+                            {
+                                <span class="govuk-hint"><i>Unassigned</i></span>
+                            }
+                            else
+                            {
+                                <span>
+                                    Type: <strong>@Model.IdentifierType</strong>,
+                                    Pointer: <code class="dfe-code-badge">@Model.IdentifierPointerDisplay</code>,
+                                    Required: <strong>@Model.IdentifierRequiredDisplay</strong>
+                                </span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Stored regression tests</dt>
+                        <dd class="govuk-summary-list__value">
+                            <strong>@Model.ValidFixturesCount</strong> valid, <strong>@Model.InvalidFixturesCount</strong> invalid
+                            @if (Model.HasLastTestRun)
+                            {
+                                <span class="govuk-!-margin-left-2">
+                                    &bull; Last run:
+                                    <strong class="@Model.LastTestRunTagCssClass">@Model.LastTestRunTagText</strong>
+                                    <span>@Model.LastTestRunTimestampDisplay</span>
+                                </span>
+                            }
+                        </dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">SHA-256 Digest</dt>
+                        <dd class="govuk-summary-list__value"><code class="dfe-code-badge">@Model.Sha256Hash</code></dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Created (UTC)</dt>
+                        <dd class="govuk-summary-list__value">@Model.CreatedAtDisplay</dd>
+                    </div>
+                </dl>
+
+                <div class="govuk-tabs" data-module="govuk-tabs" id="@Model.Tabs.ContainerId" data-default-tab="@Model.Tabs.DefaultTabId">
+                    <GovUkTabStrip Model="Model.Tabs" />
+                    <GovUkTabPanel Tab="Model.FieldsTab">
+                        <FieldsViewer Model="Model.FieldsViewer" />
+                    </GovUkTabPanel>
+                    <GovUkTabPanel Tab="Model.QualityRulesTab">
+                        <QualityRulesViewer Model="Model.QualityRulesViewer" />
+                    </GovUkTabPanel>
+                    <GovUkTabPanel Tab="Model.ValidationEnginesTab">
+                        <ValidationEngineDiagnostics Model="Model.EngineDiagnostics" />
+                    </GovUkTabPanel>
+                    <GovUkTabPanel Tab="Model.RawJsonSchemaTab">
+                        <h2 class="govuk-heading-m govuk-!-margin-bottom-2">Raw JSON Schema (Draft 2020-12 / Draft-07)</h2>
+                        <pre class="dfe-code-pre">@Model.RawJsonSchema</pre>
+                    </GovUkTabPanel>
+                </div>
+            </div>
+        </div>
+    }
+</DfeAdminLayout>
+
+@code {
+    [Parameter, EditorRequired] public SchemaDetailViewModel Model { get; set; } = default!;
+}

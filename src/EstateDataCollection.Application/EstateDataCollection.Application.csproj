@@ -1,9 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   
   <ItemGroup>
+    <PackageReference Include="JsonLogic" />
     <PackageReference Include="JsonSchema.Net" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Scrutor" />
   </ItemGroup>
   
@@ -13,7 +15,6 @@
   </ItemGroup>
   
   <ItemGroup>
-    <Folder Include="Options\" />
     <Folder Include="UseCases\Schema\" />
   </ItemGroup>
   
