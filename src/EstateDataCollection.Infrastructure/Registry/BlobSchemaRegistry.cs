@@ -604,29 +604,64 @@ public sealed class BlobSchemaRegistry(
         else if (DraftSchemaBlobPathParser.IsRulesBlob(normalisedPath, content))
         {
             rawRulesJson = content;
-
-            // Check if companion {basePrefix}.schema.json is also present in draft-schemas
-            var companionSchemaPath = $"{basePrefix}.schema.json";
-            var companionSchemaBlob = draftContainer.GetBlobClient(companionSchemaPath);
-            if (await companionSchemaBlob.ExistsAsync(cancellationToken))
-            {
-                rawSchemaJson = (await companionSchemaBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-                consumedBlobs.Add(companionSchemaPath);
-            }
         }
         else
         {
             rawSchemaJson = content;
+        }
 
-            // Check if companion {basePrefix}.rules.json or {basePrefix}.logic.json is also present in draft-schemas
+        // Probe companion JSON schema if not already loaded ({basePrefix}.schema.json)
+        if (rawSchemaJson is null)
+        {
+            var companionSchemaPath = $"{basePrefix}.schema.json";
+            if (!consumedBlobs.Contains(companionSchemaPath, StringComparer.OrdinalIgnoreCase))
+            {
+                var companionSchemaBlob = draftContainer.GetBlobClient(companionSchemaPath);
+                if (await companionSchemaBlob.ExistsAsync(cancellationToken))
+                {
+                    rawSchemaJson = (await companionSchemaBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
+                    consumedBlobs.Add(companionSchemaPath);
+                }
+            }
+        }
+
+        // Probe companion JSON rules if not already loaded ({basePrefix}.rules.json or .logic.json)
+        if (rawRulesJson is null)
+        {
             foreach (var rulesSuffix in new[] { ".rules.json", ".logic.json" })
             {
                 var companionRulesPath = $"{basePrefix}{rulesSuffix}";
+                if (consumedBlobs.Contains(companionRulesPath, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 var companionRulesBlob = draftContainer.GetBlobClient(companionRulesPath);
                 if (await companionRulesBlob.ExistsAsync(cancellationToken))
                 {
                     rawRulesJson = (await companionRulesBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
                     consumedBlobs.Add(companionRulesPath);
+                    break;
+                }
+            }
+        }
+
+        // Probe companion ODCS YAML if not already loaded ({basePrefix}.odcs.yaml / .odcs.yml / .yaml / .yml)
+        if (rawOdcsYaml is null)
+        {
+            foreach (var yamlSuffix in new[] { ".odcs.yaml", ".odcs.yml", ".yaml", ".yml" })
+            {
+                var companionYamlPath = $"{basePrefix}{yamlSuffix}";
+                if (consumedBlobs.Contains(companionYamlPath, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var companionYamlBlob = draftContainer.GetBlobClient(companionYamlPath);
+                if (await companionYamlBlob.ExistsAsync(cancellationToken))
+                {
+                    rawOdcsYaml = (await companionYamlBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
+                    consumedBlobs.Add(companionYamlPath);
                     break;
                 }
             }

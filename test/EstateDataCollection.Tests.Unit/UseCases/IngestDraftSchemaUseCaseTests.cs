@@ -80,6 +80,86 @@ public class IngestDraftSchemaUseCaseTests
     }
 
     [Fact]
+    public async Task When_Both_Json_And_OdcsYaml_Present_Json_Should_Take_Precedence_Over_Yaml()
+    {
+        var odcsYaml = CdeContractFixtureLoader.LoadFile("contracts/edc-school-site-jsonlogic.odcs.yaml");
+        const string overrideSchemaJson = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "title": "Override School Site",
+          "type": "object",
+          "required": ["urn"],
+          "properties": { "urn": { "type": "integer" } }
+        }
+        """;
+        const string overrideRulesJson = """
+        [
+          {
+            "id": "JSON-OVERRIDE-RULE",
+            "type": "custom",
+            "engine": "cel",
+            "description": "Override rule",
+            "severity": "ERROR",
+            "path": "/urn",
+            "message": "URN must be positive",
+            "implementation": "urn > 0"
+          }
+        ]
+        """;
+
+        const string blobPath = "edc-survey-sites/v1.odcs.yaml";
+        var artifact = new DraftSchemaArtifact(
+            TriggerBlobPath: blobPath,
+            SchemaName: "edc-survey-sites",
+            Version: 1,
+            RawSchemaJson: overrideSchemaJson,
+            RawRulesJson: overrideRulesJson,
+            RawOdcsYaml: odcsYaml,
+            SampleValidFixtures: [],
+            SampleInvalidFixtures: [],
+            ConsumedDraftBlobPaths: [blobPath, "edc-survey-sites/v1.schema.json", "edc-survey-sites/v1.rules.json"]);
+
+        var registry = Substitute.For<ISchemaRegistry>();
+        var verifier = Substitute.For<ISchemaVerificationService>();
+        registry.GetDraftArtefactAsync(blobPath, Arg.Any<CancellationToken>())
+            .Returns(Result<DraftSchemaArtifact>.Success(artifact));
+        verifier.VerifyCandidateSchemaAsync(
+                overrideSchemaJson,
+                overrideRulesJson,
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [])));
+        registry.SaveSchemaAsync(
+                Arg.Any<SchemaMetadata>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+        registry.CompleteDraftIngestionAsync(artifact, Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+
+        var sut = new IngestDraftSchemaUseCase(registry, verifier, new OdcsContractParser());
+
+        var result = (await sut.ExecuteAsync(new IngestDraftSchemaRequest(blobPath))).ShouldSucceed();
+
+        result.Promoted.Should().BeTrue();
+        await verifier.Received(1).VerifyCandidateSchemaAsync(
+            overrideSchemaJson,
+            overrideRulesJson,
+            Arg.Any<IReadOnlyList<string>>(),
+            Arg.Any<IReadOnlyList<string>>(),
+            Arg.Any<SchemaIdentifierConfig?>(),
+            Arg.Any<CancellationToken>());
+        await registry.Received(1).SaveSchemaAsync(
+            Arg.Is<SchemaMetadata>(m => m.RawJsonSchema == overrideSchemaJson),
+            overrideRulesJson,
+            odcsYaml,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task When_Draft_Includes_MetaJson_IdentifierConfig_Should_Verify_And_Persist_ResolvedConfig()
     {
         const string schemaJson = """

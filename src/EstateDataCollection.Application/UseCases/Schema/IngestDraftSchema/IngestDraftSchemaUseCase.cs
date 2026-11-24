@@ -91,7 +91,14 @@ public sealed partial class IngestDraftSchemaUseCase(
         var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, metadataContractId, rawVersionText) = resolvedInputs.Value;
         var metadataVersion = TryParseMajorVersion(rawVersionText);
 
-        if (rawOdcsYaml is null && !string.IsNullOrWhiteSpace(effectiveSchemaJson))
+        // JSON schema metadata takes precedence over ODCS YAML metadata when both are present
+        if (!string.IsNullOrWhiteSpace(effectiveSchemaJson) && !string.IsNullOrWhiteSpace(artifact.RawSchemaJson))
+        {
+            ExtractJsonSchemaMetadata(effectiveSchemaJson, out var jsonSchemaId, out var jsonVersion);
+            metadataContractId = !string.IsNullOrWhiteSpace(jsonSchemaId) ? jsonSchemaId : metadataContractId;
+            metadataVersion = jsonVersion ?? metadataVersion;
+        }
+        else if (rawOdcsYaml is null && !string.IsNullOrWhiteSpace(effectiveSchemaJson))
         {
             ExtractJsonSchemaMetadata(effectiveSchemaJson, out metadataContractId, out metadataVersion);
         }
@@ -236,7 +243,7 @@ public sealed partial class IngestDraftSchemaUseCase(
             return saveResult.Error;
         }
 
-        await schemaRegistry.CompleteDraftIngestionAsync(artifact, cancellationToken);
+        _ = await schemaRegistry.CompleteDraftIngestionAsync(artifact, cancellationToken);
         _instrumentation.DraftSchemaPromoted(request.BlobPath, schemaName, version, metadata.Sha256Hash);
 
         return new IngestDraftSchemaResult(
