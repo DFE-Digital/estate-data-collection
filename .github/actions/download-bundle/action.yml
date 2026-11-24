@@ -1,0 +1,57 @@
+name: 'Download EDC Release Bundle from GitHub Packages'
+description: 'Downloads the versioned NuGet deployment bundle from GitHub Packages and extracts Public and Admin zip packages'
+
+inputs:
+  package-id:
+    description: 'NuGet Package ID in GitHub Packages'
+    required: false
+    default: 'DFE-Digital.EstateDataCollection.Bundle'
+  package-version:
+    description: 'NuGet Package version (CalVer)'
+    required: true
+  github-token:
+    description: 'GitHub token with packages:read scope'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download & Extract Release Bundle (.nupkg)
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PKG_ID: ${{ inputs.package-id }}
+        PKG_VERSION: ${{ inputs.package-version }}
+      run: |
+        PKG_ID_LOWER="${PKG_ID,,}"
+        VERSION_LOWER="${PKG_VERSION,,}"
+        INDEX_URL="https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+
+        PACKAGE_BASE=$(curl -fsSL -u "${{ github.actor }}:${GH_TOKEN}" "${INDEX_URL}" | python3 -c "
+        import json, sys
+        data = json.load(sys.stdin)
+        for res in data.get('resources', []):
+            if str(res.get('@type', '')).startswith('PackageBaseAddress'):
+                print(res['@id'].rstrip('/'))
+                break
+        " || true)
+
+        if [ -z "${PACKAGE_BASE}" ]; then
+          PACKAGE_BASE="https://nuget.pkg.github.com/${{ github.repository_owner }}/download"
+        fi
+
+        NUPKG_URL="${PACKAGE_BASE}/${PKG_ID_LOWER}/${VERSION_LOWER}/${PKG_ID_LOWER}.${VERSION_LOWER}.nupkg"
+        TMP_NUPKG="$(mktemp -t edc-bundle.XXXXXX.nupkg)"
+
+        echo "Downloading ${PKG_ID} ${PKG_VERSION} from ${NUPKG_URL}"
+        curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+          -u "${{ github.actor }}:${GH_TOKEN}" \
+          "${NUPKG_URL}" \
+          -o "${TMP_NUPKG}"
+
+        unzip -o -j "${TMP_NUPKG}" "content/*.zip" -d .
+        rm -f "${TMP_NUPKG}"
+
+        test -f ./edc-functions-public-linux-x64.zip
+        test -f ./edc-functions-admin-linux-x64.zip
+        ls -lh ./edc-functions-public-linux-x64.zip ./edc-functions-admin-linux-x64.zip
