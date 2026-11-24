@@ -6,26 +6,6 @@ using EstateDataCollection.Domain.Submission;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
-public sealed record ValidationEngineTraceRowViewModel(
-    string EngineId,
-    string DisplayName,
-    string KindLabel,
-    string Description,
-    string OutcomeText,
-    string OutcomeTagCssClass,
-    string ItemsEvaluatedDisplay,
-    string ViolationCountDisplay,
-    string DurationDisplay,
-    string SummaryDisplay);
-
-public sealed record RegisteredValidationEngineRowViewModel(
-    string EngineId,
-    string DisplayName,
-    string KindLabel,
-    string Description,
-    string ApplicabilityText,
-    string ApplicabilityTagCssClass);
-
 public sealed record ValidationEngineDiagnosticsViewModel(
     string Heading,
     string? Subtitle,
