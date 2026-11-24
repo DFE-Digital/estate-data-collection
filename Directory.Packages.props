@@ -34,7 +34,7 @@
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.51.0" />
     <!-- Schema Validation & Rules -->
     <PackageVersion Include="JsonSchema.Net" Version="7.3.0" />
-    <PackageVersion Include="JsonLogic" Version="5.3.0" />
+    <PackageVersion Include="JsonLogic" Version="6.2.0" />
     <PackageVersion Include="Celly" Version="1.2.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <!-- Admin UI Build Tooling -->
