@@ -38,7 +38,7 @@ public sealed class SubmissionEvaluationServiceTests
         using var scope = SubmissionExecutionScope.Start("CheckSubmissionStatus", submissionId);
         var sut = CreateSut();
 
-        var inventory = await sut.LoadDraftInventoryAsync(submissionId, scope);
+        var inventory = await sut.LoadDraftInventoryAsync(submissionId);
 
         inventory.Count.Should().Be(0);
         inventory.Items.Should().BeEmpty();
@@ -83,7 +83,7 @@ public sealed class SubmissionEvaluationServiceTests
         using var scope = SubmissionExecutionScope.Start("FinaliseSubmission", submissionId);
         var sut = CreateSut();
 
-        var merged = (await sut.AssembleStoredDraftAsync(submissionId, inventory, scope)).ShouldSucceed();
+        var merged = (await sut.AssembleStoredDraftAsync(submissionId, inventory)).ShouldSucceed();
 
         merged.Should().Contain("104521");
         merged.Should().Contain("Updated");
@@ -106,7 +106,7 @@ public sealed class SubmissionEvaluationServiceTests
         using var scope = SubmissionExecutionScope.Start("CheckSubmissionStatus", submissionId);
         var sut = CreateSut();
 
-        var result = await sut.AssembleStoredDraftAsync(submissionId, inventory, scope);
+        var result = await sut.AssembleStoredDraftAsync(submissionId, inventory);
 
         result.IsFailure.Should().BeTrue();
         sut.IsMissingDraftError(result.Error).Should().BeTrue();
@@ -157,7 +157,7 @@ public sealed class SubmissionEvaluationServiceTests
         using var scope = SubmissionExecutionScope.Start("UpdateSubmission", Guid.NewGuid());
         var sut = CreateSut();
 
-        var candidate = sut.AssembleCandidateDraft(inventory, """{"school_address":"10 High St"}""", scope).ShouldSucceed();
+        var candidate = sut.AssembleCandidateDraft(inventory, """{"school_address":"10 High St"}""").ShouldSucceed();
 
         candidate.DraftCountAfterSave.Should().Be(2);
         candidate.MergedPayloadJson.Should().Contain("104521");
@@ -202,8 +202,7 @@ public sealed class SubmissionEvaluationServiceTests
         var evaluation = (await sut.EvaluatePayloadAsync(
             SurveyPayloadFixtures.MissingUrnJson,
             session,
-            isDraftUpdate: false,
-            scope)).ShouldSucceed();
+            isDraftUpdate: false)).ShouldSucceed();
 
         evaluation.ValidationErrors.Should().ContainSingle(e => e.PropertyPath == "$.urn");
         evaluation.IdentifierEvaluation.IsValid.Should().BeFalse();
@@ -235,8 +234,7 @@ public sealed class SubmissionEvaluationServiceTests
         var evaluation = (await sut.EvaluatePayloadAsync(
             SurveyPayloadFixtures.ValidPayloadJson,
             session,
-            isDraftUpdate: false,
-            scope)).ShouldSucceed();
+            isDraftUpdate: false)).ShouldSucceed();
 
         evaluation.ValidationErrors.Should().BeEmpty();
         evaluation.IdentifierEvaluation.IsValid.Should().BeTrue();

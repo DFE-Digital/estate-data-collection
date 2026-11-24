@@ -11,9 +11,7 @@ namespace EstateDataCollection.Application.UseCases.Submissions.CreateSubmission
 public class CreateSubmissionUseCase(
     ISchemaRegistry registry,
     ISubmissionInfrastructure infrastructure,
-    CreateSubmissionUseCaseInstrumentation? instrumentation = null,
-    ISubmissionAuditStore? auditStore = null,
-    ProcessExecutionInstrumentation? processInstrumentation = null
+    CreateSubmissionUseCaseInstrumentation? instrumentation = null
 ) : IUseCase<CreateSubmissionResult, CreateSubmissionRequest>
 {
     private readonly CreateSubmissionUseCaseInstrumentation _instrumentation =
@@ -24,13 +22,7 @@ public class CreateSubmissionUseCase(
     {
         _instrumentation.CreatingSubmissionSession(request.SchemaName, request.Version);
 
-        using var scope = SubmissionExecutionScope.Start(
-            "CreateSubmission",
-            instrumentation: processInstrumentation,
-            auditStore: auditStore,
-            initialCapacity: 2);
-
-        var schemaResult = await scope.ExecuteAsync(
+        var schemaResult = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.SchemaResolution,
             async () =>
             {
@@ -80,33 +72,23 @@ public class CreateSubmissionUseCase(
         var submission = SubmissionSession.Create(
             resolvedSchema.Metadata.Name,
             resolvedSchema.Metadata.Version);
-        scope.SetSubmissionId(submission.SubmissionId);
+        SubmissionExecutionScope.Current?.SetSubmissionContext(submission);
 
-        var outcome = await scope.ExecuteAsync(
+        var outcome = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.CreateSession,
             () => infrastructure.CreateSessionAsync(submission, cancellationToken),
             _ => new ProcessStepDetails(Summary: $"Created session {submission.SubmissionId}"));
 
         if (outcome.IsFailure)
         {
-            await scope.RecordErrorAuditAsync(
-                submission.SchemaName,
-                submission.SchemaVersion,
-                outcome.Error,
-                outcomeStatus: "Failed",
-                cancellationToken: cancellationToken);
-
             _instrumentation.SubmissionSessionCreationFailed(request.SchemaName, outcome.Error.Description ?? string.Empty);
             return outcome.Error;
         }
 
-        await scope.RecordAuditAsync(
-            submission.SchemaName,
-            submission.SchemaVersion,
-            "Succeeded",
-            201,
-            message: $"Draft session created for {submission.SchemaName} v{submission.SchemaVersion}",
-            cancellationToken: cancellationToken);
+        SubmissionExecutionScope.Current?.SetAuditOutcome(
+            outcomeStatus: "Succeeded",
+            httpStatus: 201,
+            message: $"Draft session created for {submission.SchemaName} v{submission.SchemaVersion}");
 
         _instrumentation.SubmissionSessionCreated(
             submission.SubmissionId,

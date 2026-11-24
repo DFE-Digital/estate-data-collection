@@ -30,7 +30,7 @@ public sealed class GetSubmissionDetailUseCase(
         var session = sessionResult.Value;
         var rawSessionJson = JsonSerializer.Serialize(session, PrettyJsonOptions);
 
-        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, scope: null, cancellationToken);
+        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, cancellationToken);
         var mergedDraftPayload = await evaluationService.TryAssembleDraftForDetailAsync(session, inventory, cancellationToken);
 
         SubmissionProcessedArtifact? processedArtifact = null;
@@ -65,7 +65,6 @@ public sealed class GetSubmissionDetailUseCase(
                 var schemaResult = await evaluationService.ResolveSchemaAsync(
                     session.SchemaName,
                     session.SchemaVersion,
-                    scope: null,
                     cancellationToken);
 
                 if (schemaResult.IsSuccess)
@@ -75,7 +74,6 @@ public sealed class GetSubmissionDetailUseCase(
                         schemaResult.Value,
                         session,
                         isDraftUpdate: false,
-                        scope: null,
                         cancellationToken);
 
                     if (evaluationResult.IsSuccess)

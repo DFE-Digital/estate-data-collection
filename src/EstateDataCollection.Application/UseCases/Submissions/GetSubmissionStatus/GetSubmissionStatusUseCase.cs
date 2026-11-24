@@ -9,9 +9,7 @@ namespace EstateDataCollection.Application.UseCases.Submissions.GetSubmissionSta
 public class GetSubmissionStatusUseCase(
     ISubmissionInfrastructure infrastructure,
     ISubmissionEvaluationService evaluationService,
-    GetSubmissionStatusUseCaseInstrumentation? instrumentation = null,
-    ISubmissionAuditStore? auditStore = null,
-    ProcessExecutionInstrumentation? processInstrumentation = null
+    GetSubmissionStatusUseCaseInstrumentation? instrumentation = null
 ) : IUseCase<GetSubmissionStatusResult, GetSubmissionStatusRequest>
 {
     private readonly GetSubmissionStatusUseCaseInstrumentation _instrumentation =
@@ -21,20 +19,9 @@ public class GetSubmissionStatusUseCase(
         GetSubmissionStatusRequest request,
         CancellationToken cancellationToken = default)
     {
-        var actionName = string.IsNullOrWhiteSpace(request.ActionName)
-            ? "CheckSubmissionStatus"
-            : request.ActionName;
-
         _instrumentation.CheckingSubmissionStatus(request.SubmissionId);
 
-        using var scope = SubmissionExecutionScope.Start(
-            actionName,
-            request.SubmissionId,
-            processInstrumentation,
-            auditStore,
-            initialCapacity: 8);
-
-        var sessionResult = await scope.ExecuteAsync(
+        var sessionResult = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.GetSession,
             () => infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken),
             loaded => new ProcessStepDetails(
@@ -47,7 +34,11 @@ public class GetSubmissionStatusUseCase(
         }
 
         var session = sessionResult.Value;
-        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, scope, cancellationToken);
+        SubmissionExecutionScope.Current?.SetSubmissionContext(
+            session,
+            evaluationService.BuildAuditIdentifier(session));
+
+        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, cancellationToken);
 
         if (session.IsFinalised)
         {
@@ -59,14 +50,11 @@ public class GetSubmissionStatusUseCase(
                 draftCount: inventory.Count,
                 pendingErrors: []);
 
-            await scope.RecordAuditAsync(
-                session.SchemaName,
-                session.SchemaVersion,
-                "Finalised",
-                200,
+            SubmissionExecutionScope.Current?.SetAuditOutcome(
+                outcomeStatus: "Finalised",
+                httpStatus: 200,
                 message: finalisedGuidance.Summary,
-                identifier: evaluationService.BuildAuditIdentifier(session),
-                cancellationToken: cancellationToken);
+                identifier: evaluationService.BuildAuditIdentifier(session));
 
             _instrumentation.SubmissionStatusChecked(
                 session.SubmissionId,
@@ -96,7 +84,6 @@ public class GetSubmissionStatusUseCase(
         var draftPayload = await evaluationService.AssembleStoredDraftAsync(
             request.SubmissionId,
             inventory,
-            scope,
             cancellationToken);
 
         if (draftPayload.IsFailure)
@@ -116,14 +103,11 @@ public class GetSubmissionStatusUseCase(
                     draftCount: 0,
                     pendingErrors: missingDraftErrors);
 
-                await scope.RecordAuditAsync(
-                    session.SchemaName,
-                    session.SchemaVersion,
-                    "DraftAwaitingPayload",
-                    200,
+                SubmissionExecutionScope.Current?.SetAuditOutcome(
+                    outcomeStatus: "DraftAwaitingPayload",
+                    httpStatus: 200,
                     message: emptyGuidance.Summary,
-                    validationErrors: missingDraftErrors,
-                    cancellationToken: cancellationToken);
+                    validationErrors: missingDraftErrors);
 
                 _instrumentation.SubmissionStatusChecked(
                     session.SubmissionId,
@@ -150,13 +134,6 @@ public class GetSubmissionStatusUseCase(
                     Summary: emptyGuidance.Summary);
             }
 
-            await scope.RecordErrorAuditAsync(
-                session.SchemaName,
-                session.SchemaVersion,
-                draftPayload.Error,
-                outcomeStatus: "Failed",
-                cancellationToken: cancellationToken);
-
             return draftPayload.Error;
         }
 
@@ -165,18 +142,10 @@ public class GetSubmissionStatusUseCase(
             draftPayload.Value,
             session,
             isDraftUpdate: false,
-            scope,
             cancellationToken);
 
         if (evaluationResult.IsFailure)
         {
-            await scope.RecordErrorAuditAsync(
-                session.SchemaName,
-                session.SchemaVersion,
-                evaluationResult.Error,
-                outcomeStatus: "Failed",
-                cancellationToken: cancellationToken);
-
             return evaluationResult.Error;
         }
 
@@ -195,15 +164,12 @@ public class GetSubmissionStatusUseCase(
             draftCount: effectiveDraftCount,
             pendingErrors: pendingErrors);
 
-        await scope.RecordAuditAsync(
-            session.SchemaName,
-            session.SchemaVersion,
-            isReadyToFinalise ? "ReadyToFinalise" : "DraftPendingErrors",
-            200,
+        SubmissionExecutionScope.Current?.SetAuditOutcome(
+            outcomeStatus: isReadyToFinalise ? "ReadyToFinalise" : "DraftPendingErrors",
+            httpStatus: 200,
             message: draftGuidance.Summary,
             validationErrors: pendingErrors,
-            identifier: evaluation.AuditIdentifier,
-            cancellationToken: cancellationToken);
+            identifier: evaluation.AuditIdentifier);
 
         _instrumentation.SubmissionStatusChecked(
             session.SubmissionId,

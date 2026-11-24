@@ -1,5 +1,4 @@
 using EstateDataCollection.Application.Models.Contracts;
-using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Common.Markers;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
@@ -10,13 +9,11 @@ public interface ISubmissionEvaluationService : IApplication
 {
     Task<SubmissionDraftInventory> LoadDraftInventoryAsync(
         Guid submissionId,
-        SubmissionExecutionScope? scope = null,
         CancellationToken cancellationToken = default);
 
     Task<Result<string>> AssembleStoredDraftAsync(
         Guid submissionId,
         SubmissionDraftInventory inventory,
-        SubmissionExecutionScope? scope = null,
         CancellationToken cancellationToken = default);
 
     Task<string?> TryAssembleDraftForDetailAsync(
@@ -26,13 +23,11 @@ public interface ISubmissionEvaluationService : IApplication
 
     Result<SubmissionCandidateDraft> AssembleCandidateDraft(
         SubmissionDraftInventory existingDrafts,
-        string incomingPayload,
-        SubmissionExecutionScope? scope = null);
+        string incomingPayload);
 
     Task<Result<ResolvedSchema>> ResolveSchemaAsync(
         string schemaName,
         int schemaVersion,
-        SubmissionExecutionScope? scope = null,
         CancellationToken cancellationToken = default);
 
     Task<Result<PayloadEvaluationResult>> EvaluateResolvedPayloadAsync(
@@ -40,14 +35,12 @@ public interface ISubmissionEvaluationService : IApplication
         ResolvedSchema schema,
         SubmissionSession session,
         bool isDraftUpdate,
-        SubmissionExecutionScope? scope = null,
         CancellationToken cancellationToken = default);
 
     Task<Result<PayloadEvaluationResult>> EvaluatePayloadAsync(
         string rawPayloadJson,
         SubmissionSession session,
         bool isDraftUpdate,
-        SubmissionExecutionScope? scope = null,
         CancellationToken cancellationToken = default);
 
     bool IsMissingDraftError(Error error);

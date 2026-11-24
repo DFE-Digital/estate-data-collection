@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.UseCases;
+using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Common.Markers;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,12 +14,14 @@ public static class DependencyInjection
             .AddClasses(classes => classes.AssignableTo<IApplication>())
             .AsImplementedInterfaces()
             .WithScopedLifetime()
-            .AddClasses(classes => classes.AssignableTo<IUseCase>())
+            .AddClasses(classes => classes.AssignableTo<IUseCase>().Where(t => !t.IsGenericTypeDefinition))
             .AsImplementedInterfaces()
             .WithScopedLifetime()
             .AddClasses(classes => classes.AssignableTo<IInstrumentation>())
             .AsSelf()
             .WithTransientLifetime());
+
+        services.Decorate(typeof(IUseCase<,>), typeof(SubmissionUseCaseAuditDecorator<,>));
 
         return services;
     }

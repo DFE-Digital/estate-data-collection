@@ -14,7 +14,7 @@ public sealed class PayloadValidationService(
     IBusinessLogicValidator logicValidator,
     IOptions<ValidationOptions>? options = null,
     ProcessExecutionInstrumentation? processInstrumentation = null
-) : IPayloadValidationService, IScopedPayloadValidationService
+) : IPayloadValidationService
 {
     private readonly ValidationOptions _options = options?.Value ?? new ValidationOptions();
 
@@ -45,49 +45,20 @@ public sealed class PayloadValidationService(
         return report.IsFailure ? report.Error : Result<IReadOnlyList<ValidationError>>.Success(report.Value.Errors);
     }
 
-    public Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceAsync(
+    public async Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceAsync(
         string rawPayloadJson,
         ResolvedSchema schema,
         bool isDraftUpdate = false,
         CancellationToken cancellationToken = default)
     {
-        return ValidatePayloadWithTraceCoreAsync(rawPayloadJson, schema, isDraftUpdate, executionScope: null, cancellationToken);
-    }
-
-    Task<Result<PayloadValidationReport>> IScopedPayloadValidationService.ValidatePayloadWithTraceAsync(
-        string rawPayloadJson,
-        ResolvedSchema schema,
-        bool isDraftUpdate,
-        SubmissionExecutionScope executionScope,
-        CancellationToken cancellationToken)
-    {
-        return ValidatePayloadWithTraceCoreAsync(rawPayloadJson, schema, isDraftUpdate, executionScope, cancellationToken);
-    }
-
-    public Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceAsync(
-        string rawPayloadJson,
-        ResolvedSchema schema,
-        bool isDraftUpdate,
-        SubmissionExecutionScope? executionScope,
-        CancellationToken cancellationToken = default)
-    {
-        return ValidatePayloadWithTraceCoreAsync(rawPayloadJson, schema, isDraftUpdate, executionScope, cancellationToken);
-    }
-
-    private async Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceCoreAsync(
-        string rawPayloadJson,
-        ResolvedSchema schema,
-        bool isDraftUpdate,
-        SubmissionExecutionScope? executionScope,
-        CancellationToken cancellationToken)
-    {
-        using var ownedScope = executionScope is null
+        var ambientScope = SubmissionExecutionScope.Current;
+        using var ownedScope = ambientScope is null
             ? SubmissionExecutionScope.Start(
                 isDraftUpdate ? "ValidateDraftPayload" : "ValidatePayload",
                 instrumentation: processInstrumentation,
                 initialCapacity: 3)
             : null;
-        var scope = executionScope ?? ownedScope!;
+        var scope = ambientScope ?? ownedScope!;
 
         var errors = new List<ValidationError>();
         var engineTraces = new List<ValidationEngineTrace>();

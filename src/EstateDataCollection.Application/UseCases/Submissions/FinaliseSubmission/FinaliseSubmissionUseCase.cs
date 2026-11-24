@@ -10,9 +10,7 @@ namespace EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmissi
 public class FinaliseSubmissionUseCase(
     ISubmissionInfrastructure infrastructure,
     ISubmissionEvaluationService evaluationService,
-    FinaliseSubmissionUseCaseInstrumentation? instrumentation = null,
-    ISubmissionAuditStore? auditStore = null,
-    ProcessExecutionInstrumentation? processInstrumentation = null
+    FinaliseSubmissionUseCaseInstrumentation? instrumentation = null
 ) : IUseCase<FinaliseSubmissionResult, FinaliseSubmissionRequest>
 {
     private readonly FinaliseSubmissionUseCaseInstrumentation _instrumentation =
@@ -23,14 +21,7 @@ public class FinaliseSubmissionUseCase(
     {
         _instrumentation.FinalisingSubmission(request.SubmissionId);
 
-        using var scope = SubmissionExecutionScope.Start(
-            "FinaliseSubmission",
-            request.SubmissionId,
-            processInstrumentation,
-            auditStore,
-            initialCapacity: 9);
-
-        var session = await scope.ExecuteAsync(
+        var session = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.GetSession,
             () => infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken),
             loaded => new ProcessStepDetails(
@@ -42,36 +33,22 @@ public class FinaliseSubmissionUseCase(
             return session.Error;
         }
 
+        SubmissionExecutionScope.Current?.SetSubmissionContext(
+            session.Value,
+            evaluationService.BuildAuditIdentifier(session.Value));
+
         if (session.Value.IsFinalised)
         {
             _instrumentation.SubmissionAlreadyFinalised(request.SubmissionId);
-            var alreadyErr = Error.Forbidden(ErrorCodes.SubmissionAlreadyFinalised);
-
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                alreadyErr,
-                outcomeStatus: "Rejected",
-                identifier: evaluationService.BuildAuditIdentifier(session.Value),
-                cancellationToken: cancellationToken);
-
-            return alreadyErr;
+            return Error.Forbidden(ErrorCodes.SubmissionAlreadyFinalised);
         }
 
-        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, scope, cancellationToken);
-        var draftPayload = await evaluationService.AssembleStoredDraftAsync(request.SubmissionId, inventory, scope, cancellationToken);
+        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, cancellationToken);
+        var draftPayload = await evaluationService.AssembleStoredDraftAsync(request.SubmissionId, inventory, cancellationToken);
 
         if (draftPayload.IsFailure)
         {
             _instrumentation.DraftPayloadMissing(request.SubmissionId);
-
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                draftPayload.Error,
-                outcomeStatus: "Failed",
-                cancellationToken: cancellationToken);
-
             return draftPayload.Error;
         }
 
@@ -79,18 +56,10 @@ public class FinaliseSubmissionUseCase(
             draftPayload.Value,
             session.Value,
             isDraftUpdate: false,
-            scope,
             cancellationToken);
 
         if (evaluation.IsFailure)
         {
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                evaluation.Error,
-                outcomeStatus: "Failed",
-                cancellationToken: cancellationToken);
-
             return evaluation.Error;
         }
 
@@ -98,45 +67,35 @@ public class FinaliseSubmissionUseCase(
         if (validationErrors.Count > 0)
         {
             _instrumentation.ValidationFailed(request.SubmissionId, validationErrors.Count);
-            var contractErr = Error.Validation(ErrorCodes.SchemaContractViolation, errors: validationErrors);
-
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                contractErr,
-                outcomeStatus: "Rejected",
-                message: $"Finalisation rejected with {validationErrors.Count} validation error(s)",
+            SubmissionExecutionScope.Current?.SetAuditContext(
                 validationErrors: validationErrors,
-                cancellationToken: cancellationToken);
+                message: $"Finalisation rejected with {validationErrors.Count} validation error(s)");
 
-            return contractErr;
+            return Error.Validation(ErrorCodes.SchemaContractViolation, errors: validationErrors);
         }
 
         var identifierEval = evaluation.Value.IdentifierEvaluation;
         if (!identifierEval.IsValid)
         {
             _instrumentation.InvalidUrn(request.SubmissionId, 0);
-            var idErr = identifierEval.FailureError ?? Error.Validation(ErrorCodes.PayloadInvalidIdentifier);
+            if (identifierEval.ValidationError is not null)
+            {
+                SubmissionExecutionScope.Current?.SetAuditContext(validationErrors: [identifierEval.ValidationError]);
+            }
 
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                idErr,
-                outcomeStatus: "Rejected",
-                validationErrors: identifierEval.ValidationError is not null ? [identifierEval.ValidationError] : null,
-                cancellationToken: cancellationToken);
-
-            return idErr;
+            return identifierEval.FailureError ?? Error.Validation(ErrorCodes.PayloadInvalidIdentifier);
         }
 
         var extractedIdentifier = identifierEval.Identifier;
         var resolvedUrn = extractedIdentifier?.AsPositiveInt ?? 0;
         var auditIdentifier = evaluation.Value.AuditIdentifier;
 
+        SubmissionExecutionScope.Current?.SetAuditContext(identifier: auditIdentifier);
+
         var isLegacyCompatibleUrnCall = extractedIdentifier is null ||
             (resolvedUrn > 0 && string.Equals(extractedIdentifier.Value.Type, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase));
 
-        var promotion = await scope.ExecuteAsync(
+        var promotion = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.PromoteToProcessed,
             () => isLegacyCompatibleUrnCall
                 ? infrastructure.PromoteToProcessedAsync(
@@ -156,30 +115,19 @@ public class FinaliseSubmissionUseCase(
 
         if (promotion.IsFailure)
         {
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                promotion.Error,
-                outcomeStatus: "Failed",
-                identifier: auditIdentifier,
-                cancellationToken: cancellationToken);
-
             _instrumentation.SubmissionPromotionFailed(request.SubmissionId, promotion.Error.Description ?? string.Empty);
             return promotion.Error;
         }
 
-        await scope.RecordAuditAsync(
-            session.Value.SchemaName,
-            session.Value.SchemaVersion,
-            "Succeeded",
-            200,
+        SubmissionExecutionScope.Current?.SetAuditOutcome(
+            outcomeStatus: "Succeeded",
+            httpStatus: 200,
             message: "Submission finalised and promoted to processed storage",
             identifier: auditIdentifier,
             details: new Dictionary<string, string>
             {
                 ["processedBlobUri"] = promotion.Value
-            },
-            cancellationToken: cancellationToken);
+            });
 
         _instrumentation.SubmissionFinalisedAndPromoted(
             session.Value.SubmissionId,

@@ -9,9 +9,7 @@ namespace EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission
 public class UpdateSubmissionUseCase(
     ISubmissionInfrastructure infrastructure,
     ISubmissionEvaluationService evaluationService,
-    UpdateSubmissionUseCaseInstrumentation? instrumentation = null,
-    ISubmissionAuditStore? auditStore = null,
-    ProcessExecutionInstrumentation? processInstrumentation = null
+    UpdateSubmissionUseCaseInstrumentation? instrumentation = null
 ) : IUseCase<UpdateSubmissionResult, UpdateSubmissionRequest>
 {
     private readonly UpdateSubmissionUseCaseInstrumentation _instrumentation =
@@ -21,14 +19,7 @@ public class UpdateSubmissionUseCase(
     {
         _instrumentation.UpdatingDraftPayload(request.SubmissionId);
 
-        using var scope = SubmissionExecutionScope.Start(
-            "UpdateSubmission",
-            request.SubmissionId,
-            processInstrumentation,
-            auditStore,
-            initialCapacity: 8);
-
-        var session = await scope.ExecuteAsync(
+        var session = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.GetSession,
             () => infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken),
             loaded => new ProcessStepDetails(
@@ -40,51 +31,30 @@ public class UpdateSubmissionUseCase(
             return session.Error;
         }
 
+        SubmissionExecutionScope.Current?.SetSubmissionContext(
+            session.Value,
+            evaluationService.BuildAuditIdentifier(session.Value));
+
         if (session.Value.IsFinalised)
         {
             _instrumentation.SubmissionAlreadyFinalised(request.SubmissionId);
-            var finalisedErr = Error.Forbidden(ErrorCodes.SubmissionAlreadyFinalised);
-
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                finalisedErr,
-                outcomeStatus: "Rejected",
-                identifier: evaluationService.BuildAuditIdentifier(session.Value),
-                cancellationToken: cancellationToken);
-
-            return finalisedErr;
+            return Error.Forbidden(ErrorCodes.SubmissionAlreadyFinalised);
         }
 
         var schema = await evaluationService.ResolveSchemaAsync(
             session.Value.SchemaName,
             session.Value.SchemaVersion,
-            scope,
             cancellationToken);
 
         if (schema.IsFailure)
         {
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                schema.Error,
-                outcomeStatus: "Failed",
-                cancellationToken: cancellationToken);
-
             return schema.Error;
         }
 
-        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, scope, cancellationToken);
-        var candidateResult = evaluationService.AssembleCandidateDraft(inventory, request.Payload, scope);
+        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, cancellationToken);
+        var candidateResult = evaluationService.AssembleCandidateDraft(inventory, request.Payload);
         if (candidateResult.IsFailure)
         {
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                candidateResult.Error,
-                outcomeStatus: "Rejected",
-                cancellationToken: cancellationToken);
-
             return candidateResult.Error;
         }
 
@@ -94,25 +64,21 @@ public class UpdateSubmissionUseCase(
             schema.Value,
             session.Value,
             isDraftUpdate: true,
-            scope,
             cancellationToken);
 
         if (evaluation.IsFailure)
         {
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                evaluation.Error,
-                outcomeStatus: "Failed",
-                cancellationToken: cancellationToken);
-
             return evaluation.Error;
         }
 
         var errors = evaluation.Value.ValidationErrors;
         var auditIdentifier = evaluation.Value.AuditIdentifier;
 
-        var save = await scope.ExecuteAsync(
+        SubmissionExecutionScope.Current?.SetAuditContext(
+            identifier: auditIdentifier,
+            validationErrors: errors);
+
+        var save = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.SaveDraftPayload,
             () => infrastructure.SaveDraftPayloadAsync(request.SubmissionId, null, request.Payload, cancellationToken),
             () => new ProcessStepDetails(
@@ -121,15 +87,6 @@ public class UpdateSubmissionUseCase(
 
         if (save.IsFailure)
         {
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                save.Error,
-                outcomeStatus: "Failed",
-                validationErrors: errors,
-                identifier: auditIdentifier,
-                cancellationToken: cancellationToken);
-
             _instrumentation.DraftPayloadSaveFailed(request.SubmissionId, save.Error.Description ?? string.Empty);
             return save.Error;
         }
@@ -149,17 +106,14 @@ public class UpdateSubmissionUseCase(
             draftCount: draftCountAfterSave,
             pendingErrors: errors);
 
-        await scope.RecordAuditAsync(
-            session.Value.SchemaName,
-            session.Value.SchemaVersion,
-            isValid ? "Succeeded" : "SavedWithPendingErrors",
-            200,
+        SubmissionExecutionScope.Current?.SetAuditOutcome(
+            outcomeStatus: isValid ? "Succeeded" : "SavedWithPendingErrors",
+            httpStatus: 200,
             message: isValid
                 ? $"Draft payload saved (chunk #{draftCountAfterSave}) with no validation errors"
                 : $"Draft payload saved (chunk #{draftCountAfterSave}) with {errors.Count} pending validation error(s)",
             validationErrors: errors,
-            identifier: auditIdentifier,
-            cancellationToken: cancellationToken);
+            identifier: auditIdentifier);
 
         _instrumentation.DraftPayloadSaved(request.SubmissionId, isValid, errors.Count);
 

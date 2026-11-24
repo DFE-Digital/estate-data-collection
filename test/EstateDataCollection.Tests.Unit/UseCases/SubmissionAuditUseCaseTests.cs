@@ -1,21 +1,28 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using AwesomeAssertions;
+using EstateDataCollection.Application;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Application.UseCases;
+using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.Application.UseCases.Submissions;
+using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Application.UseCases.Submissions.CreateSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
+using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatus;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Validation;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;
 using Json.Schema;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
 
@@ -35,6 +42,11 @@ public sealed class SubmissionAuditUseCaseTests
             .Returns(Result<string>.Success("sub/audit/entry.json"));
     }
 
+    private IUseCase<TResult, TRequest> Audited<TResult, TRequest>(IUseCase<TResult, TRequest> inner)
+    {
+        return new SubmissionUseCaseAuditDecorator<TResult, TRequest>(inner, _auditStore);
+    }
+
     [Fact]
     public async Task CreateSubmission_Should_Record_Audit_Entry_With_SchemaResolution_And_CreateSession_Processes()
     {
@@ -49,7 +61,7 @@ public sealed class SubmissionAuditUseCaseTests
         SubmissionAuditEntry? recorded = null;
         await _auditStore.AppendAsync(Arg.Do<SubmissionAuditEntry>(e => recorded = e), Arg.Any<CancellationToken>());
 
-        var sut = new CreateSubmissionUseCase(_registry, _infrastructure, auditStore: _auditStore);
+        var sut = Audited(new CreateSubmissionUseCase(_registry, _infrastructure));
         var result = (await sut.ExecuteAsync(new CreateSubmissionRequest(metadata.Name, null))).ShouldSucceed();
 
         await _auditStore.Received(1).AppendAsync(Arg.Any<SubmissionAuditEntry>(), Arg.Any<CancellationToken>());
@@ -75,7 +87,7 @@ public sealed class SubmissionAuditUseCaseTests
         _auditStore.AppendAsync(Arg.Any<SubmissionAuditEntry>(), Arg.Any<CancellationToken>())
             .Returns<Task<Result<string>>>(_ => throw new InvalidOperationException("Transient audit store outage"));
 
-        var sut = new CreateSubmissionUseCase(_registry, _infrastructure, auditStore: _auditStore);
+        var sut = Audited(new CreateSubmissionUseCase(_registry, _infrastructure));
         var result = await sut.ExecuteAsync(new CreateSubmissionRequest(metadata.Name, null));
 
         result.IsSuccess.Should().BeTrue();
@@ -116,10 +128,7 @@ public sealed class SubmissionAuditUseCaseTests
         await _auditStore.AppendAsync(Arg.Do<SubmissionAuditEntry>(e => recorded = e), Arg.Any<CancellationToken>());
 
         var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, _validationService);
-        var sut = new UpdateSubmissionUseCase(
-            _infrastructure,
-            evaluationService,
-            auditStore: _auditStore);
+        var sut = Audited(new UpdateSubmissionUseCase(_infrastructure, evaluationService));
 
         var result = (await sut.ExecuteAsync(new UpdateSubmissionRequest(session.SubmissionId, SurveyPayloadFixtures.MissingUrnJson)))
             .ShouldSucceed();
@@ -146,10 +155,7 @@ public sealed class SubmissionAuditUseCaseTests
 
         var validationService = new PayloadValidationService(_validator, new JsonLogicValidator());
         var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService);
-        var sut = new FinaliseSubmissionUseCase(
-            _infrastructure,
-            evaluationService,
-            auditStore: _auditStore);
+        var sut = Audited(new FinaliseSubmissionUseCase(_infrastructure, evaluationService));
 
         var result = await sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId));
 
@@ -193,7 +199,7 @@ public sealed class SubmissionAuditUseCaseTests
 
         var validationService = new PayloadValidationService(new JsonSchemaNetValidator(), new JsonLogicValidator());
         var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService);
-        var sut = new FinaliseSubmissionUseCase(_infrastructure, evaluationService, auditStore: _auditStore);
+        var sut = Audited(new FinaliseSubmissionUseCase(_infrastructure, evaluationService));
 
         var result = await sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId));
 
@@ -226,7 +232,7 @@ public sealed class SubmissionAuditUseCaseTests
         await _auditStore.AppendAsync(Arg.Do<SubmissionAuditEntry>(e => recorded = e), Arg.Any<CancellationToken>());
 
         var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, _validationService);
-        var sut = new UpdateSubmissionUseCase(_infrastructure, evaluationService, auditStore: _auditStore);
+        var sut = Audited(new UpdateSubmissionUseCase(_infrastructure, evaluationService));
         var result = await sut.ExecuteAsync(new UpdateSubmissionRequest(session.SubmissionId, "{}"));
 
         result.ShouldFailWith("Schema.NotFound");
@@ -237,5 +243,59 @@ public sealed class SubmissionAuditUseCaseTests
         step.Errors.Should().ContainSingle();
         step.Errors![0].Message.Should().Contain("Pinned schema version was not found.");
         step.Errors[0].RuleId.Should().Be("Schema.NotFound");
+    }
+
+    [Fact]
+    public async Task GetSubmissionStatus_When_Resolved_Via_Scrutor_DI_Should_Decorate_And_Audit_CheckSubmission()
+    {
+        var session = new SubmissionSessionBuilder().Build();
+        _infrastructure.GetSessionAsync(session.SubmissionId, Arg.Any<CancellationToken>())
+            .Returns(Result<SubmissionSession>.Success(session));
+        _infrastructure.GetDraftPayloadAsync(session.SubmissionId, Arg.Any<CancellationToken>())
+            .Returns(Result<string>.Failure(Error.NotFound(ErrorCodes.PayloadNotFound)));
+
+        SubmissionAuditEntry? recorded = null;
+        await _auditStore.AppendAsync(Arg.Do<SubmissionAuditEntry>(e => recorded = e), Arg.Any<CancellationToken>());
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddApplication();
+        services.AddScoped(_ => _infrastructure);
+        services.AddScoped(_ => _registry);
+        services.AddScoped(_ => _validator);
+        services.AddScoped(_ => Substitute.For<IBusinessLogicValidator>());
+        services.AddScoped(_ => Substitute.For<ISchemaVerificationService>());
+        services.AddScoped(_ => _auditStore);
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var resolvedUseCase = scope.ServiceProvider.GetRequiredService<IUseCase<GetSubmissionStatusResult, GetSubmissionStatusRequest>>();
+        resolvedUseCase.Should().BeOfType<SubmissionUseCaseAuditDecorator<GetSubmissionStatusResult, GetSubmissionStatusRequest>>();
+
+        var result = (await resolvedUseCase.ExecuteAsync(new GetSubmissionStatusRequest(session.SubmissionId, ActionName: "CheckSubmission")))
+            .ShouldSucceed();
+
+        result.Status.Should().Be("Draft");
+        recorded.Should().NotBeNull();
+        recorded!.Action.Should().Be("CheckSubmission");
+        recorded.Outcome.Status.Should().Be("DraftAwaitingPayload");
+        recorded.ProcessesConsumed.Select(p => p.ProcessName)
+            .Should().Contain(["BlobStorage:GetSession", "BlobStorage:GetDraftItems", "BlobStorage:GetDraftPayload"]);
+    }
+
+    [Fact]
+    public async Task NonAudited_UseCase_Should_Pass_Through_Decorator_Without_Writing_Submission_Audit()
+    {
+        _registry.ListSchemasAsync(null, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyList<SchemaMetadata>>.Success([]));
+
+        var inner = new GetSchemasUseCase(_registry);
+        var wrapped = Audited(inner);
+
+        var result = (await wrapped.ExecuteAsync(new GetSchemasRequest())).ShouldSucceed();
+
+        result.Schemas.Should().BeEmpty();
+        await _auditStore.DidNotReceive().AppendAsync(Arg.Any<SubmissionAuditEntry>(), Arg.Any<CancellationToken>());
     }
 }

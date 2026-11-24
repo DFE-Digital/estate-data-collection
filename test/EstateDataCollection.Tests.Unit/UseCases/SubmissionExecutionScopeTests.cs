@@ -160,7 +160,7 @@ public sealed class SubmissionExecutionScopeTests
         var service = new PayloadValidationService(schemaValidator, logicValidator);
         using var scope = SubmissionExecutionScope.Start("FinaliseSubmission", Guid.NewGuid());
 
-        var result = await service.ValidatePayloadWithTraceAsync("{}", resolved, isDraftUpdate: false, scope, CancellationToken.None);
+        var result = await service.ValidatePayloadWithTraceAsync("{}", resolved, isDraftUpdate: false, CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
         scope.Processes.Should().HaveCount(2);
@@ -195,7 +195,6 @@ public sealed class SubmissionExecutionScopeTests
             """{"school_capacity":-5}""",
             resolved,
             isDraftUpdate: false,
-            scope,
             CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
@@ -245,6 +244,37 @@ public sealed class SubmissionExecutionScopeTests
         step.Errors![0].PropertyPath.Should().Be("$.schemaVersion");
         step.Errors[0].Message.Should().Be("Version 99 does not exist");
         step.Errors[0].RuleId.Should().Be("SCHEMA_MISSING");
+    }
+
+    [Fact]
+    public async Task Ambient_Current_And_StepAsync_Should_Restore_Previous_Scope_And_Work_Without_Active_Scope()
+    {
+        SubmissionExecutionScope.Current.Should().BeNull();
+
+        var noScopeResult = await SubmissionExecutionScope.StepAsync(
+            SubmissionProcessCatalog.SchemaResolution,
+            () => Task.FromResult(Result<string>.Success("unscoped")));
+        noScopeResult.IsSuccess.Should().BeTrue();
+        noScopeResult.Value.Should().Be("unscoped");
+
+        using (var outer = SubmissionExecutionScope.Start("UpdateSubmission", Guid.NewGuid()))
+        {
+            SubmissionExecutionScope.Current.Should().BeSameAs(outer);
+
+            using (var inner = SubmissionExecutionScope.Start("ValidateDraftPayload", Guid.Empty))
+            {
+                SubmissionExecutionScope.Current.Should().BeSameAs(inner);
+                await SubmissionExecutionScope.StepAsync(
+                    SubmissionProcessCatalog.JsonSchemaValidator,
+                    () => Task.FromResult(Result<string>.Success("ok")));
+                inner.Processes.Should().ContainSingle();
+            }
+
+            SubmissionExecutionScope.Current.Should().BeSameAs(outer);
+            outer.Processes.Should().BeEmpty();
+        }
+
+        SubmissionExecutionScope.Current.Should().BeNull();
     }
 
     [Fact]

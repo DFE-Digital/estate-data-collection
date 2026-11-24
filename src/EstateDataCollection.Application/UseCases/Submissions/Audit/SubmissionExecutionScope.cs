@@ -8,11 +8,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace EstateDataCollection.Application.UseCases.Submissions.Audit;
 
 /// <summary>
-/// Coordinates step timing, OpenTelemetry spans/metrics, structured instrumentation logging,
-/// and audit trail persistence for a single submission operation.
+/// Coordinates ambient step timing, OpenTelemetry spans/metrics, structured instrumentation logging,
+/// and unified audit trail metadata/persistence for a single submission operation.
 /// </summary>
 public sealed class SubmissionExecutionScope : IDisposable
 {
+    private static readonly AsyncLocal<SubmissionExecutionScope?> CurrentScope = new();
+
     private static readonly ProcessExecutionInstrumentation DefaultInstrumentation =
         new(NullLogger<ProcessExecutionInstrumentation>.Instance);
 
@@ -20,6 +22,7 @@ public sealed class SubmissionExecutionScope : IDisposable
     private readonly ProcessExecutionInstrumentation _instrumentation;
     private readonly ISubmissionAuditStore? _auditStore;
     private readonly Activity? _rootActivity;
+    private readonly SubmissionExecutionScope? _previousScope;
 
     private SubmissionExecutionScope(
         Guid submissionId,
@@ -43,11 +46,27 @@ public sealed class SubmissionExecutionScope : IDisposable
                 _rootActivity.SetTag("submission.id", submissionId.ToString());
             }
         }
+
+        _previousScope = CurrentScope.Value;
+        CurrentScope.Value = this;
     }
+
+    public static SubmissionExecutionScope? Current => CurrentScope.Value;
 
     public Guid SubmissionId { get; private set; }
     public string Action { get; }
     public IReadOnlyList<SubmissionProcessExecution> Processes => _processes;
+
+    public bool IsAuditEnabled { get; private set; }
+    public string? SchemaName { get; private set; }
+    public int? SchemaVersion { get; private set; }
+    public string? OutcomeStatus { get; private set; }
+    public int? HttpStatus { get; private set; }
+    public string? FailureOutcomeStatus { get; private set; }
+    public string? Message { get; private set; }
+    public IReadOnlyList<ValidationError>? ValidationErrors { get; private set; }
+    public SubmissionAuditIdentifier? Identifier { get; private set; }
+    public IReadOnlyDictionary<string, string>? Details { get; private set; }
 
     public static SubmissionExecutionScope Start(
         string action,
@@ -59,10 +78,144 @@ public sealed class SubmissionExecutionScope : IDisposable
         return new SubmissionExecutionScope(submissionId, action, instrumentation, auditStore, initialCapacity);
     }
 
+    public static Task<Result<T>> StepAsync<T>(
+        SubmissionProcessDescriptor descriptor,
+        Func<Task<Result<T>>> operation,
+        Func<T, ProcessStepDetails>? describeSuccess = null,
+        Func<Error, ProcessStepDetails>? describeFailure = null,
+        string? engineOverride = null)
+    {
+        return Current is { } scope
+            ? scope.ExecuteAsync(descriptor, operation, describeSuccess, describeFailure, engineOverride)
+            : operation();
+    }
+
+    public static Task<Result> StepAsync(
+        SubmissionProcessDescriptor descriptor,
+        Func<Task<Result>> operation,
+        Func<ProcessStepDetails>? describeSuccess = null,
+        Func<Error, ProcessStepDetails>? describeFailure = null,
+        string? engineOverride = null)
+    {
+        return Current is { } scope
+            ? scope.ExecuteAsync(descriptor, operation, describeSuccess, describeFailure, engineOverride)
+            : operation();
+    }
+
+    public static Result<T> StepResultSync<T>(
+        SubmissionProcessDescriptor descriptor,
+        Func<Result<T>> operation,
+        Func<T, ProcessStepDetails>? describeSuccess = null,
+        Func<Error, ProcessStepDetails>? describeFailure = null,
+        string? engineOverride = null)
+    {
+        return Current is { } scope
+            ? scope.ExecuteResultSync(descriptor, operation, describeSuccess, describeFailure, engineOverride)
+            : operation();
+    }
+
+    public static T StepSync<T>(
+        SubmissionProcessDescriptor descriptor,
+        Func<T> operation,
+        Func<T, ProcessStepDetails> describe,
+        string? engineOverride = null)
+    {
+        return Current is { } scope
+            ? scope.ExecuteSync(descriptor, operation, describe, engineOverride)
+            : operation();
+    }
+
     public void SetSubmissionId(Guid submissionId)
     {
         SubmissionId = submissionId;
         _rootActivity?.SetTag("submission.id", submissionId.ToString());
+    }
+
+    public void SetSubmissionContext(SubmissionSession session, SubmissionAuditIdentifier? identifier = null)
+    {
+        if (SubmissionId == Guid.Empty && session.SubmissionId != Guid.Empty)
+        {
+            SetSubmissionId(session.SubmissionId);
+        }
+
+        SchemaName = session.SchemaName;
+        SchemaVersion = session.SchemaVersion;
+        if (identifier is not null)
+        {
+            Identifier = identifier;
+        }
+
+        IsAuditEnabled = true;
+    }
+
+    public void SetAuditContext(
+        SubmissionAuditIdentifier? identifier = null,
+        IReadOnlyList<ValidationError>? validationErrors = null,
+        string? message = null,
+        string? failureOutcomeStatus = null,
+        IReadOnlyDictionary<string, string>? details = null)
+    {
+        if (identifier is not null)
+        {
+            Identifier = identifier;
+        }
+
+        if (validationErrors is not null)
+        {
+            ValidationErrors = validationErrors;
+        }
+
+        if (message is not null)
+        {
+            Message = message;
+        }
+
+        if (failureOutcomeStatus is not null)
+        {
+            FailureOutcomeStatus = failureOutcomeStatus;
+        }
+
+        if (details is not null)
+        {
+            Details = details;
+        }
+    }
+
+    public void SetAuditOutcome(
+        string outcomeStatus,
+        int httpStatus = 200,
+        string? message = null,
+        IReadOnlyList<ValidationError>? validationErrors = null,
+        SubmissionAuditIdentifier? identifier = null,
+        IReadOnlyDictionary<string, string>? details = null)
+    {
+        OutcomeStatus = outcomeStatus;
+        HttpStatus = httpStatus;
+        Message = message;
+        if (validationErrors is not null)
+        {
+            ValidationErrors = validationErrors;
+        }
+
+        if (identifier is not null)
+        {
+            Identifier = identifier;
+        }
+
+        if (details is not null)
+        {
+            Details = details;
+        }
+    }
+
+    public void MarkRootFailed(Error error)
+    {
+        if (!string.IsNullOrWhiteSpace(error.Code))
+        {
+            _rootActivity?.SetTag("error.code", error.Code);
+        }
+
+        _rootActivity?.SetStatus(ActivityStatusCode.Error, error.Description ?? error.Code);
     }
 
     public async Task<Result<T>> ExecuteAsync<T>(
@@ -260,6 +413,11 @@ public sealed class SubmissionExecutionScope : IDisposable
 
     public void Dispose()
     {
+        if (ReferenceEquals(CurrentScope.Value, this))
+        {
+            CurrentScope.Value = _previousScope;
+        }
+
         _rootActivity?.Dispose();
     }
 
