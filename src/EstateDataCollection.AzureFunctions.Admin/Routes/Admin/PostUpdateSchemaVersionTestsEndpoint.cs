@@ -86,7 +86,9 @@ public sealed class PostUpdateSchemaVersionTestsEndpoint(
                     SchemaName: schemaName,
                     Version: version,
                     IncludeUnscheduled: true,
-                    IncludeRawJsonSchema: false),
+                    IncludeRawJsonSchema: false,
+                    IncludeUpcoming: true,
+                    IncludeRetired: true),
                 cancellationToken);
 
             var meta = CreatePageMeta(http, $"Tests - {schemaName} v{version}", activeNav: "schemas");

@@ -11,7 +11,7 @@ using Microsoft.Azure.Functions.Worker;
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 
 /// <summary>
-/// Admin view of all schemas in the registry, including unscheduled (Validated / Draft) and Retired versions by default.
+/// Admin view of all schemas in the registry, including unscheduled (Validated / Draft), Upcoming, and Retired versions by default.
 /// Route: GET /api/schemas
 /// </summary>
 public sealed class GetAdminSchemasEndpoint(
@@ -42,11 +42,15 @@ public sealed class GetAdminSchemasEndpoint(
             ? sName.ToString()
             : null;
         var includeUnscheduled = http.GetBoolFromQuery("includeUnscheduled", defaultValue: true);
+        var includeUpcoming = http.GetBoolFromQuery("includeUpcoming", defaultValue: true);
+        var includeRetired = http.GetBoolFromQuery("includeRetired", defaultValue: true);
         var includeFields = http.GetBoolFromQuery("includeFields", defaultValue: true);
 
         return new GetSchemasRequest(
             SchemaName: schemaName,
             IncludeUnscheduled: includeUnscheduled,
-            IncludeActiveVersionFields: includeFields);
+            IncludeActiveVersionFields: includeFields,
+            IncludeUpcoming: includeUpcoming,
+            IncludeRetired: includeRetired);
     }
 }

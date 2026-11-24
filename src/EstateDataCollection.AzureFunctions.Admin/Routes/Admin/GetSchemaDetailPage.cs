@@ -37,7 +37,9 @@ public sealed class GetSchemaDetailPage(
                 SchemaName: schemaName,
                 Version: version,
                 IncludeUnscheduled: true,
-                IncludeRawJsonSchema: true),
+                IncludeRawJsonSchema: true,
+                IncludeUpcoming: true,
+                IncludeRetired: true),
             cancellationToken);
 
         var meta = CreatePageMeta(http, $"{schemaName} v{version}", activeNav: "schemas");

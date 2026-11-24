@@ -4,6 +4,7 @@ using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -33,7 +34,9 @@ public sealed class GetSchemaVersionsPage(
         var result = await getSchemasUseCase.ExecuteAsync(
             new GetSchemasRequest(
                 SchemaName: schemaName,
-                IncludeUnscheduled: true),
+                IncludeUnscheduled: true,
+                IncludeUpcoming: true,
+                IncludeRetired: true),
             cancellationToken);
 
         var meta = CreatePageMeta(http, schemaName, activeNav: "schemas");
@@ -47,7 +50,18 @@ public sealed class GetSchemaVersionsPage(
                 MapErrorToStatusCode(result.Error));
         }
 
-        var model = new SchemaVersionsViewModel(meta, result.Value.Schemas.First());
+        var entry = result.Value.Schemas.FirstOrDefault();
+        if (entry is null)
+        {
+            var notFound = Error.NotFound(ErrorCodes.SchemaNotFound, new { SchemaName = schemaName, Version = "any" });
+            var errModel = new SchemaVersionsViewModel(meta, Schema: null, PageError: notFound);
+            return await RenderPageAsync<SchemaVersionsPage, SchemaVersionsViewModel>(
+                EndpointName,
+                errModel,
+                StatusCodes.Status404NotFound);
+        }
+
+        var model = new SchemaVersionsViewModel(meta, entry);
         return await RenderPageAsync<SchemaVersionsPage, SchemaVersionsViewModel>(EndpointName, model);
     }
 }
