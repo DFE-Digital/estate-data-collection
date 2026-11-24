@@ -11,6 +11,7 @@ namespace EstateDataCollection.Application.UseCases.Schema.IngestDraftSchema;
 
 public sealed partial class IngestDraftSchemaUseCase(
     ISchemaRegistry schemaRegistry,
+    ISchemaVerificationService schemaVerifier,
     IOdcsContractParser? odcsParser = null,
     IngestDraftSchemaUseCaseInstrumentation? instrumentation = null
 ) : IUseCase<IngestDraftSchemaResult, IngestDraftSchemaRequest>
@@ -110,11 +111,12 @@ public sealed partial class IngestDraftSchemaUseCase(
             else
             {
                 // Validate the rules syntax and any fixtures now; if valid, keep staged in draft-schemas until .schema.json lands.
-                var rulesOnlyVerification = await schemaRegistry.VerifyCanditateSchemaAsync(
+                var rulesOnlyVerification = await schemaVerifier.VerifyCandidateSchemaAsync(
                     null,
                     effectiveRulesJson,
                     artifact.SampleValidFixtures,
                     artifact.SampleInvalidFixtures,
+                    identifierConfig: null,
                     cancellationToken);
 
                 if (rulesOnlyVerification.IsFailure)
@@ -159,20 +161,13 @@ public sealed partial class IngestDraftSchemaUseCase(
             : effectiveSchemaJson;
         var rulesParam = string.IsNullOrWhiteSpace(effectiveRulesJson) ? null : effectiveRulesJson;
 
-        var verification = artifact.IdentifierConfig is not null
-            ? await schemaRegistry.VerifyCanditateSchemaAsync(
-                schemaParam,
-                rulesParam,
-                artifact.SampleValidFixtures,
-                artifact.SampleInvalidFixtures,
-                artifact.IdentifierConfig,
-                cancellationToken)
-            : await schemaRegistry.VerifyCanditateSchemaAsync(
-                schemaParam,
-                rulesParam,
-                artifact.SampleValidFixtures,
-                artifact.SampleInvalidFixtures,
-                cancellationToken);
+        var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
+            schemaParam,
+            rulesParam,
+            artifact.SampleValidFixtures,
+            artifact.SampleInvalidFixtures,
+            artifact.IdentifierConfig,
+            cancellationToken);
 
         if (verification.IsFailure)
         {

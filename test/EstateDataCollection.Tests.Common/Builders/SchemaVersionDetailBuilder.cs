@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Tests.Common.Builders;
@@ -213,7 +214,7 @@ public sealed class SchemaVersionDetailBuilder
     public SchemaVersionDetailBuilder WithInvalidFixtureOutcome(
         int index,
         bool failedAsExpected,
-        IReadOnlyList<string> triggeredErrors,
+        IReadOnlyList<ValidationMessage> triggeredErrors,
         IReadOnlyList<string>? expectedErrors = null,
         IReadOnlyList<string>? unmatchedExpectedErrors = null,
         string? description = null,

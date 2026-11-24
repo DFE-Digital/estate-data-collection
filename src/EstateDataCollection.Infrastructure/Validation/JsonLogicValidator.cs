@@ -62,7 +62,7 @@ public class JsonLogicValidator : IBusinessLogicValidator
         if (string.IsNullOrWhiteSpace(rawLogicJson))
         {
             return Result<IReadOnlyList<ValidationMessage>>.Success([
-                new ValidationMessage(typeof(JsonLogicValidator), null,  "Logic JSON was empty or null.")
+                new ValidationMessage(typeof(JsonLogicValidator), null, "Logic JSON was empty or null.", source: ValidationSources.Rule)
             ]);
         }
 
@@ -73,7 +73,7 @@ public class JsonLogicValidator : IBusinessLogicValidator
             if (deserialized is null || deserialized.Count == 0)
             {
                 return Result<IReadOnlyList<ValidationMessage>>.Success([
-                    new ValidationMessage(typeof(JsonLogicValidator), null, "Logic JSON must contain at least one business rule.")
+                    new ValidationMessage(typeof(JsonLogicValidator), null, "Logic JSON must contain at least one business rule.", source: ValidationSources.Rule)
                 ]);
             }
             rules = deserialized;
@@ -81,7 +81,7 @@ public class JsonLogicValidator : IBusinessLogicValidator
         catch (Exception ex)
         {
             return Result<IReadOnlyList<ValidationMessage>>.Success([
-                new ValidationMessage(typeof(JsonLogicValidator), null, $"Malformed Logic JSON syntax: {ex.Message}")
+                new ValidationMessage(typeof(JsonLogicValidator), null, $"Malformed Logic JSON syntax: {ex.Message}", source: ValidationSources.Rule)
             ]);
         }
 
@@ -94,23 +94,23 @@ public class JsonLogicValidator : IBusinessLogicValidator
 
             if (string.IsNullOrWhiteSpace(rule.Id))
             {
-                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, $"'id' is required."));
+                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, "'id' is required.", source: ValidationSources.Rule, ruleId: ruleId));
             }
 
             if (string.IsNullOrWhiteSpace(rule.Description))
             {
-                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, $"'description' is required."));
+                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, "'description' is required.", source: ValidationSources.Rule, ruleId: ruleId));
             }
 
             if (string.IsNullOrWhiteSpace(rule.Path))
             {
-                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, $"'path' target is required."));
+                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, "'path' target is required.", source: ValidationSources.Rule, ruleId: ruleId));
             }
 
             // ODCS rules use 'description' + 'implementation', whereas standalone rules use 'message' + 'assert'
             if (string.IsNullOrWhiteSpace(rule.Message) && rule.Implementation is null)
             {
-                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, $"'message' is required."));
+                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, "'message' is required.", source: ValidationSources.Rule, ruleId: ruleId));
             }
 
             var engineName = rule.ResolveEngine(_options.DefaultEngine);
@@ -118,7 +118,7 @@ public class JsonLogicValidator : IBusinessLogicValidator
             {
                 if (_options.UnknownEngineBehavior == UnknownEngineBehavior.Fail)
                 {
-                    syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, $"{engineError}"));
+                    syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, $"{engineError}", source: ValidationSources.Rule, ruleId: ruleId));
                 }
                 else
                 {
@@ -129,7 +129,7 @@ public class JsonLogicValidator : IBusinessLogicValidator
 
             if (rule.EffectiveAssertion is null)
             {
-                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, $"'assert' (or 'implementation') logic condition is required."));
+                syntaxErrors.Add(new ValidationMessage(typeof(JsonLogicValidator), ruleId, "'assert' (or 'implementation') logic condition is required.", source: ValidationSources.Rule, ruleId: ruleId));
             }
             else
             {

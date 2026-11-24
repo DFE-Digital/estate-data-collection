@@ -10,6 +10,7 @@ namespace EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 
 public sealed class RunSchemaTestsUseCase(
     ISchemaRegistry schemaRegistry,
+    ISchemaVerificationService schemaVerifier,
     RunSchemaTestsUseCaseInstrumentation? instrumentation = null
 ) : IUseCase<RunSchemaTestsResult, RunSchemaTestsRequest>
 {
@@ -89,20 +90,13 @@ public sealed class RunSchemaTestsUseCase(
                 rulesJson = JsonSerializer.Serialize(resolved.Rules);
             }
 
-            var verification = meta.IdentifierConfig is not null
-                ? await schemaRegistry.VerifyCanditateSchemaAsync(
-                    meta.RawJsonSchema,
-                    rulesJson,
-                    validFixtures,
-                    invalidFixtures,
-                    meta.IdentifierConfig,
-                    cancellationToken)
-                : await schemaRegistry.VerifyCanditateSchemaAsync(
-                    meta.RawJsonSchema,
-                    rulesJson,
-                    validFixtures,
-                    invalidFixtures,
-                    cancellationToken);
+            var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
+                meta.RawJsonSchema,
+                rulesJson,
+                validFixtures,
+                invalidFixtures,
+                meta.IdentifierConfig,
+                cancellationToken);
 
             bool passed;
             IReadOnlyList<string> errors;

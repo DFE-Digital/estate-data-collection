@@ -42,7 +42,7 @@
                                 <div class="govuk-!-margin-top-1">
                                     @foreach (var err in outcome.TriggeredErrors)
                                     {
-                                        <div><code class="dfe-code-badge">@err</code></div>
+                                        <div><code class="dfe-code-badge">@err.FormatDisplay()</code></div>
                                     }
                                 </div>
                             </li>

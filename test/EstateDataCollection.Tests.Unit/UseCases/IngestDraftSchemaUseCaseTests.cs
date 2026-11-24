@@ -32,13 +32,15 @@ public class IngestDraftSchemaUseCaseTests
             ConsumedDraftBlobPaths: [blobPath]);
 
         var registry = Substitute.For<ISchemaRegistry>();
+        var verifier = Substitute.For<ISchemaVerificationService>();
         registry.GetDraftArtifactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
-        registry.VerifyCanditateSchemaAsync(
+        verifier.VerifyCandidateSchemaAsync(
                 Arg.Any<string?>(),
                 Arg.Any<string?>(),
                 Arg.Any<IReadOnlyList<string>>(),
                 Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
                 Arg.Any<CancellationToken>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [])));
         registry.SaveSchemaAsync(
@@ -52,7 +54,7 @@ public class IngestDraftSchemaUseCaseTests
         registry.CompleteDraftIngestionAsync(artifact, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var sut = new IngestDraftSchemaUseCase(registry, new OdcsContractParser());
+        var sut = new IngestDraftSchemaUseCase(registry, verifier, new OdcsContractParser());
 
         var result = (await sut.ExecuteAsync(new IngestDraftSchemaRequest(blobPath))).ShouldSucceed();
 
@@ -111,9 +113,10 @@ public class IngestDraftSchemaUseCaseTests
             IdentifierConfig: metaIdentifier);
 
         var registry = Substitute.For<ISchemaRegistry>();
+        var verifier = Substitute.For<ISchemaVerificationService>();
         registry.GetDraftArtifactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
-        registry.VerifyCanditateSchemaAsync(
+        verifier.VerifyCandidateSchemaAsync(
                 schemaJson,
                 null,
                 Arg.Any<IReadOnlyList<string>>(),
@@ -127,7 +130,7 @@ public class IngestDraftSchemaUseCaseTests
         registry.CompleteDraftIngestionAsync(artifact, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var sut = new IngestDraftSchemaUseCase(registry, new OdcsContractParser());
+        var sut = new IngestDraftSchemaUseCase(registry, verifier, new OdcsContractParser());
 
         var result = (await sut.ExecuteAsync(new IngestDraftSchemaRequest(blobPath))).ShouldSucceed();
 
@@ -160,13 +163,15 @@ public class IngestDraftSchemaUseCaseTests
             ConsumedDraftBlobPaths: [blobPath, "edc-school-site/v2.rules.json"]);
 
         var registry = Substitute.For<ISchemaRegistry>();
+        var verifier = Substitute.For<ISchemaVerificationService>();
         registry.GetDraftArtifactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
-        registry.VerifyCanditateSchemaAsync(
+        verifier.VerifyCandidateSchemaAsync(
                 schemaJson,
                 rulesJson,
                 Arg.Any<IReadOnlyList<string>>(),
                 Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
                 Arg.Any<CancellationToken>())
             .Returns(Result<SchemaVerificationResult>.Success(
                 new SchemaVerificationResult([], ["SampleValidFixtures:0 violated quality rules: /survey"])));
@@ -178,7 +183,7 @@ public class IngestDraftSchemaUseCaseTests
                 Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var sut = new IngestDraftSchemaUseCase(registry, new OdcsContractParser());
+        var sut = new IngestDraftSchemaUseCase(registry, verifier, new OdcsContractParser());
 
         var result = await sut.ExecuteAsync(new IngestDraftSchemaRequest(blobPath));
 

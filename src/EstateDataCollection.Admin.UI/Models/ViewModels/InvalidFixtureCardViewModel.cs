@@ -1,3 +1,5 @@
+using EstateDataCollection.Common.Results;
+
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
 public sealed record InvalidFixtureCardViewModel(
@@ -13,5 +15,5 @@ public sealed record InvalidFixtureCardViewModel(
     int TriggeredErrorCount,
     bool PassedUnexpectedly,
     bool HasTriggeredErrors,
-    IReadOnlyList<string> TriggeredErrors,
+    IReadOnlyList<ValidationMessage> TriggeredErrors,
     string FormattedPayloadJson);

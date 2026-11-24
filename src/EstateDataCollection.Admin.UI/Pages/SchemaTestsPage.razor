@@ -287,7 +287,7 @@
                                 <ul class="govuk-list govuk-list--bullet govuk-body-s govuk-!-margin-bottom-3">
                                     @foreach (var trigErr in card.TriggeredErrors)
                                     {
-                                        <li><code class="dfe-code-badge">@trigErr</code></li>
+                                        <li><code class="dfe-code-badge">@trigErr.FormatDisplay()</code></li>
                                     }
                                 </ul>
                             }

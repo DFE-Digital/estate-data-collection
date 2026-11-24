@@ -1,21 +1,15 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Models.Contracts;
-using EstateDataCollection.Application.Models.Options;
-using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Extensions;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
-using EstateDataCollection.Domain.Submission;
-using EstateDataCollection.Infrastructure.Validation;
 using Json.Schema;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,54 +17,23 @@ using Microsoft.Extensions.Options;
 
 namespace EstateDataCollection.Infrastructure.Registry;
 
-public sealed partial class BlobSchemaRegistry(
+public sealed class BlobSchemaRegistry(
     BlobServiceClient blobServiceClient,
     IOptions<BlobSchemaRegistryOptions> options,
     IMemoryCache cache,
     BlobSchemaRegistryInstrumentation? instrumentation = null,
-    IBusinessLogicValidator? logicValidator = null,
-    IOdcsContractParser? odcsParser = null,
-    IOptions<ValidationOptions>? validationOptions = null) : ISchemaRegistry
+    IOdcsContractParser? odcsParser = null) : ISchemaRegistry
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
 
-    private static readonly string[] IgnoredCompanionSuffixes =
-    [
-        ".error.json",
-        ".valid.json",
-        ".invalid.json",
-        ".meta.json"
-    ];
-
-    private static readonly string[] KnownContractSuffixes =
-    [
-        ".odcs.yaml",
-        ".odcs.yml",
-        ".schema.json",
-        ".rules.json",
-        ".logic.json",
-        ".yaml",
-        ".yml",
-        ".json"
-    ];
-
     private readonly BlobSchemaRegistryInstrumentation _instrumentation =
         instrumentation ?? new BlobSchemaRegistryInstrumentation(NullLogger<BlobSchemaRegistry>.Instance);
 
-    private readonly IBusinessLogicValidator _logicValidator =
-        logicValidator ?? new JsonLogicValidator(
-            [],
-            validationOptions,
-            new JsonLogicValidatorInstrumentation(NullLogger<JsonLogicValidator>.Instance));
-
     private readonly IOdcsContractParser _odcsParser =
         odcsParser ?? new OdcsContractParser();
-
-    private readonly ValidationOptions _validationOptions =
-        validationOptions?.Value ?? new ValidationOptions();
 
     public async Task<Result<ResolvedSchema>> ResolveActiveSchemaAsync(string schemaName, DateTimeOffset timestamp,
         CancellationToken cancellationToken = default)
@@ -126,7 +89,7 @@ public sealed partial class BlobSchemaRegistry(
             {
                 if (item.Name.EndsWith(".schema.json", StringComparison.OrdinalIgnoreCase))
                 {
-                    TryParseDraftBlobPathConvention(item.Name, out var sName, out var ver, out _);
+                    DraftSchemaBlobPathParser.TryParseDraftBlobPathConvention(item.Name, out var sName, out var ver, out _);
                     if (!string.IsNullOrWhiteSpace(sName) && ver is > 0)
                     {
                         var key = (sName, ver.Value);
@@ -137,7 +100,7 @@ public sealed partial class BlobSchemaRegistry(
                 else if (item.Name.EndsWith(".meta.json", StringComparison.OrdinalIgnoreCase))
                 {
                     var withoutMeta = item.Name[..^".meta.json".Length] + ".schema.json";
-                    TryParseDraftBlobPathConvention(withoutMeta, out var sName, out var ver, out _);
+                    DraftSchemaBlobPathParser.TryParseDraftBlobPathConvention(withoutMeta, out var sName, out var ver, out _);
                     if (!string.IsNullOrWhiteSpace(sName) && ver is > 0)
                     {
                         var key = (sName, ver.Value);
@@ -273,7 +236,7 @@ public sealed partial class BlobSchemaRegistry(
 
             if (validFixtures.Count > 0)
             {
-                var validJson = SerializeFixturesArray(validFixtures);
+                var validJson = DraftSchemaBlobPathParser.SerializeFixturesArray(validFixtures);
                 using var validStream = new MemoryStream(Encoding.UTF8.GetBytes(validJson));
                 await validFixturesBlob.UploadAsync(validStream, new BlobUploadOptions
                 {
@@ -289,7 +252,7 @@ public sealed partial class BlobSchemaRegistry(
 
             if (invalidFixtures.Count > 0)
             {
-                var invalidJson = SerializeFixturesArray(invalidFixtures);
+                var invalidJson = DraftSchemaBlobPathParser.SerializeFixturesArray(invalidFixtures);
                 using var invalidStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
                 await invalidFixturesBlob.UploadAsync(invalidStream, new BlobUploadOptions
                 {
@@ -358,7 +321,7 @@ public sealed partial class BlobSchemaRegistry(
     {
         var namespacing = new { schemaName, version };
         var key = options.Value.CacheKey.FormatWith(namespacing);
-        
+
         if (cache.TryGetValue(key, out ResolvedSchema? cached) && cached is not null)
         {
             _instrumentation.SchemaCacheHit(schemaName, version);
@@ -366,9 +329,9 @@ public sealed partial class BlobSchemaRegistry(
         }
 
         _instrumentation.SchemaCacheMiss(schemaName, version);
-        
+
         var schemasContainer = blobServiceClient.GetBlobContainerClient(options.Value.ContainerName);
-        
+
         var schemaBlob = schemasContainer.GetBlobClient(options.Value.SchemaBlobDirectory.FormatWith(namespacing));
         var metaBlob = schemasContainer.GetBlobClient(options.Value.MetaBlobDirectory.FormatWith(namespacing));
 
@@ -377,7 +340,7 @@ public sealed partial class BlobSchemaRegistry(
             _instrumentation.SchemaBlobNotFound(schemaName, version);
             return Error.NotFound(ErrorCodes.SchemaNotFound, new { schemaName, version });
         }
-        
+
         var schemaJson = (await schemaBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
         var compiledSchema = JsonSchema.FromText(schemaJson);
 
@@ -424,7 +387,7 @@ public sealed partial class BlobSchemaRegistry(
             options.Value.InvalidFixturesBlobDirectory.FormatWith(namespacing),
             consumedBlobs: null,
             cancellationToken);
-        
+
         var resolved = new ResolvedSchema(metadata, compiledSchema, rules, rawRulesJson, validFixtures, invalidFixtures);
         cache.Set(key, resolved, TimeSpan.FromMinutes(15));
         _instrumentation.SchemaLoadedFromBlob(schemaName, version);
@@ -432,440 +395,6 @@ public sealed partial class BlobSchemaRegistry(
         return resolved;
     }
 
-    public Task<Result<SchemaVerificationResult>> VerifyCanditateSchemaAsync(
-        string? rawSchemaJson,
-        string? rawRulesJson,
-        IReadOnlyList<string> sampleValidPayloads,
-        IReadOnlyList<string> sampleInvalidPayloads,
-        CancellationToken cancellationToken = default)
-    {
-        return VerifyCandidateSchemaCoreAsync(
-            rawSchemaJson,
-            rawRulesJson,
-            sampleValidPayloads,
-            sampleInvalidPayloads,
-            identifierConfig: null,
-            cancellationToken);
-    }
-
-    public Task<Result<SchemaVerificationResult>> VerifyCanditateSchemaAsync(
-        string? rawSchemaJson,
-        string? rawRulesJson,
-        IReadOnlyList<string> sampleValidPayloads,
-        IReadOnlyList<string> sampleInvalidPayloads,
-        SchemaIdentifierConfig? identifierConfig,
-        CancellationToken cancellationToken = default)
-    {
-        return VerifyCandidateSchemaCoreAsync(
-            rawSchemaJson,
-            rawRulesJson,
-            sampleValidPayloads,
-            sampleInvalidPayloads,
-            identifierConfig,
-            cancellationToken);
-    }
-
-    private async Task<Result<SchemaVerificationResult>> VerifyCandidateSchemaCoreAsync(
-        string? rawSchemaJson,
-        string? rawRulesJson,
-        IReadOnlyList<string> sampleValidPayloads,
-        IReadOnlyList<string> sampleInvalidPayloads,
-        SchemaIdentifierConfig? identifierConfig,
-        CancellationToken cancellationToken)
-    {
-        var syntaxErrors = new List<ValidationMessage>();
-        var fixtureErrors = new List<ValidationMessage>();
-        var warnings = new List<ValidationMessage>();
-
-        JsonSchema? candidateSchema = null;
-        IReadOnlyList<BusinessRule>? candidateRules = null;
-
-        if (string.IsNullOrWhiteSpace(rawSchemaJson) && string.IsNullOrWhiteSpace(rawRulesJson))
-        {
-            return new SchemaVerificationResult(
-                [new ValidationMessage(typeof(BlobSchemaRegistry), "schema", "Either Schema JSON/YAML or Rules JSON must be provided.")],
-                []);
-        }
-
-        // Route Detection: If rawSchemaJson is an ODCS YAML contract, parse it into Schema JSON + Rules JSON
-        if (!string.IsNullOrWhiteSpace(rawSchemaJson) && _odcsParser.IsOdcsYaml(rawSchemaJson))
-        {
-            var odcsResult = _odcsParser.Parse(rawSchemaJson);
-            if (odcsResult.IsFailure)
-            {
-                var msg = odcsResult.Error.Description ?? "Failed to parse ODCS YAML contract.";
-                _instrumentation.CandidateVerificationCompleted(false, 1, 0);
-                return new SchemaVerificationResult(
-                    [new ValidationMessage(_odcsParser.GetType(), "odcs", msg)],
-                    []);
-            }
-
-            rawSchemaJson = odcsResult.Value.GeneratedSchemaJson;
-            if (string.IsNullOrWhiteSpace(rawRulesJson) && !string.IsNullOrWhiteSpace(odcsResult.Value.GeneratedRulesJson))
-            {
-                rawRulesJson = odcsResult.Value.GeneratedRulesJson;
-            }
-        }
-
-        // Phase One A: Syntax & Meta-Schema Evaluation (Draft 2020-12 & Draft-07)
-        if (!string.IsNullOrWhiteSpace(rawSchemaJson))
-        {
-            try
-            {
-                var node = JsonNode.Parse(rawSchemaJson);
-
-                if (node is null)
-                {
-                    syntaxErrors.Add(new ValidationMessage(typeof(JsonSchema), "schema", "Schema JSON was empty or null."));
-                }
-                else
-                {
-                    var meta = ResolveMetaSchema(node, syntaxErrors);
-                    if (meta is not null)
-                    {
-                        var metaResult = meta.Evaluate(node, new EvaluationOptions { OutputFormat = OutputFormat.List });
-
-                        if (!metaResult.IsValid)
-                        {
-                            var errors = metaResult.Details
-                                .Where(x => x.HasErrors)
-                                .SelectMany(x => (x.Errors?.Values ?? []).Select(err => new ValidationMessage(
-                                    typeof(JsonSchema),
-                                    string.IsNullOrWhiteSpace(x.InstanceLocation.ToString()) ? "schema" : x.InstanceLocation.ToString(),
-                                    err)))
-                                .Distinct();
-
-                            syntaxErrors.AddRange(errors);
-                        }
-                    }
-
-                    candidateSchema = JsonSchema.FromText(rawSchemaJson);
-                }
-            }
-            catch (Exception ex)
-            {
-                return new SchemaVerificationResult(
-                    [
-                        new ValidationMessage(typeof(JsonSchema), "schema", "Malformed JSON Schema syntax"),
-                        new ValidationMessage(typeof(JsonSchema), "schema", ex.Message)
-                    ],
-                    []);
-            }
-        }
-
-        // Phase One B: Syntax & Engine Validation for Quality Rules
-        if (!string.IsNullOrWhiteSpace(rawRulesJson))
-        {
-            var logicSyntaxResult = _logicValidator.ValidateRulesSyntax(rawRulesJson, out candidateRules);
-            if (logicSyntaxResult.IsSuccess && logicSyntaxResult.Value.Count > 0)
-            {
-                syntaxErrors.AddRange(logicSyntaxResult.Value);
-            }
-        }
-
-        // Phase One C: Identifier Config Alignment Against Schema AST & Derived Requiredness
-        var identifierAlignment = IdentifierSchemaValidator.ValidateAndAlign(
-            candidateSchema is not null ? rawSchemaJson : null,
-            identifierConfig,
-            _validationOptions.UrnJsonPaths,
-            _validationOptions.RequireUrnOnFinalise);
-
-        if (!identifierAlignment.IsValid)
-        {
-            syntaxErrors.AddRange(identifierAlignment.Errors);
-        }
-
-        if (syntaxErrors.Count > 0)
-        {
-            _instrumentation.CandidateVerificationCompleted(false, syntaxErrors.Count, 0);
-            return new SchemaVerificationResult(syntaxErrors, [], ResolvedIdentifierConfig: identifierAlignment.EffectiveConfig);
-        }
-
-        // Phase Two: In-Flight Golden Fixture Dry-Runs (against Schema, Quality Rules, and Identifier Extraction)
-        var evalOptions = new EvaluationOptions
-        {
-            OutputFormat = OutputFormat.List,
-            RequireFormatValidation = _validationOptions.RequireFormatValidation
-        };
-
-        var effectiveIdentifierType = identifierAlignment.EffectiveConfig?.Type ?? SchemaIdentifierConfig.DefaultUrnType;
-
-        // Ensure valid fixtures pass schema, quality rules, and identifier extraction
-        for (var i = 0; i < sampleValidPayloads.Count; i++)
-        {
-            var payload = sampleValidPayloads[i];
-            var fixtureId = $"SampleValidFixtures:{i}";
-            var payloadParsed = true;
-
-            if (candidateSchema is not null)
-            {
-                try
-                {
-                    var validNode = JsonNode.Parse(payload);
-                    var eval = candidateSchema.Evaluate(validNode, evalOptions);
-
-                    if (!eval.IsValid)
-                    {
-                        fixtureErrors.Add(new ValidationMessage(
-                            typeof(JsonSchema),
-                            fixtureId,
-                            $"{fixtureId} was expected to pass, but was rejected by the schema."));
-
-                        fixtureErrors.AddRange((eval.Details?.Where(x => x.HasErrors).Select(e => e.Errors!) ?? [])
-                            .Select(e => new ValidationMessage(
-                                typeof(JsonSchema),
-                                fixtureId,
-                                $"{fixtureId} {string.Join(", ", e.Values)}")));
-
-                        fixtureErrors.AddRange((eval.Errors?.Values ?? [])
-                            .Select(e => new ValidationMessage(
-                                typeof(JsonSchema),
-                                fixtureId,
-                                $"{fixtureId} {e}")));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    payloadParsed = false;
-                    fixtureErrors.Add(new ValidationMessage(
-                        typeof(JsonSchema),
-                        fixtureId,
-                        $"{fixtureId} could not be parsed: {ex.Message}"));
-                }
-            }
-
-            if (candidateRules is { Count: > 0 })
-            {
-                var logicResult = await _logicValidator.ValidateAsync(payload, candidateRules, cancellationToken);
-                if (logicResult.IsFailure)
-                {
-                    fixtureErrors.Add(new ValidationMessage(
-                        _logicValidator.GetType(),
-                        fixtureId,
-                        $"{fixtureId} quality rule evaluation failed: {logicResult.Error.Description}"));
-                }
-                else if (!logicResult.Value.IsValid)
-                {
-                    var ruleErrors = string.Join("; ", logicResult.Value.Errors!.Select(e => $"{e.PropertyPath}: {e.Message}"));
-                    fixtureErrors.Add(new ValidationMessage(
-                        _logicValidator.GetType(),
-                        fixtureId,
-                        $"{fixtureId} violated quality rules: {ruleErrors}"));
-                }
-            }
-
-            if (payloadParsed && identifierAlignment.IsEnabled && candidateSchema is not null)
-            {
-                var idInspect = SubmissionIdentifier.InspectPayload(
-                    payload,
-                    identifierAlignment.ResolvedPaths,
-                    effectiveIdentifierType);
-
-                if (idInspect.IsSuccess)
-                {
-                    if (idInspect.Value.Status == IdentifierExtractionStatus.Invalid)
-                    {
-                        fixtureErrors.Add(new ValidationMessage(
-                            typeof(SubmissionIdentifier),
-                            fixtureId,
-                            $"{fixtureId} failed identifier extraction: {idInspect.Value.ErrorMessage}"));
-                    }
-                    else if (idInspect.Value.Status == IdentifierExtractionStatus.NotPresent && identifierAlignment.IsRequiredInSchema)
-                    {
-                        var expectedPath = idInspect.Value.MatchedPath
-                            ?? identifierAlignment.ResolvedPaths.FirstOrDefault()
-                            ?? "/urn";
-                        fixtureErrors.Add(new ValidationMessage(
-                            typeof(SubmissionIdentifier),
-                            fixtureId,
-                            $"{fixtureId} is missing required '{effectiveIdentifierType}' identifier at '{expectedPath}'."));
-                    }
-                }
-            }
-        }
-
-        // Ensure invalid fixtures fail schema, quality rules, or identifier extraction
-        var invalidFixtureOutcomes = new List<InvalidFixtureOutcome>(sampleInvalidPayloads.Count);
-
-        for (var i = 0; i < sampleInvalidPayloads.Count; i++)
-        {
-            var spec = InvalidFixtureParser.Parse(sampleInvalidPayloads[i]);
-            var payload = spec.PayloadJson;
-            var fixtureId = $"SampleInvalidFixtures:{i}";
-            var schemaFailed = false;
-            var rulesFailed = false;
-            var identifierFailed = false;
-            var triggeredErrors = new List<string>();
-
-            if (candidateSchema is not null)
-            {
-                try
-                {
-                    var invalidNode = JsonNode.Parse(payload);
-                    var eval = candidateSchema.Evaluate(invalidNode, evalOptions);
-                    if (!eval.IsValid)
-                    {
-                        schemaFailed = true;
-                        CollectSchemaErrors(eval, triggeredErrors);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (candidateRules is null)
-                    {
-                        fixtureErrors.Add(new ValidationMessage(
-                            typeof(JsonSchema),
-                            fixtureId,
-                            $"{fixtureId} could not be parsed: {ex.Message}"));
-                    }
-                    schemaFailed = true;
-                    triggeredErrors.Add($"[JSON] Could not parse payload: {ex.Message}");
-                }
-            }
-
-            if (candidateRules is { Count: > 0 })
-            {
-                var logicResult = await _logicValidator.ValidateAsync(payload, candidateRules, cancellationToken);
-                if (logicResult.IsFailure)
-                {
-                    rulesFailed = true;
-                    triggeredErrors.Add($"[Rule] {logicResult.Error.Description ?? logicResult.Error.Code}");
-                }
-                else if (!logicResult.Value.IsValid)
-                {
-                    rulesFailed = true;
-                    foreach (var err in logicResult.Value.Errors ?? [])
-                    {
-                        var path = string.IsNullOrWhiteSpace(err.PropertyPath) ? "/" : err.PropertyPath;
-                        var prefix = string.IsNullOrWhiteSpace(err.RuleId) ? "[Rule]" : $"[Rule:{err.RuleId}]";
-                        triggeredErrors.Add($"{prefix} {path}: {err.Message}");
-                    }
-                }
-            }
-
-            if (identifierAlignment.IsEnabled && candidateSchema is not null)
-            {
-                var idInspect = SubmissionIdentifier.InspectPayload(
-                    payload,
-                    identifierAlignment.ResolvedPaths,
-                    effectiveIdentifierType);
-
-                if (idInspect.IsSuccess)
-                {
-                    if (idInspect.Value.Status == IdentifierExtractionStatus.Invalid)
-                    {
-                        identifierFailed = true;
-                        triggeredErrors.Add($"[Identifier] {idInspect.Value.ErrorMessage}");
-                    }
-                    else if (idInspect.Value.Status == IdentifierExtractionStatus.NotPresent && identifierAlignment.IsRequiredInSchema)
-                    {
-                        identifierFailed = true;
-                        var expectedPath = idInspect.Value.MatchedPath
-                            ?? identifierAlignment.ResolvedPaths.FirstOrDefault()
-                            ?? "/urn";
-                        triggeredErrors.Add($"[Identifier] Missing required '{effectiveIdentifierType}' identifier at '{expectedPath}'.");
-                    }
-                }
-            }
-
-            var distinctTriggered = triggeredErrors.Distinct(StringComparer.Ordinal).ToList();
-            var anyValidatorConfigured = candidateSchema is not null || candidateRules is not null;
-            var failedValidation = schemaFailed || rulesFailed || identifierFailed;
-            var failedAsExpected = !anyValidatorConfigured || failedValidation;
-            var unmatchedExpected = new List<string>();
-            string? fixtureWarning = null;
-
-            if (anyValidatorConfigured && !failedValidation)
-            {
-                fixtureErrors.Add(new ValidationMessage(
-                    typeof(BlobSchemaRegistry),
-                    fixtureId,
-                    $"{fixtureId} was expected to fail, but passed the schema."));
-            }
-            else if (spec.ExpectedErrors.Count > 0)
-            {
-                foreach (var expectedPattern in spec.ExpectedErrors)
-                {
-                    if (!distinctTriggered.Any(actual => actual.Contains(expectedPattern, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        unmatchedExpected.Add(expectedPattern);
-                    }
-                }
-
-                if (unmatchedExpected.Count > 0)
-                {
-                    failedAsExpected = false;
-                    var actualSummary = distinctTriggered.Count > 0
-                        ? string.Join("; ", distinctTriggered)
-                        : "none";
-                    fixtureErrors.Add(new ValidationMessage(
-                        typeof(BlobSchemaRegistry),
-                        fixtureId,
-                        $"{fixtureId} did not trigger expected error(s) [{string.Join(", ", unmatchedExpected)}]. Actual triggered errors: {actualSummary}."));
-                }
-            }
-            else if (anyValidatorConfigured && failedValidation)
-            {
-                var actualSummary = distinctTriggered.Count > 0
-                    ? string.Join("; ", distinctTriggered)
-                    : "validation rejected payload";
-                fixtureWarning =
-                    $"Failed validation, but unknown if expected because no expectedErrors assertions were configured. Triggered: {actualSummary}.";
-                warnings.Add(new ValidationMessage(
-                    typeof(BlobSchemaRegistry),
-                    fixtureId,
-                    $"{fixtureId} failed validation, but unknown if expected (no expectedErrors configured). Triggered error(s): {actualSummary}."));
-            }
-
-            invalidFixtureOutcomes.Add(new InvalidFixtureOutcome(
-                Index: i,
-                FailedAsExpected: failedAsExpected,
-                TriggeredErrors: distinctTriggered,
-                ExpectedErrors: spec.ExpectedErrors,
-                UnmatchedExpectedErrors: unmatchedExpected,
-                Description: spec.Description,
-                Warning: fixtureWarning));
-        }
-
-        var isSuccess = syntaxErrors.Count == 0 && fixtureErrors.Count == 0;
-        _instrumentation.CandidateVerificationCompleted(isSuccess, syntaxErrors.Count, fixtureErrors.Count);
-        return new SchemaVerificationResult(
-            syntaxErrors,
-            fixtureErrors,
-            ResolvedIdentifierConfig: identifierAlignment.EffectiveConfig,
-            InvalidFixtureOutcomes: invalidFixtureOutcomes,
-            Warnings: warnings);
-    }
-
-    private static void CollectSchemaErrors(EvaluationResults eval, List<string> target)
-    {
-        if (eval.Errors is { Count: > 0 })
-        {
-            var loc = string.IsNullOrWhiteSpace(eval.InstanceLocation.ToString()) ? "/" : eval.InstanceLocation.ToString();
-            foreach (var msg in eval.Errors.Values)
-            {
-                target.Add($"[Schema] {loc}: {msg}");
-            }
-        }
-
-        if (eval.Details is { Count: > 0 })
-        {
-            foreach (var detail in eval.Details.Where(d => d.HasErrors && d.Errors is { Count: > 0 }))
-            {
-                var loc = string.IsNullOrWhiteSpace(detail.InstanceLocation.ToString()) ? "/" : detail.InstanceLocation.ToString();
-                foreach (var msg in detail.Errors!.Values)
-                {
-                    target.Add($"[Schema] {loc}: {msg}");
-                }
-            }
-        }
-
-        if (target.Count == 0)
-        {
-            target.Add("[Schema] Payload rejected by JSON Schema.");
-        }
-    }
-    
     public async Task<Result<bool>> ExistsAsync(string schemaName, int version, CancellationToken cancellationToken = default)
     {
         var namespacing = new { schemaName, version };
@@ -905,23 +434,23 @@ public sealed partial class BlobSchemaRegistry(
         CancellationToken cancellationToken = default)
     {
         var namespacing = new { schemaName = metadata.Name, version = metadata.Version };
-        
+
         var schemasContainer = blobServiceClient.GetBlobContainerClient(options.Value.ContainerName);
-        
+
         var schemaBlob = schemasContainer.GetBlobClient(options.Value.SchemaBlobDirectory.FormatWith(namespacing));
         var metaBlob = schemasContainer.GetBlobClient(options.Value.MetaBlobDirectory.FormatWith(namespacing));
         var rulesBlob = schemasContainer.GetBlobClient(options.Value.RulesBlobDirectory.FormatWith(namespacing));
         var odcsBlob = schemasContainer.GetBlobClient(options.Value.OdcsBlobDirectory.FormatWith(namespacing));
         var validFixturesBlob = schemasContainer.GetBlobClient(options.Value.ValidFixturesBlobDirectory.FormatWith(namespacing));
         var invalidFixturesBlob = schemasContainer.GetBlobClient(options.Value.InvalidFixturesBlobDirectory.FormatWith(namespacing));
-        
+
         Response<BlobContentInfo>? rawSchemaFileUpload = null;
         Response<BlobContentInfo>? companionMetafieldUpload = null;
         Response<BlobContentInfo>? companionRulesUpload = null;
         Response<BlobContentInfo>? odcsUpload = null;
         Response<BlobContentInfo>? validFixturesUpload = null;
         Response<BlobContentInfo>? invalidFixturesUpload = null;
-        
+
         try
         {
             // 1. Upload companion metadata file first ({schemaName}/v{version}.meta.json)
@@ -955,7 +484,7 @@ public sealed partial class BlobSchemaRegistry(
             // 4. Upload stored golden regression test fixtures if provided ({schemaName}/v{version}.valid.json / .invalid.json)
             if (sampleValidFixtures is { Count: > 0 })
             {
-                var validJson = SerializeFixturesArray(sampleValidFixtures);
+                var validJson = DraftSchemaBlobPathParser.SerializeFixturesArray(sampleValidFixtures);
                 using var validStream = new MemoryStream(Encoding.UTF8.GetBytes(validJson));
                 validFixturesUpload = await validFixturesBlob.UploadAsync(validStream, new BlobUploadOptions
                 {
@@ -965,7 +494,7 @@ public sealed partial class BlobSchemaRegistry(
 
             if (sampleInvalidFixtures is { Count: > 0 })
             {
-                var invalidJson = SerializeFixturesArray(sampleInvalidFixtures);
+                var invalidJson = DraftSchemaBlobPathParser.SerializeFixturesArray(sampleInvalidFixtures);
                 using var invalidStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
                 invalidFixturesUpload = await invalidFixturesBlob.UploadAsync(invalidStream, new BlobUploadOptions
                 {
@@ -1035,11 +564,10 @@ public sealed partial class BlobSchemaRegistry(
         string blobPath,
         CancellationToken cancellationToken = default)
     {
-        var normalizedPath = NormalizeDraftBlobPath(blobPath, options.Value.DraftContainerName);
-        TryParseDraftBlobPathConvention(normalizedPath, out var pathSchemaName, out var pathVersion, out var basePrefix);
+        var normalizedPath = DraftSchemaBlobPathParser.NormalizeDraftBlobPath(blobPath, options.Value.DraftContainerName);
+        DraftSchemaBlobPathParser.TryParseDraftBlobPathConvention(normalizedPath, out var pathSchemaName, out var pathVersion, out var basePrefix);
 
-        if (IgnoredCompanionSuffixes.Any(s => normalizedPath.EndsWith(s, StringComparison.OrdinalIgnoreCase)) ||
-            normalizedPath.EndsWith(options.Value.DraftErrorBlobSuffix, StringComparison.OrdinalIgnoreCase))
+        if (DraftSchemaBlobPathParser.IsIgnoredCompanionBlob(normalizedPath, options.Value.DraftErrorBlobSuffix))
         {
             return new DraftSchemaArtifact(
                 TriggerBlobPath: normalizedPath,
@@ -1073,7 +601,7 @@ public sealed partial class BlobSchemaRegistry(
         {
             rawOdcsYaml = content;
         }
-        else if (IsRulesBlob(normalizedPath, content))
+        else if (DraftSchemaBlobPathParser.IsRulesBlob(normalizedPath, content))
         {
             rawRulesJson = content;
 
@@ -1172,7 +700,7 @@ public sealed partial class BlobSchemaRegistry(
         IReadOnlyList<string> errors,
         CancellationToken cancellationToken = default)
     {
-        var normalizedPath = NormalizeDraftBlobPath(blobPath, options.Value.DraftContainerName);
+        var normalizedPath = DraftSchemaBlobPathParser.NormalizeDraftBlobPath(blobPath, options.Value.DraftContainerName);
         var errorBlobPath = $"{normalizedPath}{options.Value.DraftErrorBlobSuffix}";
         var draftContainer = blobServiceClient.GetBlobContainerClient(options.Value.DraftContainerName);
         var errorBlob = draftContainer.GetBlobClient(errorBlobPath);
@@ -1321,130 +849,4 @@ public sealed partial class BlobSchemaRegistry(
 
         return [raw];
     }
-
-    private static string SerializeFixturesArray(IReadOnlyList<string> fixtures)
-    {
-        var array = new JsonArray();
-        foreach (var fixture in fixtures.Where(f => !string.IsNullOrWhiteSpace(f)))
-        {
-            try
-            {
-                var parsed = JsonNode.Parse(fixture);
-                if (parsed is not null)
-                {
-                    array.Add(parsed);
-                    continue;
-                }
-            }
-            catch
-            {
-                // Preserve raw string if not valid JSON
-            }
-
-            array.Add(JsonValue.Create(fixture));
-        }
-
-        return array.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-    }
-
-    private static bool IsRulesBlob(string blobPath, string content)
-    {
-        if (blobPath.EndsWith(".rules.json", StringComparison.OrdinalIgnoreCase) ||
-            blobPath.EndsWith(".logic.json", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return content.TrimStart().StartsWith('[');
-    }
-
-    private static string NormalizeDraftBlobPath(string blobPath, string draftContainerName)
-    {
-        var normalized = blobPath.Trim().TrimStart('/');
-        var containerPrefix = $"{draftContainerName}/";
-        if (normalized.StartsWith(containerPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            normalized = normalized[containerPrefix.Length..];
-        }
-
-        return normalized;
-    }
-
-    private static void TryParseDraftBlobPathConvention(
-        string normalizedPath,
-        out string? schemaName,
-        out int? version,
-        out string basePrefix)
-    {
-        schemaName = null;
-        version = null;
-        basePrefix = normalizedPath;
-
-        foreach (var suffix in KnownContractSuffixes)
-        {
-            if (normalizedPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            {
-                basePrefix = normalizedPath[..^suffix.Length];
-                break;
-            }
-        }
-
-        // Pattern 1: {schemaName}/v{version}.{ext} or {schemaName}/{version}.{ext}
-        var folderMatch = FolderVersionRegex().Match(basePrefix);
-        if (folderMatch.Success)
-        {
-            schemaName = folderMatch.Groups[RegexName].Value;
-            if (int.TryParse(folderMatch.Groups[RegexVersion].Value, out var v) && v > 0)
-            {
-                version = v;
-            }
-            return;
-        }
-
-        // Pattern 2: {schemaName}-v{version}.{ext} or {schemaName}_v{version}.{ext}
-        var flatVersionMatch = FlatVersionRegex().Match(basePrefix);
-        if (flatVersionMatch.Success)
-        {
-            schemaName = flatVersionMatch.Groups[RegexName].Value;
-            if (int.TryParse(flatVersionMatch.Groups[RegexVersion].Value, out var v) && v > 0)
-            {
-                version = v;
-            }
-        }
-    }
-
-    private JsonSchema? ResolveMetaSchema(JsonNode schemaNode, List<ValidationMessage> syntaxErrors)
-    {
-        if (schemaNode is JsonObject obj && obj.TryGetPropertyValue("$schema", out var schemaUriNode) &&
-            schemaUriNode is JsonValue val && val.TryGetValue<string>(out var schemaUri) &&
-            !string.IsNullOrWhiteSpace(schemaUri))
-        {
-            if (_validationOptions.AllowedMetaSchemas.Count > 0 &&
-                !_validationOptions.AllowedMetaSchemas.Any(allowed =>
-                    string.Equals(allowed.TrimEnd('#'), schemaUri.TrimEnd('#'), StringComparison.OrdinalIgnoreCase)))
-            {
-                syntaxErrors.Add(new ValidationMessage(
-                    typeof(JsonSchema),
-                    "$schema",
-                    $"Meta-schema '{schemaUri}' is not in the configured AllowedMetaSchemas list."));
-                return null;
-            }
-
-            if (schemaUri.Contains("draft-07", StringComparison.OrdinalIgnoreCase))
-            {
-                return MetaSchemas.Draft7;
-            }
-        }
-
-        return MetaSchemas.Draft202012;
-    }
-
-    public const string RegexName = "name";
-    public const string RegexVersion = "ver";
-
-    [GeneratedRegex($@"^(?<{RegexName}>[^/]+)/v?(?<{RegexVersion}>\d+)$", RegexOptions.IgnoreCase)]
-    private static partial Regex FolderVersionRegex();
-
-    [GeneratedRegex($@"^(?<{RegexName}>.+?)[-_]v(?<{RegexVersion}>\d+)$", RegexOptions.IgnoreCase)]
-    private static partial Regex FlatVersionRegex();
 }

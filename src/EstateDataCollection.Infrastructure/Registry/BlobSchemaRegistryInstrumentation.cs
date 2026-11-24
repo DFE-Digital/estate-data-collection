@@ -57,12 +57,6 @@ public sealed partial class BlobSchemaRegistryInstrumentation(
 
     [LoggerMessage(
         Level = LogLevel.Information,
-        Message = "Candidate schema verification completed. Valid: {IsValid}, SyntaxErrors: {SyntaxErrorCount}, FixtureErrors: {FixtureErrorCount}"
-    )]
-    public partial void CandidateVerificationCompleted(bool isValid, int syntaxErrorCount, int fixtureErrorCount);
-
-    [LoggerMessage(
-        Level = LogLevel.Information,
         Message = "Deleted {Count} processed draft blob(s) from container {DraftContainer} for {TriggerBlobPath}"
     )]
     public partial void DraftBlobsCleanedUp(int count, string draftContainer, string triggerBlobPath);

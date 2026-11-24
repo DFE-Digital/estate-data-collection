@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Markers;
 using EstateDataCollection.Common.Results;

@@ -9,6 +9,7 @@ namespace EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 
 public class SubmitSchemaUseCase(
     ISchemaRegistry schemaRegistry,
+    ISchemaVerificationService schemaVerifier,
     SubmitSchemaUseCaseInstrumentation? instrumentation = null,
     IOdcsContractParser? odcsParser = null
 ) : IUseCase<SubmitSchemaResult, SubmitSchemaRequest>
@@ -58,21 +59,14 @@ public class SubmitSchemaUseCase(
         var validFixtures = request.SampleValidFixtures ?? [];
         var invalidFixtures = request.SampleInvalidFixtures ?? [];
 
-        var verification = request.IdentifierConfig is not null
-            ? await schemaRegistry.VerifyCanditateSchemaAsync(
-                effectiveSchemaJson,
-                rulesParam,
-                validFixtures,
-                invalidFixtures,
-                request.IdentifierConfig,
-                cancellationToken)
-            : await schemaRegistry.VerifyCanditateSchemaAsync(
-                effectiveSchemaJson,
-                rulesParam,
-                validFixtures,
-                invalidFixtures,
-                cancellationToken);
-        
+        var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
+            effectiveSchemaJson,
+            rulesParam,
+            validFixtures,
+            invalidFixtures,
+            request.IdentifierConfig,
+            cancellationToken);
+
         if (verification.IsFailure)
         {
             return verification.Error;
@@ -126,7 +120,7 @@ public class SubmitSchemaUseCase(
                 result.Error.Description ?? string.Empty);
             return result.Error;
         }
-        
+
         _instrumentation.SchemaSaved(metadata.Name, metadata.Version, metadata.Sha256Hash);
 
         return new SubmitSchemaResult(

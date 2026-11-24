@@ -27,7 +27,8 @@ public class BlobSubmissionInfrastructure(
     public async Task<Result<Guid>> SaveSubmissionAsync(SubmissionEnvelope submission, CancellationToken cancellationToken = default)
     {
         var urnValue = submission.Urn > 0 ? submission.Urn.ToString(CultureInfo.InvariantCulture) : null;
-        var blobName = ResolveProcessedBlobName(
+        var blobName = SubmissionBlobPathResolver.ResolveProcessedBlobName(
+            options.Value.ProcessedBlobNameFormat,
             urnValue is not null ? SchemaIdentifierConfig.DefaultUrnType : null,
             urnValue,
             submission.Urn,
@@ -173,7 +174,11 @@ public class BlobSubmissionInfrastructure(
             if (existingChunks.Count == 0 && hadExistingDraft && !string.IsNullOrWhiteSpace(previousDraftJson))
             {
                 var legacyTimestamp = DateTimeOffset.UtcNow.AddTicks(-1);
-                var legacyChunkName = BuildTimestampedDraftBlobName(submissionId, legacyTimestamp, Guid.CreateVersion7());
+                var legacyChunkName = SubmissionBlobPathResolver.BuildTimestampedDraftBlobName(
+                    options.Value.DraftBlobPrefixFormat,
+                    submissionId,
+                    legacyTimestamp,
+                    Guid.CreateVersion7());
                 var legacyChunkBlob = container.GetBlobClient(legacyChunkName);
                 await UploadTimestampedDraftChunkAsync(legacyChunkBlob, submissionId, legacyTimestamp, previousDraftUrn, previousDraftJson, cancellationToken);
                 existingChunks =
@@ -183,7 +188,11 @@ public class BlobSubmissionInfrastructure(
             }
 
             var chunkTimestamp = DateTimeOffset.UtcNow;
-            var chunkBlobName = BuildTimestampedDraftBlobName(submissionId, chunkTimestamp, Guid.CreateVersion7());
+            var chunkBlobName = SubmissionBlobPathResolver.BuildTimestampedDraftBlobName(
+                options.Value.DraftBlobPrefixFormat,
+                submissionId,
+                chunkTimestamp,
+                Guid.CreateVersion7());
             newChunkBlob = container.GetBlobClient(chunkBlobName);
             await UploadTimestampedDraftChunkAsync(newChunkBlob, submissionId, chunkTimestamp, urn, rawPayloadJson, cancellationToken);
             chunkUploaded = true;
@@ -294,7 +303,7 @@ public class BlobSubmissionInfrastructure(
                 var props = await legacyBlob.GetPropertiesAsync(cancellationToken: cancellationToken);
                 var download = await legacyBlob.DownloadContentAsync(cancellationToken);
                 var content = download.Value.Content.ToString();
-                var timestamp = TryReadTimestampFromMetadata(props.Value.Metadata, "last_saved_at_utc")
+                var timestamp = SubmissionBlobPathResolver.TryReadTimestampFromMetadata(props.Value.Metadata, "last_saved_at_utc")
                                 ?? props.Value.LastModified;
 
                 return new SubmissionDraftItem[]
@@ -347,7 +356,8 @@ public class BlobSubmissionInfrastructure(
         var draftBlob = payloadContainer.GetBlobClient(options.Value.PayloadBlobNameFormat.FormatWith(new { submissionId }));
         var sessionBlob = payloadContainer.GetBlobClient(options.Value.SessionBlobNameFormat.FormatWith(new { submissionId }));
 
-        var targetBlobName = ResolveProcessedBlobName(
+        var targetBlobName = SubmissionBlobPathResolver.ResolveProcessedBlobName(
+            options.Value.ProcessedBlobNameFormat,
             identifierType,
             identifierValue,
             legacyUrn,
@@ -487,7 +497,7 @@ public class BlobSubmissionInfrastructure(
         Guid submissionId,
         CancellationToken cancellationToken)
     {
-        var prefix = ResolveDraftPrefix(submissionId);
+        var prefix = SubmissionBlobPathResolver.ResolveDraftPrefix(options.Value.DraftBlobPrefixFormat, submissionId);
         var blobs = container.GetBlobsAsync(traits: BlobTraits.Metadata, prefix: prefix, cancellationToken: cancellationToken);
         if (blobs is null)
         {
@@ -505,7 +515,7 @@ public class BlobSubmissionInfrastructure(
             var blobClient = container.GetBlobClient(blobItem.Name);
             var download = await blobClient.DownloadContentAsync(cancellationToken);
             var content = download.Value.Content.ToString();
-            var createdAt = TryReadTimestampFromMetadata(blobItem.Metadata, "created_at_utc")
+            var createdAt = SubmissionBlobPathResolver.TryReadTimestampFromMetadata(blobItem.Metadata, "created_at_utc")
                             ?? blobItem.Properties.CreatedOn
                             ?? blobItem.Properties.LastModified
                             ?? DateTimeOffset.UtcNow;
@@ -521,96 +531,6 @@ public class BlobSubmissionInfrastructure(
             .OrderBy(i => i.BlobName, StringComparer.Ordinal)
             .ThenBy(i => i.CreatedAtUtc)
             .ToList();
-    }
-
-    private string ResolveDraftPrefix(Guid submissionId)
-    {
-        var prefix = options.Value.DraftBlobPrefixFormat
-            .FormatWith(new { submissionId })
-            .TrimStart('/');
-
-        return prefix.EndsWith('/') ? prefix : $"{prefix}/";
-    }
-
-    private string BuildTimestampedDraftBlobName(Guid submissionId, DateTimeOffset timestampUtc, Guid chunkId)
-    {
-        var prefix = ResolveDraftPrefix(submissionId);
-        var formattedTs = timestampUtc.ToUniversalTime().ToString("yyyyMMddTHHmmssfffffffZ", CultureInfo.InvariantCulture);
-        return $"{prefix}{formattedTs}_{chunkId:N}.json";
-    }
-
-    private static DateTimeOffset? TryReadTimestampFromMetadata(
-        IDictionary<string, string>? metadata,
-        string key)
-    {
-        if (metadata is null || !metadata.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        return DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
-            ? parsed
-            : null;
-    }
-
-    private string ResolveProcessedBlobName(
-        string? identifierType,
-        string? identifierValue,
-        int legacyUrn,
-        string schemaName,
-        int schemaVersion,
-        Guid submissionId)
-    {
-        var format = options.Value.ProcessedBlobNameFormat;
-        var effectiveValue = !string.IsNullOrWhiteSpace(identifierValue)
-            ? identifierValue.Trim()
-            : legacyUrn > 0
-                ? legacyUrn.ToString(CultureInfo.InvariantCulture)
-                : null;
-
-        if (string.IsNullOrWhiteSpace(effectiveValue))
-        {
-            format = format
-                .Replace("urn={urn}/", string.Empty, StringComparison.OrdinalIgnoreCase)
-                .Replace("/urn={urn}", string.Empty, StringComparison.OrdinalIgnoreCase)
-                .TrimStart('/');
-
-            return format.FormatWith(new
-            {
-                urn = legacyUrn,
-                schemaName,
-                schemaVersion,
-                submissionId
-            });
-        }
-
-        var safeValue = SanitizeBlobPathSegment(effectiveValue);
-        var effectiveType = string.IsNullOrWhiteSpace(identifierType)
-            ? SchemaIdentifierConfig.DefaultUrnType
-            : identifierType.Trim();
-
-        if (!string.Equals(effectiveType, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase))
-        {
-            var safeType = SanitizeBlobPathSegment(effectiveType.ToLowerInvariant());
-            format = format.Replace("urn={urn}", $"{safeType}={safeValue}", StringComparison.OrdinalIgnoreCase);
-        }
-
-        return format.FormatWith(new
-        {
-            urn = safeValue,
-            identifier = safeValue,
-            schemaName,
-            schemaVersion,
-            submissionId
-        });
-    }
-
-    private static string SanitizeBlobPathSegment(string value)
-    {
-        return value.Trim()
-            .Replace('/', '-')
-            .Replace('\\', '-')
-            .Replace("..", "_", StringComparison.Ordinal);
     }
 
     private static async Task<Response<BlobContentInfo>> UploadSessionBlobAsync(

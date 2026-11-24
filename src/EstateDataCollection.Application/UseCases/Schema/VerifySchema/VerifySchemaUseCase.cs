@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 
 public class VerifySchemaUseCase(
-    ISchemaRegistry schemaRegistry,
+    ISchemaVerificationService schemaVerifier,
     VerifySchemaUseCaseInstrumentation? instrumentation = null,
     IOdcsContractParser? odcsParser = null
 ) : IUseCase<VerifySchemaResult, VerifySchemaRequest>
@@ -47,20 +47,13 @@ public class VerifySchemaUseCase(
         var validFixtures = request.SampleValidFixtures ?? [];
         var invalidFixtures = request.SampleInvalidFixtures ?? [];
 
-        var verification = request.IdentifierConfig is not null
-            ? await schemaRegistry.VerifyCanditateSchemaAsync(
-                schemaInput,
-                effectiveRulesInput,
-                validFixtures,
-                invalidFixtures,
-                request.IdentifierConfig,
-                cancellationToken)
-            : await schemaRegistry.VerifyCanditateSchemaAsync(
-                schemaInput,
-                effectiveRulesInput,
-                validFixtures,
-                invalidFixtures,
-                cancellationToken);
+        var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
+            schemaInput,
+            effectiveRulesInput,
+            validFixtures,
+            invalidFixtures,
+            request.IdentifierConfig,
+            cancellationToken);
 
         if (verification.IsFailure)
         {

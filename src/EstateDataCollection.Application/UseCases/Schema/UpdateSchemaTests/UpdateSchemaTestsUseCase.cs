@@ -8,6 +8,7 @@ namespace EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
 
 public sealed class UpdateSchemaTestsUseCase(
     ISchemaRegistry schemaRegistry,
+    ISchemaVerificationService schemaVerifier,
     UpdateSchemaTestsUseCaseInstrumentation? instrumentation = null
 ) : IUseCase<UpdateSchemaTestsResult, UpdateSchemaTestsRequest>
 {
@@ -58,20 +59,13 @@ public sealed class UpdateSchemaTestsUseCase(
             rulesJson = JsonSerializer.Serialize(existing.Rules);
         }
 
-        var verification = meta.IdentifierConfig is not null
-            ? await schemaRegistry.VerifyCanditateSchemaAsync(
-                meta.RawJsonSchema,
-                rulesJson,
-                validFixtures,
-                invalidFixtures,
-                meta.IdentifierConfig,
-                cancellationToken)
-            : await schemaRegistry.VerifyCanditateSchemaAsync(
-                meta.RawJsonSchema,
-                rulesJson,
-                validFixtures,
-                invalidFixtures,
-                cancellationToken);
+        var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
+            meta.RawJsonSchema,
+            rulesJson,
+            validFixtures,
+            invalidFixtures,
+            meta.IdentifierConfig,
+            cancellationToken);
 
         if (verification.IsFailure)
         {

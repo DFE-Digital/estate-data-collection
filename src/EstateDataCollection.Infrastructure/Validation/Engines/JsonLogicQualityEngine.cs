@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Results;
 using Json.Logic;
@@ -24,12 +23,12 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
         var assertion = rule.EffectiveAssertion;
         if (assertion is null)
         {
-            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId,$"'implementation' (or 'assert') logic condition is required.")];
+            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, "'implementation' (or 'assert') logic condition is required.", source: ValidationSources.Rule, ruleId: ruleId)];
         }
 
         if (assertion is not JsonObject)
         {
-            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId,$"JsonLogic 'implementation' must be a JSON object expression.")];
+            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, "JsonLogic 'implementation' must be a JSON object expression.", source: ValidationSources.Rule, ruleId: ruleId)];
         }
 
         try
@@ -38,14 +37,14 @@ public sealed class JsonLogicQualityEngine : IQualityRuleEngine
             var logicRule = JsonSerializer.Deserialize<Rule>(normalized.ToJsonString());
             if (logicRule is null)
             {
-                return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId,$"Failed to parse JsonLogic assertion rule.")];
+                return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, "Failed to parse JsonLogic assertion rule.", source: ValidationSources.Rule, ruleId: ruleId)];
             }
 
             return [];
         }
         catch (Exception ex)
         {
-            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, $"Invalid JsonLogic assertion syntax: {ex.Message}")];
+            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, $"Invalid JsonLogic assertion syntax: {ex.Message}", source: ValidationSources.Rule, ruleId: ruleId)];
         }
     }
 

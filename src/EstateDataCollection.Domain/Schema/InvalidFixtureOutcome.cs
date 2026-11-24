@@ -1,3 +1,5 @@
+using EstateDataCollection.Common.Results;
+
 namespace EstateDataCollection.Domain.Schema;
 
 /// <summary>
@@ -8,7 +10,7 @@ namespace EstateDataCollection.Domain.Schema;
 public sealed record InvalidFixtureOutcome(
     int Index,
     bool FailedAsExpected,
-    IReadOnlyList<string> TriggeredErrors,
+    IReadOnlyList<ValidationMessage> TriggeredErrors,
     IReadOnlyList<string>? ExpectedErrors = null,
     IReadOnlyList<string>? UnmatchedExpectedErrors = null,
     string? Description = null,

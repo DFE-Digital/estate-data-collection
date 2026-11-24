@@ -7,7 +7,6 @@ using Celly.Interpreter;
 using Celly.Providers;
 using Celly.Values;
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Results;
@@ -41,7 +40,7 @@ public sealed partial class CelQualityEngine(
         var exprText = ExtractExpressionString(rule.EffectiveAssertion);
         if (string.IsNullOrWhiteSpace(exprText))
         {
-            return [new ValidationMessage(typeof(CelQualityEngine), ruleId,$"CEL 'implementation' must be a non-empty expression string.")];
+            return [new ValidationMessage(typeof(CelQualityEngine), ruleId, "CEL 'implementation' must be a non-empty expression string.", source: ValidationSources.Rule, ruleId: ruleId)];
         }
 
         try
@@ -52,7 +51,7 @@ public sealed partial class CelQualityEngine(
         }
         catch (Exception ex)
         {
-            return [new ValidationMessage(typeof(CelQualityEngine), ruleId,$"Invalid CEL expression syntax: {ex.Message}")];
+            return [new ValidationMessage(typeof(CelQualityEngine), ruleId, $"Invalid CEL expression syntax: {ex.Message}", source: ValidationSources.Rule, ruleId: ruleId)];
         }
     }
 

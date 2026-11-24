@@ -1,4 +1,4 @@
-using EstateDataCollection.Application.Models;
+using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Application.Validators;

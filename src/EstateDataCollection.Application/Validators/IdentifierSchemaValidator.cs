@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using EstateDataCollection.Application.Models;
+using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Application.Validators;
@@ -28,9 +28,9 @@ public static class IdentifierSchemaValidator
             {
                 var msgs = defValidation.Error.ValidationErrors.Count > 0
                     ? defValidation.Error.ValidationErrors
-                        .Select(e => new ValidationMessage(typeof(IdentifierSchemaValidator), e.PropertyPath, e.Message))
+                        .Select(e => new ValidationMessage(typeof(IdentifierSchemaValidator), e.PropertyPath, e.Message, source: ValidationSources.Identifier))
                         .ToList()
-                    : [new ValidationMessage(typeof(IdentifierSchemaValidator), "identifierConfig", defValidation.Error.Description ?? "Invalid identifier configuration.")];
+                    : [new ValidationMessage(typeof(IdentifierSchemaValidator), "identifierConfig", defValidation.Error.Description ?? "Invalid identifier configuration.", source: ValidationSources.Identifier)];
 
                 return new IdentifierSchemaAlignmentResult(
                     IsValid: false,
@@ -113,7 +113,9 @@ public static class IdentifierSchemaValidator
                         new ValidationMessage(
                             typeof(IdentifierSchemaValidator),
                             "identifierConfig.jsonPointer",
-                            inspection.FailureReason ?? $"Identifier pointer '{normalized.JsonPointer}' does not exist in the JSON Schema.")
+                            inspection.FailureReason ?? $"Identifier pointer '{normalized.JsonPointer}' does not exist in the JSON Schema.",
+                            source: ValidationSources.Identifier,
+                            path: normalized.JsonPointer)
                     ]);
             }
 
@@ -130,7 +132,9 @@ public static class IdentifierSchemaValidator
                         new ValidationMessage(
                             typeof(IdentifierSchemaValidator),
                             "identifierConfig.jsonPointer",
-                            inspection.FailureReason ?? $"Identifier pointer '{normalized.JsonPointer}' must resolve to a scalar string, integer, or number property.")
+                            inspection.FailureReason ?? $"Identifier pointer '{normalized.JsonPointer}' must resolve to a scalar string, integer, or number property.",
+                            source: ValidationSources.Identifier,
+                            path: normalized.JsonPointer)
                     ]);
             }
 
@@ -204,7 +208,8 @@ public static class IdentifierSchemaValidator
                 new ValidationMessage(
                     typeof(IdentifierSchemaValidator),
                     "identifierConfig.jsonPointer",
-                    $"Schema does not declare a compatible school identifier property at any default path ({searchedFormatted}). Configure IdentifierConfig.JsonPointer (or upload a .meta.json), or set IdentifierConfig.Type to 'None'.")
+                    $"Schema does not declare a compatible school identifier property at any default path ({searchedFormatted}). Configure IdentifierConfig.JsonPointer (or upload a .meta.json), or set IdentifierConfig.Type to 'None'.",
+                    source: ValidationSources.Identifier)
             ]);
     }
 

@@ -1,3 +1,5 @@
+using EstateDataCollection.Common.Results;
+
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
 public sealed record VerifyInvalidOutcomeViewModel(
@@ -6,4 +8,4 @@ public sealed record VerifyInvalidOutcomeViewModel(
     string? Description,
     string StatusTagText,
     string StatusTagCssClass,
-    IReadOnlyList<string> TriggeredErrors);
+    IReadOnlyList<ValidationMessage> TriggeredErrors);

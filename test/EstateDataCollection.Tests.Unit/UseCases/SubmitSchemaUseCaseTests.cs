@@ -13,11 +13,12 @@ namespace EstateDataCollection.Tests.Unit.UseCases;
 public class SubmitSchemaUseCaseTests
 {
     private readonly ISchemaRegistry _registry = Substitute.For<ISchemaRegistry>();
+    private readonly ISchemaVerificationService _verifier = Substitute.For<ISchemaVerificationService>();
     private readonly SubmitSchemaUseCase _sut;
 
     public SubmitSchemaUseCaseTests()
     {
-        _sut = new SubmitSchemaUseCase(_registry);
+        _sut = new SubmitSchemaUseCase(_registry, _verifier);
     }
 
     [Fact]
@@ -51,8 +52,8 @@ public class SubmitSchemaUseCaseTests
         _registry.ExistsAsync("edc_payload", 2, Arg.Any<CancellationToken>())
             .Returns(Result<bool>.Success(false));
 
-        _registry.VerifyCanditateSchemaAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+        _verifier.VerifyCandidateSchemaAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<SchemaIdentifierConfig?>(), Arg.Any<CancellationToken>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult(
                 ["Syntax error in schema"], [])));
 
@@ -80,8 +81,8 @@ public class SubmitSchemaUseCaseTests
         _registry.ExistsAsync("edc_payload", 3, Arg.Any<CancellationToken>())
             .Returns(Result<bool>.Success(false));
 
-        _registry.VerifyCanditateSchemaAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+        _verifier.VerifyCandidateSchemaAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<SchemaIdentifierConfig?>(), Arg.Any<CancellationToken>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [])));
 
         _registry.SaveSchemaAsync(Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>())

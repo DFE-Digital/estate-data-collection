@@ -1,4 +1,3 @@
-using EstateDataCollection.Application.Models;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
@@ -38,10 +37,12 @@ public sealed record SchemaVerificationResult(
         [
             .. SyntaxErrors.Select(e => new ValidationError(
                 string.IsNullOrWhiteSpace(e.Identifier) ? defaultPropertyPath : e.Identifier,
-                e.Message)),
+                e.Message,
+                e.RuleId)),
             .. FixtureErrors.Select(e => new ValidationError(
                 string.IsNullOrWhiteSpace(e.Identifier) ? "fixtures" : e.Identifier,
-                e.Message))
+                e.Message,
+                e.RuleId))
         ];
     }
 }

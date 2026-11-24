@@ -18,11 +18,12 @@ namespace EstateDataCollection.Tests.Unit.UseCases;
 public sealed class UpdateSchemaTestsUseCaseTests
 {
     private readonly ISchemaRegistry _registry = Substitute.For<ISchemaRegistry>();
+    private readonly ISchemaVerificationService _verifier = Substitute.For<ISchemaVerificationService>();
     private readonly UpdateSchemaTestsUseCase _sut;
 
     public UpdateSchemaTestsUseCaseTests()
     {
-        _sut = new UpdateSchemaTestsUseCase(_registry);
+        _sut = new UpdateSchemaTestsUseCase(_registry, _verifier);
     }
 
     [Fact]
@@ -49,7 +50,7 @@ public sealed class UpdateSchemaTestsUseCaseTests
         IReadOnlyList<string> newValid = ["""{"urn":123456,"capacity":50}""", """{"urn":654321,"capacity":75}"""];
         IReadOnlyList<string> newInvalid = ["""{"urn":123456,"capacity":-1}"""];
 
-        _registry.VerifyCanditateSchemaAsync(
+        _verifier.VerifyCandidateSchemaAsync(
                 metadata.RawJsonSchema,
                 resolved.RawRulesJson,
                 Arg.Is<IReadOnlyList<string>>(v => v.Count == 2),
@@ -106,11 +107,12 @@ public sealed class UpdateSchemaTestsUseCaseTests
         _registry.GetExplicitSchemaAsync("school-site", 1, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Success(resolved));
 
-        _registry.VerifyCanditateSchemaAsync(
+        _verifier.VerifyCandidateSchemaAsync(
                 metadata.RawJsonSchema,
                 null,
                 Arg.Any<IReadOnlyList<string>>(),
                 Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
                 Arg.Any<CancellationToken>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult(
                 [],

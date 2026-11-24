@@ -53,36 +53,6 @@ public interface ISchemaRegistry : IInfrastructure
     }
 
     /// <summary>
-    /// Validates a candidate schema and/or companion quality rules (JsonLogic, CEL) and executes dry-run golden test fixtures.
-    /// </summary>
-    Task<Result<SchemaVerificationResult>> VerifyCanditateSchemaAsync(
-        string? rawSchemaJson,
-        string? rawRulesJson,
-        IReadOnlyList<string> sampleValidPayloads,
-        IReadOnlyList<string> sampleInvalidPayloads,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Validates a candidate schema, quality rules, identifier pointer alignment against the schema,
-    /// and executes dry-run golden test fixtures.
-    /// </summary>
-    Task<Result<SchemaVerificationResult>> VerifyCanditateSchemaAsync(
-        string? rawSchemaJson,
-        string? rawRulesJson,
-        IReadOnlyList<string> sampleValidPayloads,
-        IReadOnlyList<string> sampleInvalidPayloads,
-        SchemaIdentifierConfig? identifierConfig,
-        CancellationToken cancellationToken = default)
-    {
-        return VerifyCanditateSchemaAsync(
-            rawSchemaJson,
-            rawRulesJson,
-            sampleValidPayloads,
-            sampleInvalidPayloads,
-            cancellationToken);
-    }
-
-    /// <summary>
     /// Checks whether a schema version already exists in storage.
     /// </summary>
     Task<Result<bool>> ExistsAsync(string schemaName, int version, CancellationToken cancellationToken = default);

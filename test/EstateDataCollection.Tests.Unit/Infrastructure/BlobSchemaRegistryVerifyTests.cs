@@ -1,12 +1,11 @@
-using Azure.Storage.Blobs;
 using AwesomeAssertions;
+using EstateDataCollection.Application.Validators;
+using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Infrastructure.Registry;
+using EstateDataCollection.Infrastructure.Validation;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
-using NSubstitute;
 using Xunit;
 
 namespace EstateDataCollection.Tests.Unit.Infrastructure;
@@ -42,30 +41,31 @@ public class BlobSchemaRegistryVerifyTests
     }
     """;
 
+    private static SchemaVerificationService CreateVerifier() =>
+        new(new JsonLogicValidator(), new OdcsContractParser());
+
     [Fact]
     public async Task VerifyCandidateSchema_Should_Validate_InFlight_Fixtures_For_Both_OdcsYaml_And_Split_Json()
     {
-        var blobServiceClient = Substitute.For<BlobServiceClient>();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
-        var registry = new BlobSchemaRegistry(blobServiceClient, Options.Create(new BlobSchemaRegistryOptions()), cache);
+        var verifier = CreateVerifier();
 
         var odcsYaml = CdeContractFixtureLoader.LoadFile("contracts/edc-school-site-jsonlogic.odcs.yaml");
         var schemaJson = CdeContractFixtureLoader.LoadFile("schemas/edc-school-site.schema.json");
         var rulesJson = CdeContractFixtureLoader.LoadFile("schemas/edc-school-site.rules.json");
 
-        var yamlOutcome = (await registry.VerifyCanditateSchemaAsync(
+        var yamlOutcome = (await verifier.VerifyCandidateSchemaAsync(
             rawSchemaJson: odcsYaml,
             rawRulesJson: null,
             sampleValidPayloads: [CdePayloadFixtures.ValidSchoolSitePayload],
             sampleInvalidPayloads: [CdePayloadFixtures.InvalidTimestampSchoolSitePayload])).ShouldSucceed();
 
-        var jsonOutcome = (await registry.VerifyCanditateSchemaAsync(
+        var jsonOutcome = (await verifier.VerifyCandidateSchemaAsync(
             rawSchemaJson: schemaJson,
             rawRulesJson: rulesJson,
             sampleValidPayloads: [CdePayloadFixtures.ValidSchoolSitePayload],
             sampleInvalidPayloads: [CdePayloadFixtures.InvalidTimestampSchoolSitePayload])).ShouldSucceed();
 
-        var failedInFlight = (await registry.VerifyCanditateSchemaAsync(
+        var failedInFlight = (await verifier.VerifyCandidateSchemaAsync(
             rawSchemaJson: schemaJson,
             rawRulesJson: rulesJson,
             sampleValidPayloads: [CdePayloadFixtures.InvalidTimestampSchoolSitePayload],
@@ -89,13 +89,11 @@ public class BlobSchemaRegistryVerifyTests
     [Fact]
     public async Task VerifyCandidateSchema_Should_Verify_Custom_LAEstab_Pointer_And_Fixtures()
     {
-        var blobServiceClient = Substitute.For<BlobServiceClient>();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
-        var registry = new BlobSchemaRegistry(blobServiceClient, Options.Create(new BlobSchemaRegistryOptions()), cache);
+        var verifier = CreateVerifier();
 
         var idConfig = new SchemaIdentifierConfig { Type = "LAEstab", JsonPointer = "/establishment/laestab" };
 
-        var okOutcome = (await registry.VerifyCanditateSchemaAsync(
+        var okOutcome = (await verifier.VerifyCandidateSchemaAsync(
             rawSchemaJson: LaEstabSchema,
             rawRulesJson: null,
             sampleValidPayloads: ["""{"establishment":{"laestab":"201-3614"}}"""],
@@ -108,7 +106,7 @@ public class BlobSchemaRegistryVerifyTests
         okOutcome.ResolvedIdentifierConfig.JsonPointer.Should().Be("/establishment/laestab");
         okOutcome.ResolvedIdentifierConfig.Required.Should().BeTrue();
 
-        var missingDefaultOutcome = (await registry.VerifyCanditateSchemaAsync(
+        var missingDefaultOutcome = (await verifier.VerifyCandidateSchemaAsync(
             rawSchemaJson: LaEstabSchema,
             rawRulesJson: null,
             sampleValidPayloads: [],
@@ -122,13 +120,11 @@ public class BlobSchemaRegistryVerifyTests
     [Fact]
     public async Task VerifyCandidateSchema_Should_Respect_Optional_Schema_Identifier_And_Flag_NonPositive_Urn_Fixtures()
     {
-        var blobServiceClient = Substitute.For<BlobServiceClient>();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
-        var registry = new BlobSchemaRegistry(blobServiceClient, Options.Create(new BlobSchemaRegistryOptions()), cache);
+        var verifier = CreateVerifier();
 
         var idConfig = new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/urn" };
 
-        var outcome = (await registry.VerifyCanditateSchemaAsync(
+        var outcome = (await verifier.VerifyCandidateSchemaAsync(
             rawSchemaJson: OptionalUrnSchema,
             rawRulesJson: null,
             sampleValidPayloads:
@@ -149,9 +145,7 @@ public class BlobSchemaRegistryVerifyTests
     [Fact]
     public async Task VerifyCandidateSchema_Should_Capture_InvalidFixtureOutcomes_SoftWarnings_And_Validate_ExpectedErrors()
     {
-        var blobServiceClient = Substitute.For<BlobServiceClient>();
-        using var cache = new MemoryCache(new MemoryCacheOptions());
-        var registry = new BlobSchemaRegistry(blobServiceClient, Options.Create(new BlobSchemaRegistryOptions()), cache);
+        var verifier = CreateVerifier();
 
         var rulesJson = """
         [
@@ -186,7 +180,7 @@ public class BlobSchemaRegistryVerifyTests
         }
         """;
 
-        var okOutcome = (await registry.VerifyCanditateSchemaAsync(
+        var okOutcome = (await verifier.VerifyCandidateSchemaAsync(
             rawSchemaJson: schemaJson,
             rawRulesJson: rulesJson,
             sampleValidPayloads: ["""{"urn":123456,"capacity":20}"""],
@@ -198,13 +192,16 @@ public class BlobSchemaRegistryVerifyTests
         var outcome = okOutcome.InvalidFixtureOutcomes.Should().ContainSingle().Subject;
         outcome.FailedAsExpected.Should().BeTrue();
         outcome.Description.Should().Be("Breaks minimum capacity rule");
-        outcome.TriggeredErrors.Should().ContainSingle(e => e.Contains("RULE-CAPACITY-MIN") && e.Contains("Capacity must be at least 10."));
+        outcome.TriggeredErrors.Should().ContainSingle(e =>
+            e.Source == ValidationSources.Rule &&
+            e.RuleId == "RULE-CAPACITY-MIN" &&
+            e.Message.Contains("Capacity must be at least 10."));
         outcome.UnmatchedExpectedErrors.Should().BeEmpty();
         outcome.Warning.Should().BeNull();
 
         // Raw invalid fixture without expectedErrors -> passes verification with a soft warning AND returns triggered errors
         var rawInvalidWithoutExpectations = """{"urn":123456,"capacity":5}""";
-        var softWarningOutcome = (await registry.VerifyCanditateSchemaAsync(
+        var softWarningOutcome = (await verifier.VerifyCandidateSchemaAsync(
             rawSchemaJson: schemaJson,
             rawRulesJson: rulesJson,
             sampleValidPayloads: ["""{"urn":123456,"capacity":20}"""],
@@ -219,7 +216,9 @@ public class BlobSchemaRegistryVerifyTests
         var softOutcome = softWarningOutcome.InvalidFixtureOutcomes.Should().ContainSingle().Subject;
         softOutcome.FailedAsExpected.Should().BeTrue();
         softOutcome.Warning.Should().Contain("unknown if expected");
-        softOutcome.TriggeredErrors.Should().ContainSingle(e => e.Contains("RULE-CAPACITY-MIN"));
+        softOutcome.TriggeredErrors.Should().ContainSingle(e =>
+            e.Source == ValidationSources.Rule &&
+            e.RuleId == "RULE-CAPACITY-MIN");
 
         var mismatchedInvalid = """
         {
@@ -229,7 +228,7 @@ public class BlobSchemaRegistryVerifyTests
         }
         """;
 
-        var mismatchOutcome = (await registry.VerifyCanditateSchemaAsync(
+        var mismatchOutcome = (await verifier.VerifyCandidateSchemaAsync(
             rawSchemaJson: schemaJson,
             rawRulesJson: rulesJson,
             sampleValidPayloads: [],
