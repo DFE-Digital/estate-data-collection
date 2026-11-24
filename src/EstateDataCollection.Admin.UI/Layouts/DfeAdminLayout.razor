@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#003a69" />
-    <title>@Meta.DocumentTitle</title>
+    <title>@Model.DocumentTitle</title>
     <link rel="icon" sizes="48x48" href="@AppRoutes.Assets.FaviconIco" />
     <link rel="icon" sizes="any" href="@AppRoutes.Assets.FaviconSvg" type="image/svg+xml" />
     <link rel="stylesheet" href="@AppRoutes.Assets.GovUkCss" />
@@ -25,9 +25,9 @@
             </a>
 
             <div class="dfe-header__meta">
-                @if (Meta.HasSignedInUser)
+                @if (Model.HasSignedInUser)
                 {
-                    <span>@Meta.SignedInUser</span>
+                    <span>@Model.SignedInUser</span>
                 }
             </div>
         </div>
@@ -37,22 +37,22 @@
         <div class="govuk-width-container dfe-width-container">
             <ul class="dfe-service-nav__list">
                 <li>
-                    <a href="@AppRoutes.AdminUi.Dashboard" class="@Meta.SchemasNavLinkCssClass">
+                    <a href="@AppRoutes.AdminUi.Dashboard" class="@Model.SchemasNavLinkCssClass">
                         Schemas &amp; Lifecycle
                     </a>
                 </li>
                 <li>
-                    <a href="@AppRoutes.AdminUi.Workbench" class="@Meta.WorkbenchNavLinkCssClass">
+                    <a href="@AppRoutes.AdminUi.Workbench" class="@Model.WorkbenchNavLinkCssClass">
                         Contract Workbench
                     </a>
                 </li>
                 <li>
-                    <a href="@AppRoutes.AdminUi.Statistics" class="@Meta.StatisticsNavLinkCssClass">
+                    <a href="@AppRoutes.AdminUi.Statistics" class="@Model.StatisticsNavLinkCssClass">
                         Submission Statistics
                     </a>
                 </li>
                 <li>
-                    <a href="@AppRoutes.AdminUi.Submissions" class="@Meta.SubmissionsNavLinkCssClass">
+                    <a href="@AppRoutes.AdminUi.Submissions" class="@Model.SubmissionsNavLinkCssClass">
                         Submissions
                     </a>
                 </li>
@@ -81,9 +81,9 @@
                 <div class="govuk-footer__meta-item govuk-footer__meta-item--grow">
                     <span class="govuk-footer__licence-description">
                         Department for Education &bull; Education Estates Directorate &bull; Estate Data Collection (EDC)
-                        @if (Meta.HasAppVersion)
+                        @if (Model.HasAppVersion)
                         {
-                            <span> &bull; Build <code class="dfe-code-badge">@Meta.AppVersion</code></span>
+                            <span> &bull; Build <code class="dfe-code-badge">@Model.AppVersion</code></span>
                         }
                     </span>
                 </div>
@@ -101,6 +101,6 @@
 </html>
 
 @code {
-    [Parameter, EditorRequired] public AdminPageMeta Meta { get; set; } = default!;
+    [Parameter, EditorRequired] public AdminPageMeta Model { get; set; } = default!;
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }
