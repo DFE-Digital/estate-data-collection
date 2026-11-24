@@ -40,7 +40,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup, Test & Package
         id: build
@@ -129,7 +129,7 @@ jobs:
       name: Dev
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download Bundle from GitHub Packages
         uses: ./.github/actions/download-bundle
         with:
@@ -174,7 +174,7 @@ jobs:
       name: Test
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download Bundle from GitHub Packages
         uses: ./.github/actions/download-bundle
         with:
@@ -219,7 +219,7 @@ jobs:
       name: Prod
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download Bundle from GitHub Packages
         uses: ./.github/actions/download-bundle
         with:
@@ -260,7 +260,7 @@ jobs:
       contents: write
       packages: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download Bundle from GitHub Packages
         uses: ./.github/actions/download-bundle
         with:

@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout Target Commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.commit_sha }}
 
@@ -68,7 +68,7 @@ jobs:
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - name: Checkout Actions
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
