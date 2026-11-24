@@ -24,8 +24,8 @@ flowchart TD
     EG["Azure Event Grid<br/>(BlobCreated on draft-schemas)"]:::input
 
     subgraph Hosts["Azure Functions v4 (.NET 10 Isolated Worker)"]
-        F_PUB["<b>AzureFunctions.Public</b> (:7071)<br/>• /api/schemas*<br/>• /api/submissions*<br/>• /api/about"]:::host
-        F_ADM["<b>AzureFunctions.Admin</b> (:7072)<br/>• /api/schemas* &amp; /api/logic/verify<br/>• /api/schemas/tests/run &amp; .../tests<br/>• /manage/* (SSR HTML) &amp; /assets/*<br/>• IngestDraftSchemaEvent"]:::host
+        F_PUB["<b>AzureFunctions.Public</b> (:7071)<br/>• /api/schemas* (active default + upcoming/retired filters)<br/>• /api/submissions*<br/>• /api/about"]:::host
+        F_ADM["<b>AzureFunctions.Admin</b> (:7072)<br/>• /api/schemas* &amp; /api/schemas/verify<br/>• /api/schemas/tests/run &amp; .../tests<br/>• /manage/* (SSR HTML) &amp; /assets/*<br/>• IngestDraftSchemaEvent"]:::host
     end
 
     subgraph AdminUI["EstateDataCollection.Admin.UI (Razor Class Library)"]
@@ -40,7 +40,7 @@ flowchart TD
 
     subgraph Domain["Domain Layer (Enterprise Invariants)"]
         D_SCH["SchemaMetadata &amp; State Machine<br/>SchemaIdentifierConfig<br/>InvalidFixtureParser &amp; Outcomes"]:::domain
-        D_SUB["SubmissionSession<br/>SubmissionIdentifier<br/>SubmissionEnvelope"]:::domain
+        D_SUB["SubmissionSession<br/>SubmissionIdentifier"]:::domain
     end
 
     subgraph Infrastructure["Infrastructure Layer (Adapters)"]
@@ -83,7 +83,7 @@ graph LR
     classDef processed stroke:#00796b,stroke-width:4px;
 
     subgraph D_Container["Container: draft-schemas"]
-        D1["{schemaName}/v{version}/{file}.odcs.yaml|.schema.json<br/>(+ {blob}.error.json on ingestion failure)"]:::draft
+        D1["{schemaName}/v{version}/{file}.odcs.yaml|.schema.json|.rules.json<br/>(JSON overrides YAML; + {blob}.error.json on failure)"]:::draft
     end
 
     subgraph S_Container["Container: schemas"]
@@ -104,7 +104,7 @@ graph LR
 
 | Container | Blob Path Pattern(s) | Responsibility | Lifecycle |
 | :--- | :--- | :--- | :--- |
-| **`draft-schemas`** | `{file}.odcs.yaml`, `{file}.schema.json`, `{file}.error.json` | Event Grid-watched dropzone for draft contract ingestion; writes diagnostic `.error.json` alongside failed drops. | **Staging** |
+| **`draft-schemas`** | `{file}.odcs.yaml`, `{file}.schema.json`, `{file}.rules.json`, `{file}.error.json` | Event Grid-watched dropzone for dual YAML/JSON draft ingestion (with JSON-over-YAML precedence and companion cleanup); writes diagnostic `.error.json` alongside failed drops. | **Staging** |
 | **`schemas`** | `{schemaName}/v{version}.schema.json`<br/>`{schemaName}/v{version}.rules.json`<br/>`{schemaName}/v{version}.odcs.yaml`<br/>`{schemaName}/v{version}.meta.json`<br/>`{schemaName}/v{version}.valid.json`<br/>`{schemaName}/v{version}.invalid.json` | Immutable schema contracts, compiled quality rules, identifier metadata, test run telemetry, and mutable golden regression test fixture arrays. | **Contracts Immutable** once Validated/Scheduled/Active; **Test fixtures mutable** via verified `UpdateSchemaTests` |
 | **`payloads`** | `{submissionId}/session.json`<br/>`{submissionId}/draft.json` | Holding workspace for active survey sessions and partial draft uploads. | **Temporary**. Deleted on finalisation or Azure Blob lifecycle policies |
 | **`processed`** | `urn={urn}/schema={name}/v={v}/{id}.json`<br/>`{partitionLabel}={value}/...`<br/>`unidentified/schema={name}/v={v}/{id}.json` | Sealed payloads tagged `ReadyForCde` with SHA-256 hash and audit metadata, partitioned by configured `SchemaIdentifierConfig` ([ADR 0019](docs/decisions/0019-configurable-schema-verified-identifier-partitioning.md)). | **Permanent Canonical Record** |

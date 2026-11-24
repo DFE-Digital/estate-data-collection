@@ -50,7 +50,7 @@ public interface IUseCase<TResult, in TRequest>
 ```
 
 1. **Domain Layer (`EstateDataCollection.Domain`)**: Completely free of external dependencies, hosting frameworks, or 
-   persistence packages. Contains core domain entities (`SchemaMetadata`, `SubmissionEnvelope`, `Urn`).
+   persistence packages. Contains core domain entities (`SchemaMetadata`, `SchemaIdentifierConfig`, `SubmissionSession`, `SubmissionIdentifier`).
 2. **Application Layer (`EstateDataCollection.Application`)**: Encapsulates all workflow orchestration into discrete 
    single-responsibility use cases (`VerifySchemaUseCase`, `SubmitSchemaUseCase`, `CreateSubmissionUseCase`, 
    `UpdateSubmissionUseCase`, `FinaliseSubmissionUseCase`).

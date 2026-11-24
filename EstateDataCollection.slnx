@@ -7,7 +7,7 @@
         <File Path=".gitignore" />
     </Folder>
     <Folder Name="/decisions/">
-        <File Path="docs/decisions/DECISIONS.md" />
+        <File Path="docs/DECISIONS.md" />
         <File Path="docs/decisions/0001-clean-architecture-and-use-cases.md" />
         <File Path="docs/decisions/0002-dynamic-json-schema-contract-validation.md" />
         <File Path="docs/decisions/0003-multi-container-blob-storage-landing-zone.md" />
@@ -21,6 +21,15 @@
         <File Path="docs/decisions/0011-architectural-marker-interfaces-and-assembly-scanning.md" />
         <File Path="docs/decisions/0012-local-developer-orchestration-and-http-specifications.md" />
         <File Path="docs/decisions/0013-superseding-relational-document-cache-for-pure-blob-correlation.md" />
+        <File Path="docs/decisions/0014-segregated-multi-workflow-ci-cd-with-composite-actions.md" />
+        <File Path="docs/decisions/0015-calendar-versioning-calver-and-log-enrichment.md" />
+        <File Path="docs/decisions/0016-self-healing-storage-container-initialisation.md" />
+        <File Path="docs/decisions/0017-ssr-admin-portal-and-proxy-boundary.md" />
+        <File Path="docs/decisions/0018-zero-logic-razor-views-and-presentation-viewmodels.md" />
+        <File Path="docs/decisions/0019-configurable-schema-verified-identifier-partitioning.md" />
+        <File Path="docs/decisions/0020-schema-regression-test-suites-and-soft-warnings.md" />
+        <File Path="docs/decisions/0021-isolated-ephemeral-azurite-test-containers.md" />
+        <File Path="docs/decisions/0022-authoring-schema-test-fixtures-and-expected-errors.md" />
     </Folder>
     <Folder Name="/src/">
         <Project Path="src/EstateDataCollection.Common/EstateDataCollection.Common.csproj" />

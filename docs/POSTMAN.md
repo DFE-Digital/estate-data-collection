@@ -22,9 +22,9 @@ The collection is organized into seven logical folders reflecting the EDC Public
 ### `1. Admin Verification & Dry-Run (Admin API)`
 - **`1.1 Verify Schema Candidate (Draft 2020-12 & Fixtures)`** (`POST {{adminBaseUrl}}/schemas/verify`):
   - Tests schema syntax against JSON Schema Draft 2020-12 / Draft-07 and executes validation assertions against sample valid and invalid fixtures without writing to Azure Blob Storage.
-- **`1.2 Verify Standalone Quality Rules (Direct Array - JsonLogic & CEL)`** (`POST {{adminBaseUrl}}/logic/verify`):
+- **`1.2 Verify Standalone Quality Rules (Direct Array - JsonLogic & CEL)`** (`POST {{adminBaseUrl}}/schemas/verify`):
   - Validates standalone `jsonlogic` and `cel` quality rule definitions posted as a raw JSON array.
-- **`1.3 Verify Multi-Engine Quality Rules with Fixtures (JsonLogic + CEL)`** (`POST {{adminBaseUrl}}/logic/verify`):
+- **`1.3 Verify Multi-Engine Quality Rules with Fixtures (JsonLogic + CEL)`** (`POST {{adminBaseUrl}}/schemas/verify`):
   - Evaluates both `jsonlogic` and `cel` quality rules against valid and invalid golden fixtures in a dry-run.
 - **`1.4 Verify Paired Draft-07 Schema & Quality Rules (Route A)`** (`POST {{adminBaseUrl}}/schemas/verify`):
   - Tests Route A (`schemaJson` + `rulesJson`) exported from ODCS contracts alongside sample fixtures.

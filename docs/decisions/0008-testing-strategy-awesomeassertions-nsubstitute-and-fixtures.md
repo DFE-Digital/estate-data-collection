@@ -1,5 +1,5 @@
 ---
-status: "proposed"
+status: "accepted"
 sub-status: "implemented"
 date: 2026-10-21
 decision-makers: ["Chris Kelly"]
@@ -46,22 +46,20 @@ lambda-free mocking API, and placing shared builders in `EstateDataCollection.Te
 test suites:
 
 1. **Test Project Segregation**:
-   - `EstateDataCollection.Tests.Common`: Shared test data builders, golden JSON Schema fixtures, Bogus data generators, 
-     and test doubles. No tests run directly in this project.
+   - `EstateDataCollection.Tests.Common`: Shared test data builders (`SchemaMetadataBuilder`, `SubmissionSessionBuilder`, `SurveyPayloadBuilder`, `QualityRulesBuilder`, `ResolvedSchemaBuilder`), golden JSON Schema & ODCS contract fixtures (`JsonSchemaFixtures`, `SurveyPayloadFixtures`, `CdeContractFixtureLoader`), and result assertion extensions. No tests run directly in this project.
    - `EstateDataCollection.Tests.Unit`: Fast, isolated, in-memory tests running without network or file system dependencies 
-     (targeting Domain, Application Use Cases, and Infrastructure logic). Executes the full suite in under 400ms.
+     (targeting Domain, Application Use Cases, Admin UI ViewModels/Razor components, and Infrastructure logic).
    - `EstateDataCollection.Tests.Integration`: End-to-end integration tests executing against local containerised Azurite 
-     storage emulators and test host instances.
+     storage emulators and DI test harnesses (`IntegrationEndpointHarness`).
 2. **Assertion and Mocking Standards**:
    - **`AwesomeAssertions`**: Used for all test assertions (`result.IsSuccess.Should().BeTrue()`, 
-     `envelope.Status.Should().Be(SubmissionStatus.Draft)`). Provides readable, fluent syntax and rich diagnostic output 
+     `session.Status.Should().Be(SubmissionStatus.Draft)`). Provides readable, fluent syntax and rich diagnostic output 
      upon failure.
-   - **`NSubstitute`**: Used for interface test doubles (`Substitute.For<IBlobService>()`, 
-     `substitute.Received(1).WriteAsync(...)`) providing concise, lambda-free syntax without runtime generation overhead.
+   - **`NSubstitute`**: Used for interface test doubles (`Substitute.For<ISchemaRegistry>()`, 
+     `substitute.Received(1).UpdateSchemaMetadataAsync(...)`) providing concise, lambda-free syntax without runtime generation overhead.
 3. **Builder Pattern & Golden Fixtures**:
-   Domain records and entities are constructed using immutable fluent builders (e.g., `SchemaMetadataBuilder`) with 
-   sensible production defaults. Golden fixtures (`JsonSchemaFixtures`, `SurveyPayloadFixtures`) and deterministic random 
-   generators (`SchoolPayloadGenerator` via Bogus) prevent test payload duplication.
+   Domain records and entities are constructed using immutable fluent builders (e.g., `SchemaMetadataBuilder`, `SurveyPayloadBuilder`) with 
+   sensible production defaults and golden fixtures (`JsonSchemaFixtures`, `CdeContractFixtureLoader`) to prevent test payload duplication.
 4. **Behavioural Test Specification Naming**:
    Test methods adhere strictly to the behavioural naming convention:
    `When_<ConditionOrAction>_It_Should_<ExpectedOutcome>`
@@ -72,7 +70,7 @@ test suites:
 * Good, because tests read like executable behavioural specifications.
 * Good, because test doubles for storage, use cases, and repositories are trivial to configure and verify.
 * Good, because test setup boilerplate is minimised by domain builders with sensible default values.
-* Good, because the entire unit test suite runs in under 400 milliseconds, giving developers instant feedback.
+* Good, because unit tests run in milliseconds without storage containers, giving developers instant feedback.
 * Bad, because developers must maintain test builders as new domain records are introduced.
 
 ### Confirmation
@@ -106,6 +104,6 @@ Compliance is confirmed via:
 ## More Information
 
 Project Structure:
-* `test/EstateDataCollection.Tests.Common`: Builders, Fixtures, and Bogus Generators.
+* `test/EstateDataCollection.Tests.Common`: Builders, Fixtures, and Extension helpers.
 * `test/EstateDataCollection.Tests.Unit`: Fast in-memory unit tests.
 * `test/EstateDataCollection.Tests.Integration`: Azurite and end-to-end integration tests.

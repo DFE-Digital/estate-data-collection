@@ -11,7 +11,7 @@ For full architectural deep-dives and design decisions, see:
 
 ## Solution Topology
 
-The solution splits responsibilities cleanly across Clean Architecture layers and three isolated **.NET 10 Azure Functions** hosts plus an SSR UI Razor Class Library:
+The solution splits responsibilities cleanly across Clean Architecture layers and two isolated **.NET 10 Azure Functions** hosts plus an SSR UI Razor Class Library:
 
 | Project | Role | Default Local Port |
 | :--- | :--- | :--- |
@@ -20,8 +20,8 @@ The solution splits responsibilities cleanly across Clean Architecture layers an
 | `src/EstateDataCollection.Infrastructure` | `JsonSchema.Net`, `OdcsContractParser`, `JsonLogic` & `CEL` engines, `IdentifierSchemaValidator`, and Azure Blob Storage repositories | — |
 | `src/EstateDataCollection.Common` & `Common.Web` | `Result<T>`, `Error`, CalVer `AppVersionProvider`, Scrutor registration, `FunctionEndpointBase`, and worker middleware | — |
 | `src/EstateDataCollection.Admin.UI` | Server-Side Rendered GOV.UK / DfE Razor pages, components, **Zero-Logic Presentation ViewModels**, and embedded static assets | — |
-| `src/EstateDataCollection.AzureFunctions.Public` | Public M2M ingestion and schema discovery API (`/api/schemas*`, `/api/submissions*`, `/api/about`) | `http://localhost:7071` |
-| `src/EstateDataCollection.AzureFunctions.Admin` | Unified Admin API (`/api/schemas*`, `/api/logic/verify`, `/api/schemas/tests/run`), SSR Admin Portal (`/manage`, `/manage/workbench`, `/manage/schemas/{name}/{v}/tests`, `/assets/*`), & Event Grid draft ingestion (`IngestDraftSchemaEvent`) | `http://localhost:7072` |
+| `src/EstateDataCollection.AzureFunctions.Public` | Public M2M ingestion and schema discovery API (`/api/schemas*` active-by-default with `includeUpcoming`/`includeRetired` filters, `/api/submissions*`, `/api/about`) | `http://localhost:7071` |
+| `src/EstateDataCollection.AzureFunctions.Admin` | Unified Admin API (`/api/schemas*`, `/api/schemas/verify`, `/api/schemas/tests/run`), SSR Admin Portal (`/manage`, `/manage/workbench`, `/manage/schemas/{name}/{v}/tests`, `/assets/*`), & Event Grid draft ingestion (`IngestDraftSchemaEvent`, dual YAML/JSON with JSON precedence) | `http://localhost:7072` |
 
 ## Architecture Flow
 
@@ -159,7 +159,7 @@ func start --script-root src/EstateDataCollection.AzureFunctions.Admin --port 70
 
 ### 5. Running Automated Tests
 
-Run the full automated solution suite (**227 tests**: 169 unit tests + 58 integration tests):
+Run the full automated solution suite (Unit + isolated Azurite Integration tests):
 
 ```bash
 dotnet test EstateDataCollection.slnx
@@ -169,7 +169,7 @@ dotnet test EstateDataCollection.slnx
 
 ### 6. Testing with the `.http` File
 
-Use [EstateDataCollection.Admin.http](src/EstateDataCollection.AzureFunctions.Admin/EstateDataCollection.Admin.http) or [EstateDataCollection.http](src/EstateDataCollection.AzureFunctions/EstateDataCollection.http) directly inside JetBrains Rider or VS Code (REST Client) to walk through:
+Use [EstateDataCollection.Admin.http](src/EstateDataCollection.AzureFunctions.Admin/EstateDataCollection.Admin.http) or [EstateDataCollection.http](src/EstateDataCollection.AzureFunctions.Public/EstateDataCollection.http) directly inside JetBrains Rider or VS Code (REST Client) to walk through:
 1. ODCS YAML / JSON Schema verification & JsonLogic/CEL quality rules verification.
 2. Schema submission, lifecycle scheduling (`Schedule` / `Activate` / `Deprecate` / `Retire`), and identifier config (`URN`, `LAEstab`, `None`).
 3. Two-step survey submission sessions, draft saves, and promotion to `processed/`.
