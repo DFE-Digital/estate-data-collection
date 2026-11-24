@@ -2,6 +2,7 @@ using System.Text.Json;
 using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Application.UseCases.Submissions;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Logic;
@@ -27,7 +28,9 @@ public class FinaliseSubmissionUseCaseTests
 
     public FinaliseSubmissionUseCaseTests()
     {
-        _sut = new FinaliseSubmissionUseCase(_repository, _registry, _validator);
+        var validationService = new PayloadValidationService(_validator, new JsonLogicValidator());
+        var evaluationService = new SubmissionEvaluationService(_repository, _registry, validationService);
+        _sut = new FinaliseSubmissionUseCase(_repository, evaluationService);
     }
 
     [Fact]
@@ -205,7 +208,8 @@ public class FinaliseSubmissionUseCaseTests
 
         var schemaValidator = new JsonSchemaNetValidator();
         var validationService = new PayloadValidationService(schemaValidator, new JsonLogicValidator());
-        var sut = new FinaliseSubmissionUseCase(_repository, _registry, schemaValidator, validationService: validationService);
+        var evaluationService = new SubmissionEvaluationService(_repository, _registry, validationService);
+        var sut = new FinaliseSubmissionUseCase(_repository, evaluationService);
 
         var result = (await sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId))).ShouldSucceed();
 

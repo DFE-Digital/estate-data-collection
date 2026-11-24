@@ -1,30 +1,21 @@
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
-using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 
 public class UpdateSubmissionUseCase(
     ISubmissionInfrastructure infrastructure,
-    ISchemaRegistry registry,
-    ISchemaValidator validator,
+    ISubmissionEvaluationService evaluationService,
     UpdateSubmissionUseCaseInstrumentation? instrumentation = null,
-    IPayloadValidationService? validationService = null,
     ISubmissionAuditStore? auditStore = null,
-    IOptions<ValidationOptions>? validationOptions = null,
     ProcessExecutionInstrumentation? processInstrumentation = null
 ) : IUseCase<UpdateSubmissionResult, UpdateSubmissionRequest>
 {
     private readonly UpdateSubmissionUseCaseInstrumentation _instrumentation =
         instrumentation ?? new UpdateSubmissionUseCaseInstrumentation(NullLogger<UpdateSubmissionUseCase>.Instance);
-
-    private readonly ValidationOptions _options =
-        validationOptions?.Value ?? new ValidationOptions();
 
     public async Task<Result<UpdateSubmissionResult>> ExecuteAsync(UpdateSubmissionRequest request, CancellationToken cancellationToken = default)
     {
@@ -59,19 +50,17 @@ public class UpdateSubmissionUseCase(
                 session.Value.SchemaVersion,
                 finalisedErr,
                 outcomeStatus: "Rejected",
-                identifier: BuildIdentifier(session.Value.IdentifierType, session.Value.IdentifierValue, session.Value.Urn),
+                identifier: evaluationService.BuildAuditIdentifier(session.Value),
                 cancellationToken: cancellationToken);
 
             return finalisedErr;
         }
 
-        var schema = await scope.ExecuteAsync(
-            SubmissionProcessCatalog.SchemaResolution,
-            () => registry.GetExplicitSchemaAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                cancellationToken),
-            resolved => new ProcessStepDetails(Summary: $"{resolved.Metadata.Name} v{resolved.Metadata.Version}"));
+        var schema = await evaluationService.ResolveSchemaAsync(
+            session.Value.SchemaName,
+            session.Value.SchemaVersion,
+            scope,
+            cancellationToken);
 
         if (schema.IsFailure)
         {
@@ -85,90 +74,43 @@ public class UpdateSubmissionUseCase(
             return schema.Error;
         }
 
-        var draftItemsResult = await scope.ExecuteAsync(
-            SubmissionProcessCatalog.GetDraftItems,
-            async () =>
-            {
-                var raw = await infrastructure.GetDraftItemsAsync(request.SubmissionId, cancellationToken);
-                return raw ?? Result<IReadOnlyList<SubmissionDraftItem>>.Success([]);
-            },
-            items => new ProcessStepDetails(
-                ItemCount: items.Count,
-                Summary: items.Count == 0
-                    ? "No prior draft chunks"
-                    : $"Loaded {items.Count} prior draft chunk(s)"),
-            err => new ProcessStepDetails(
-                SubmissionProcessOutcome.Missing,
-                ItemCount: 0,
-                Summary: err.Description ?? err.Code));
-
-        var existingItems = draftItemsResult is { IsSuccess: true, Value: not null }
-            ? draftItemsResult.Value
-            : [];
-
-        var draftCountAfterSave = existingItems.Count + 1;
-        string payloadToValidate;
-
-        if (existingItems.Count > 0)
-        {
-            var payloadsToMerge = existingItems.Select(i => i.PayloadJson).Append(request.Payload).ToList();
-            var mergeResult = scope.ExecuteResultSync(
-                SubmissionProcessCatalog.DraftPayloadMerger,
-                () => DraftPayloadMerger.MergeJsonPayloads(payloadsToMerge),
-                _ => new ProcessStepDetails(
-                    ItemCount: payloadsToMerge.Count,
-                    Summary: $"Merged incoming patch with {existingItems.Count} prior draft chunk(s)"),
-                err => new ProcessStepDetails(
-                    SubmissionProcessOutcome.Failed,
-                    ItemCount: payloadsToMerge.Count,
-                    Summary: err.Description ?? err.Code));
-
-            if (mergeResult.IsFailure)
-            {
-                await scope.RecordErrorAuditAsync(
-                    session.Value.SchemaName,
-                    session.Value.SchemaVersion,
-                    mergeResult.Error,
-                    outcomeStatus: "Rejected",
-                    cancellationToken: cancellationToken);
-
-                return mergeResult.Error;
-            }
-
-            payloadToValidate = mergeResult.Value;
-        }
-        else
-        {
-            payloadToValidate = request.Payload;
-        }
-
-        var validationReport = await SubmissionValidationRunner.ValidateAsync(
-            scope,
-            validationService,
-            validator,
-            payloadToValidate,
-            schema.Value,
-            isDraftUpdate: true,
-            cancellationToken);
-
-        if (validationReport.IsFailure)
+        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, scope, cancellationToken);
+        var candidateResult = evaluationService.AssembleCandidateDraft(inventory, request.Payload, scope);
+        if (candidateResult.IsFailure)
         {
             await scope.RecordErrorAuditAsync(
                 session.Value.SchemaName,
                 session.Value.SchemaVersion,
-                validationReport.Error,
+                candidateResult.Error,
+                outcomeStatus: "Rejected",
+                cancellationToken: cancellationToken);
+
+            return candidateResult.Error;
+        }
+
+        var draftCountAfterSave = candidateResult.Value.DraftCountAfterSave;
+        var evaluation = await evaluationService.EvaluateResolvedPayloadAsync(
+            candidateResult.Value.MergedPayloadJson,
+            schema.Value,
+            session.Value,
+            isDraftUpdate: true,
+            scope,
+            cancellationToken);
+
+        if (evaluation.IsFailure)
+        {
+            await scope.RecordErrorAuditAsync(
+                session.Value.SchemaName,
+                session.Value.SchemaVersion,
+                evaluation.Error,
                 outcomeStatus: "Failed",
                 cancellationToken: cancellationToken);
 
-            return validationReport.Error;
+            return evaluation.Error;
         }
 
-        var errors = validationReport.Value.Errors;
-        var idEval = validationReport.Value.IdentifierEvaluation
-            ?? PayloadIdentifierExtractor.Evaluate(payloadToValidate, schema.Value, _options);
-        var auditIdentifier = idEval.Identifier is { } extracted
-            ? new SubmissionAuditIdentifier(extracted.Type, extracted.Value, extracted.AsPositiveInt)
-            : BuildIdentifier(session.Value.IdentifierType, session.Value.IdentifierValue, session.Value.Urn);
+        var errors = evaluation.Value.ValidationErrors;
+        var auditIdentifier = evaluation.Value.AuditIdentifier;
 
         var save = await scope.ExecuteAsync(
             SubmissionProcessCatalog.SaveDraftPayload,
@@ -230,12 +172,5 @@ public class UpdateSubmissionUseCase(
             NextSteps: guidance.NextSteps,
             Summary: guidance.Summary
         );
-    }
-
-    private static SubmissionAuditIdentifier? BuildIdentifier(string? type, string? value, int? urn)
-    {
-        return type is null && value is null && urn is null
-            ? null
-            : new SubmissionAuditIdentifier(type, value, urn);
     }
 }

@@ -186,9 +186,9 @@ public sealed class PayloadValidationService(
 
             if (!identifierEval.IsValid && identifierEval.ValidationError is not null)
             {
-                var normalizedIdentifierPath = NormalizePointerForDedupe(identifierEval.ValidationError.PropertyPath);
+                var normalizedIdentifierPath = PayloadIdentifierExtractor.NormalizePathForComparison(identifierEval.ValidationError.PropertyPath);
                 var alreadyReportedOnSamePath = errors.Any(e =>
-                    string.Equals(NormalizePointerForDedupe(e.PropertyPath), normalizedIdentifierPath, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(PayloadIdentifierExtractor.NormalizePathForComparison(e.PropertyPath), normalizedIdentifierPath, StringComparison.OrdinalIgnoreCase));
 
                 if (!alreadyReportedOnSamePath)
                 {
@@ -198,12 +198,5 @@ public sealed class PayloadValidationService(
         }
 
         return new PayloadValidationReport(errors, scope.Processes.ToArray(), identifierEval);
-    }
-
-    private static string NormalizePointerForDedupe(string? path)
-    {
-        return string.IsNullOrWhiteSpace(path)
-            ? string.Empty
-            : path.Trim().TrimStart('#').TrimEnd('/');
     }
 }

@@ -1,31 +1,22 @@
 using EstateDataCollection.Application.Abstraction;
-using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
-using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
 
 public class FinaliseSubmissionUseCase(
     ISubmissionInfrastructure infrastructure,
-    ISchemaRegistry registry,
-    ISchemaValidator validator,
+    ISubmissionEvaluationService evaluationService,
     FinaliseSubmissionUseCaseInstrumentation? instrumentation = null,
-    IPayloadValidationService? validationService = null,
-    IOptions<ValidationOptions>? validationOptions = null,
     ISubmissionAuditStore? auditStore = null,
     ProcessExecutionInstrumentation? processInstrumentation = null
 ) : IUseCase<FinaliseSubmissionResult, FinaliseSubmissionRequest>
 {
     private readonly FinaliseSubmissionUseCaseInstrumentation _instrumentation =
         instrumentation ?? new FinaliseSubmissionUseCaseInstrumentation(NullLogger<FinaliseSubmissionUseCase>.Instance);
-
-    private readonly ValidationOptions _options =
-        validationOptions?.Value ?? new ValidationOptions();
 
     public async Task<Result<FinaliseSubmissionResult>> ExecuteAsync(FinaliseSubmissionRequest request,
         CancellationToken cancellationToken = default)
@@ -61,56 +52,14 @@ public class FinaliseSubmissionUseCase(
                 session.Value.SchemaVersion,
                 alreadyErr,
                 outcomeStatus: "Rejected",
-                identifier: BuildIdentifier(session.Value.IdentifierType, session.Value.IdentifierValue, session.Value.Urn),
+                identifier: evaluationService.BuildAuditIdentifier(session.Value),
                 cancellationToken: cancellationToken);
 
             return alreadyErr;
         }
 
-        var draftItemsResult = await scope.ExecuteAsync(
-            SubmissionProcessCatalog.GetDraftItems,
-            async () =>
-            {
-                var raw = await infrastructure.GetDraftItemsAsync(request.SubmissionId, cancellationToken);
-                return raw ?? Result<IReadOnlyList<SubmissionDraftItem>>.Success([]);
-            },
-            items => new ProcessStepDetails(
-                ItemCount: items.Count,
-                Summary: items.Count == 0
-                    ? "No timestamped draft chunks listed"
-                    : $"Loaded {items.Count} draft chunk(s)"),
-            err => new ProcessStepDetails(
-                SubmissionProcessOutcome.Missing,
-                ItemCount: 0,
-                Summary: err.Description ?? err.Code));
-
-        var draftItems = draftItemsResult is { IsSuccess: true, Value: not null }
-            ? draftItemsResult.Value
-            : [];
-
-        Result<string> draftPayload;
-        if (draftItems.Count > 1)
-        {
-            draftPayload = scope.ExecuteResultSync(
-                SubmissionProcessCatalog.DraftPayloadMerger,
-                () => DraftPayloadMerger.Merge(draftItems),
-                _ => new ProcessStepDetails(
-                    ItemCount: draftItems.Count,
-                    Summary: $"Merged {draftItems.Count} timestamped draft chunk(s) into final candidate"),
-                err => new ProcessStepDetails(
-                    SubmissionProcessOutcome.Failed,
-                    ItemCount: draftItems.Count,
-                    Summary: err.Description ?? err.Code));
-        }
-        else
-        {
-            draftPayload = await scope.ExecuteAsync(
-                SubmissionProcessCatalog.GetDraftPayload,
-                () => infrastructure.GetDraftPayloadAsync(request.SubmissionId, cancellationToken),
-                payload => new ProcessStepDetails(
-                    ItemCount: Math.Max(1, draftItems.Count),
-                    Summary: $"Loaded {payload.Length} char draft JSON"));
-        }
+        var inventory = await evaluationService.LoadDraftInventoryAsync(request.SubmissionId, scope, cancellationToken);
+        var draftPayload = await evaluationService.AssembleStoredDraftAsync(request.SubmissionId, inventory, scope, cancellationToken);
 
         if (draftPayload.IsFailure)
         {
@@ -126,49 +75,27 @@ public class FinaliseSubmissionUseCase(
             return draftPayload.Error;
         }
 
-        var schema = await scope.ExecuteAsync(
-            SubmissionProcessCatalog.SchemaResolution,
-            () => registry.GetExplicitSchemaAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                cancellationToken),
-            resolved => new ProcessStepDetails(Summary: $"{resolved.Metadata.Name} v{resolved.Metadata.Version}"));
-
-        if (schema.IsFailure)
-        {
-            await scope.RecordErrorAuditAsync(
-                session.Value.SchemaName,
-                session.Value.SchemaVersion,
-                schema.Error,
-                outcomeStatus: "Failed",
-                cancellationToken: cancellationToken);
-
-            return schema.Error;
-        }
-
-        var validationReport = await SubmissionValidationRunner.ValidateAsync(
-            scope,
-            validationService,
-            validator,
+        var evaluation = await evaluationService.EvaluatePayloadAsync(
             draftPayload.Value,
-            schema.Value,
+            session.Value,
             isDraftUpdate: false,
+            scope,
             cancellationToken);
 
-        if (validationReport.IsFailure)
+        if (evaluation.IsFailure)
         {
             await scope.RecordErrorAuditAsync(
                 session.Value.SchemaName,
                 session.Value.SchemaVersion,
-                validationReport.Error,
+                evaluation.Error,
                 outcomeStatus: "Failed",
                 cancellationToken: cancellationToken);
 
-            return validationReport.Error;
+            return evaluation.Error;
         }
 
-        var validationErrors = validationReport.Value.Errors;
-        if (validationErrors is { Count: > 0 })
+        var validationErrors = evaluation.Value.ValidationErrors;
+        if (validationErrors.Count > 0)
         {
             _instrumentation.ValidationFailed(request.SubmissionId, validationErrors.Count);
             var contractErr = Error.Validation(ErrorCodes.SchemaContractViolation, errors: validationErrors);
@@ -185,15 +112,7 @@ public class FinaliseSubmissionUseCase(
             return contractErr;
         }
 
-        var identifierEval = validationReport.Value.IdentifierEvaluation
-            ?? scope.ExecuteSync(
-                SubmissionProcessCatalog.IdentifierExtractor,
-                () => PayloadIdentifierExtractor.Evaluate(draftPayload.Value, schema.Value, _options),
-                eval => !eval.IsValid && eval.ValidationError is not null
-                    ? new ProcessStepDetails(SubmissionProcessOutcome.ValidationErrorsFound, Summary: eval.ValidationError.Message)
-                    : new ProcessStepDetails(
-                        Summary: eval.Identifier is { } id ? $"{id.Type}={id.Value}" : "Not required by schema"));
-
+        var identifierEval = evaluation.Value.IdentifierEvaluation;
         if (!identifierEval.IsValid)
         {
             _instrumentation.InvalidUrn(request.SubmissionId, 0);
@@ -212,9 +131,7 @@ public class FinaliseSubmissionUseCase(
 
         var extractedIdentifier = identifierEval.Identifier;
         var resolvedUrn = extractedIdentifier?.AsPositiveInt ?? 0;
-        var auditIdentifier = extractedIdentifier is not null
-            ? new SubmissionAuditIdentifier(extractedIdentifier.Value.Type, extractedIdentifier.Value.Value, resolvedUrn > 0 ? resolvedUrn : null)
-            : null;
+        var auditIdentifier = evaluation.Value.AuditIdentifier;
 
         var isLegacyCompatibleUrnCall = extractedIdentifier is null ||
             (resolvedUrn > 0 && string.Equals(extractedIdentifier.Value.Type, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase));
@@ -282,12 +199,5 @@ public class FinaliseSubmissionUseCase(
             Identifier: extractedIdentifier?.Value,
             IdentifierType: extractedIdentifier?.Type
         );
-    }
-
-    private static SubmissionAuditIdentifier? BuildIdentifier(string? type, string? value, int? urn)
-    {
-        return type is null && value is null && urn is null
-            ? null
-            : new SubmissionAuditIdentifier(type, value, urn);
     }
 }

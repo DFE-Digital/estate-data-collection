@@ -5,6 +5,7 @@ using EstateDataCollection.Application.UseCases.Submissions;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionDetail;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatistics;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissions;
+using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
@@ -117,7 +118,9 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
         registry.GetExplicitSchemaAsync("edc_payload", 1, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Success(resolved));
 
-        var sut = new GetSubmissionDetailUseCase(infra, queryRepo, auditStore, registry, validator);
+        var validationService = new PayloadValidationService(validator, new JsonLogicValidator());
+        var evaluationService = new SubmissionEvaluationService(infra, registry, validationService);
+        var sut = new GetSubmissionDetailUseCase(infra, queryRepo, auditStore, evaluationService);
         var detail = (await sut.ExecuteAsync(new GetSubmissionDetailRequest(session.SubmissionId))).ShouldSucceed();
 
         detail.DraftItems.Should().HaveCount(2);

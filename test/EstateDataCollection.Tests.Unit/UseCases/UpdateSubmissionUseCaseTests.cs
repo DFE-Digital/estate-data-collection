@@ -1,5 +1,7 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Application.Models.Options;
+using EstateDataCollection.Application.UseCases.Submissions;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Schema;
@@ -11,6 +13,7 @@ using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
 using AwesomeAssertions;
 using Json.Schema;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
@@ -25,7 +28,10 @@ public class UpdateSubmissionUseCaseTests
 
     public UpdateSubmissionUseCaseTests()
     {
-        _sut = new UpdateSubmissionUseCase(_infrastructure, _registry, _validator);
+        var draftOptions = Options.Create(new ValidationOptions { ValidateIdentifierOnDraftUpdate = false });
+        var validationService = new PayloadValidationService(_validator, new JsonLogicValidator(), draftOptions);
+        var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService, draftOptions);
+        _sut = new UpdateSubmissionUseCase(_infrastructure, evaluationService);
     }
 
     [Fact]
@@ -153,7 +159,8 @@ public class UpdateSubmissionUseCaseTests
             .Returns(Result.Success());
 
         var validationService = new PayloadValidationService(new JsonSchemaNetValidator(), new JsonLogicValidator());
-        var sut = new UpdateSubmissionUseCase(_infrastructure, _registry, new JsonSchemaNetValidator(), validationService: validationService);
+        var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService);
+        var sut = new UpdateSubmissionUseCase(_infrastructure, evaluationService);
 
         var result = await sut.ExecuteAsync(new UpdateSubmissionRequest(submissionId, invalidUnsafePayload));
 

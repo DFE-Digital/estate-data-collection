@@ -110,6 +110,31 @@ public static class PayloadIdentifierExtractor
             ValidationError: new ValidationError($"#{pointer}", message));
     }
 
+    internal static string NormalizePathForComparison(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = path.Trim();
+        if (trimmed.StartsWith("$.", StringComparison.Ordinal))
+        {
+            return ("/" + trimmed[2..].Replace('.', '/')).TrimEnd('/');
+        }
+
+        if (trimmed.StartsWith('$'))
+        {
+            trimmed = trimmed.TrimStart('$');
+        }
+        else
+        {
+            trimmed = trimmed.TrimStart('#');
+        }
+
+        return trimmed.TrimEnd('/');
+    }
+
     private static string FormatPointer(string? rawPath)
     {
         return SchemaIdentifierConfig.TryParsePointerSegments(rawPath, out var segments)

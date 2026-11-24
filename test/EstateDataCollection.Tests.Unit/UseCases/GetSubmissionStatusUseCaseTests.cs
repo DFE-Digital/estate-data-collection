@@ -1,10 +1,13 @@
 using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Application.UseCases.Submissions;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatus;
+using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Schema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
+using EstateDataCollection.Infrastructure.Validation;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;
@@ -22,7 +25,9 @@ public class GetSubmissionStatusUseCaseTests
 
     public GetSubmissionStatusUseCaseTests()
     {
-        _sut = new GetSubmissionStatusUseCase(_repository, _registry, _validator);
+        var validationService = new PayloadValidationService(_validator, new JsonLogicValidator());
+        var evaluationService = new SubmissionEvaluationService(_repository, _registry, validationService);
+        _sut = new GetSubmissionStatusUseCase(_repository, evaluationService);
     }
 
     [Fact]

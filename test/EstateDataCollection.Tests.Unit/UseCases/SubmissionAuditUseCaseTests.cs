@@ -1,11 +1,14 @@
 using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Application.UseCases.Submissions;
 using EstateDataCollection.Application.UseCases.Submissions.CreateSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
+using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
+using EstateDataCollection.Infrastructure.Validation;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;
@@ -109,11 +112,10 @@ public sealed class SubmissionAuditUseCaseTests
         SubmissionAuditEntry? recorded = null;
         await _auditStore.AppendAsync(Arg.Do<SubmissionAuditEntry>(e => recorded = e), Arg.Any<CancellationToken>());
 
+        var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, _validationService);
         var sut = new UpdateSubmissionUseCase(
             _infrastructure,
-            _registry,
-            _validator,
-            validationService: _validationService,
+            evaluationService,
             auditStore: _auditStore);
 
         var result = (await sut.ExecuteAsync(new UpdateSubmissionRequest(session.SubmissionId, SurveyPayloadFixtures.MissingUrnJson)))
@@ -139,10 +141,11 @@ public sealed class SubmissionAuditUseCaseTests
         SubmissionAuditEntry? recorded = null;
         await _auditStore.AppendAsync(Arg.Do<SubmissionAuditEntry>(e => recorded = e), Arg.Any<CancellationToken>());
 
+        var validationService = new PayloadValidationService(_validator, new JsonLogicValidator());
+        var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService);
         var sut = new FinaliseSubmissionUseCase(
             _infrastructure,
-            _registry,
-            _validator,
+            evaluationService,
             auditStore: _auditStore);
 
         var result = await sut.ExecuteAsync(new FinaliseSubmissionRequest(session.SubmissionId));
