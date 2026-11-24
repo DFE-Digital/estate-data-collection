@@ -55,7 +55,7 @@ jobs:
           EOF
 
       - name: Post or Update PR Sticky Comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const marker = '<!-- edc-pr-test-status -->';
