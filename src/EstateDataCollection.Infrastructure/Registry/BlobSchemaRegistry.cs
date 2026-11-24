@@ -564,13 +564,13 @@ public sealed class BlobSchemaRegistry(
         string blobPath,
         CancellationToken cancellationToken = default)
     {
-        var normalizedPath = DraftSchemaBlobPathParser.NormalizeDraftBlobPath(blobPath, options.Value.DraftContainerName);
-        DraftSchemaBlobPathParser.TryParseDraftBlobPathConvention(normalizedPath, out var pathSchemaName, out var pathVersion, out var basePrefix);
+        var normalisedPath = DraftSchemaBlobPathParser.NormaliseDraftBlobPath(blobPath, options.Value.DraftContainerName);
+        DraftSchemaBlobPathParser.TryParseDraftBlobPathConvention(normalisedPath, out var pathSchemaName, out var pathVersion, out var basePrefix);
 
-        if (DraftSchemaBlobPathParser.IsIgnoredCompanionBlob(normalizedPath, options.Value.DraftErrorBlobSuffix))
+        if (DraftSchemaBlobPathParser.IsIgnoredCompanionBlob(normalisedPath, options.Value.DraftErrorBlobSuffix))
         {
             return new DraftSchemaArtifact(
-                TriggerBlobPath: normalizedPath,
+                TriggerBlobPath: normalisedPath,
                 SchemaName: pathSchemaName,
                 Version: pathVersion,
                 RawSchemaJson: null,
@@ -583,25 +583,25 @@ public sealed class BlobSchemaRegistry(
         }
 
         var draftContainer = blobServiceClient.GetBlobContainerClient(options.Value.DraftContainerName);
-        var triggerBlob = draftContainer.GetBlobClient(normalizedPath);
+        var triggerBlob = draftContainer.GetBlobClient(normalisedPath);
 
         if (!await triggerBlob.ExistsAsync(cancellationToken))
         {
-            return Error.NotFound(ErrorCodes.SchemaNotFound, new { blobPath = normalizedPath });
+            return Error.NotFound(ErrorCodes.SchemaNotFound, new { blobPath = normalisedPath });
         }
 
         var content = (await triggerBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-        var consumedBlobs = new List<string> { normalizedPath };
+        var consumedBlobs = new List<string> { normalisedPath };
 
         string? rawSchemaJson = null;
         string? rawRulesJson = null;
         string? rawOdcsYaml = null;
 
-        if (_odcsParser.IsOdcsYaml(content, normalizedPath))
+        if (_odcsParser.IsOdcsYaml(content, normalisedPath))
         {
             rawOdcsYaml = content;
         }
-        else if (DraftSchemaBlobPathParser.IsRulesBlob(normalizedPath, content))
+        else if (DraftSchemaBlobPathParser.IsRulesBlob(normalisedPath, content))
         {
             rawRulesJson = content;
 
@@ -642,7 +642,7 @@ public sealed class BlobSchemaRegistry(
         if (metaLoadResult.IsFailure)
         {
             await RecordDraftIngestionFailureAsync(
-                normalizedPath,
+                normalisedPath,
                 pathSchemaName,
                 pathVersion,
                 [metaLoadResult.Error.Description ?? "Malformed draft .meta.json companion file."],
@@ -655,7 +655,7 @@ public sealed class BlobSchemaRegistry(
         var invalidFixtures = await TryLoadFixturesAsync(draftContainer, $"{basePrefix}.invalid.json", consumedBlobs, cancellationToken);
 
         return new DraftSchemaArtifact(
-            TriggerBlobPath: normalizedPath,
+            TriggerBlobPath: normalisedPath,
             SchemaName: pathSchemaName,
             Version: pathVersion,
             RawSchemaJson: rawSchemaJson,
@@ -700,8 +700,8 @@ public sealed class BlobSchemaRegistry(
         IReadOnlyList<string> errors,
         CancellationToken cancellationToken = default)
     {
-        var normalizedPath = DraftSchemaBlobPathParser.NormalizeDraftBlobPath(blobPath, options.Value.DraftContainerName);
-        var errorBlobPath = $"{normalizedPath}{options.Value.DraftErrorBlobSuffix}";
+        var normalisedPath = DraftSchemaBlobPathParser.NormaliseDraftBlobPath(blobPath, options.Value.DraftContainerName);
+        var errorBlobPath = $"{normalisedPath}{options.Value.DraftErrorBlobSuffix}";
         var draftContainer = blobServiceClient.GetBlobContainerClient(options.Value.DraftContainerName);
         var errorBlob = draftContainer.GetBlobClient(errorBlobPath);
 
@@ -710,7 +710,7 @@ public sealed class BlobSchemaRegistry(
         {
             var diagnosticPayload = new
             {
-                blobPath = normalizedPath,
+                blobPath = normalisedPath,
                 schemaName,
                 version,
                 failedAtUtc = DateTimeOffset.UtcNow,
