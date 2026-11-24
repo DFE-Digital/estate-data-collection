@@ -9,13 +9,12 @@ on:
       target_environment:
         description: 'Target Environment'
         required: true
-        default: 'development'
+        default: 'Dev'
         type: choice
         options:
-          - development
-          - test
-          - uat
-          - production
+          - Dev
+          - Test
+          - Prod
 
 permissions:
   id-token: write 
@@ -87,6 +86,7 @@ jobs:
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
           function-app-name: ${{ vars.AZURE_PUBLIC_FUNCTION_APP_NAME || vars.AZURE_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-public-linux-x64.zip
+          health-path: /api/about
 
       - name: Deploy Admin Function App to Azure
         id: deploy-admin
@@ -99,3 +99,4 @@ jobs:
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
           function-app-name: ${{ vars.AZURE_ADMIN_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-admin-linux-x64.zip
+          health-path: /manage

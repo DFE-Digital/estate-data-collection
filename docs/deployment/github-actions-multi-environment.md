@@ -1,6 +1,6 @@
 # GitHub Actions Multi-Environment Deployment Guide
 
-This document explains the CI/CD architecture for the **Estate Data Collection (EDC)** platform, deploying Azure Functions across three environments: **Development**, **Test**, and **Production**.
+This document explains the CI/CD architecture for the **Estate Data Collection (EDC)** platform, deploying Azure Functions across three environments: **Dev**, **Test**, and **Prod**.
 
 The solution uses a **segregated multi-workflow model** powered by reusable composite actions, automated CalVer versioning, isolated Azurite testing, and zero-trust Entra ID OIDC authentication.
 
@@ -14,7 +14,7 @@ Instead of a single monolithic pipeline, the responsibilities are split into thr
 .github/
 ├── actions/
 │   ├── setup-and-test/      # Reusable: SDK setup, 227 tests + Azurite, CalVer stamp, Public & Admin Linux x64 zips
-│   └── deploy-function/     # Reusable: OIDC login, az config-zip, /api/about smoke test
+│   └── deploy-function/     # Reusable: OIDC login, az config-zip, smoke test
 └── workflows/
     ├── ci-pr.yml            # 1. CI Only: Triggered on Pull Requests to main
     ├── cd-main.yml          # 2. CD Release: Triggered on merge to main (Dev -> Test -> Prod Gate)
@@ -31,18 +31,18 @@ flowchart TD
 
     subgraph CD_MAIN["2. cd-main.yml (Continuous Delivery on Main)"]
         MERGE["Merge into main"] --> BUILD["Build Release Bundle (CalVer: YYYY.MM.&lt;run&gt;)"]
-        BUILD --> DEV["Deploy Public &amp; Admin to 'development'"]
-        DEV --> SMOKE_DEV["Verify /api/about"]
-        SMOKE_DEV --> TEST["Deploy Public &amp; Admin to 'test'"]
-        TEST --> SMOKE_TEST["Verify /api/about"]
+        BUILD --> DEV["Deploy Public &amp; Admin to 'Dev'"]
+        DEV --> SMOKE_DEV["Verify /api/about &amp; /manage"]
+        SMOKE_DEV --> TEST["Deploy Public &amp; Admin to 'Test'"]
+        TEST --> SMOKE_TEST["Verify /api/about &amp; /manage"]
         SMOKE_TEST --> GATE{"GitHub Environment Gate\n(Required Reviewers / Approvals)"}
-        GATE -- Approved --> PROD["Deploy Public &amp; Admin to 'production'"]
+        GATE -- Approved --> PROD["Deploy Public &amp; Admin to 'Prod'"]
         PROD --> SMOKE_PROD["Live Verification"]
     end
 
     subgraph CD_SHA["3. deploy-by-sha.yml (Ad-Hoc / Rollback by Git SHA)"]
         DISPATCH["Manual workflow_dispatch\n(Input: SHA + Target Environment)"] --> BUILD_SHA["Checkout SHA &amp; Package with CalVer"]
-        BUILD_SHA --> DEPLOY_TARGET["Deploy Public &amp; Admin to Target (Dev / Test / UAT / Prod)"]
+        BUILD_SHA --> DEPLOY_TARGET["Deploy Public &amp; Admin to Target (Dev / Test / Prod)"]
     end
 ```
 
@@ -73,13 +73,13 @@ For each environment's App Registration / Service Principal in Azure:
 1. Navigate to **Microsoft Entra ID** $\to$ **App Registrations** $\to$ Select your EDC deployment principal.
 2. Go to **Certificates & secrets** $\to$ **Federated credentials** $\to$ **Add credential**.
 3. Choose scenario: **GitHub Actions deploying Azure resources**.
-4. Configure the entity based on GitHub environment:
+4. Configure the entity based on GitHub environment (note: organisations using immutable OIDC subjects include `@<owner_id>` and `@<repo_id>`):
 
 | Azure Environment | GitHub Entity | Subject Identifier Format |
 | :--- | :--- | :--- |
-| **Development** | Environment | `repo:<org>/<repo>:environment:development` |
-| **Test** | Environment | `repo:<org>/<repo>:environment:test` |
-| **Production** | Environment | `repo:<org>/<repo>:environment:production` |
+| **Dev** | Environment (`Dev`) | `repo:<org>/<repo>:environment:Dev` *(or immutable subject format)* |
+| **Test** | Environment (`Test`) | `repo:<org>/<repo>:environment:Test` *(or immutable subject format)* |
+| **Prod** | Environment (`Prod`) | `repo:<org>/<repo>:environment:Prod` *(or immutable subject format)* |
 
 ---
 
@@ -87,29 +87,30 @@ For each environment's App Registration / Service Principal in Azure:
 
 In your GitHub repository, navigate to **Settings** $\to$ **Environments** and create three environments:
 
-### Environment 1: `development`
+### Environment 1: `Dev`
+These are example enviroment values
 - **Protection Rules**: None (deploys automatically on merge to `main`).
 - **Variables**:
-  - `AZURE_RESOURCE_GROUP`: `rg-edc-dev-uksouth`
-  - `AZURE_PUBLIC_FUNCTION_APP_NAME`: `func-edc-public-dev-uksouth`
-  - `AZURE_ADMIN_FUNCTION_APP_NAME`: `func-edc-admin-dev-uksouth`
+  - `AZURE_RESOURCE_GROUP`: `rg-edc-dev`
+  - `AZURE_PUBLIC_FUNCTION_APP_NAME`: `func-edc-public-dev`
+  - `AZURE_ADMIN_FUNCTION_APP_NAME`: `func-edc-admin-dev`
 - **Secrets**:
   - `AZURE_CLIENT_ID`: Entra ID Application (client) ID for Dev
   - `AZURE_TENANT_ID`: Azure Tenant ID
   - `AZURE_SUBSCRIPTION_ID`: Azure Subscription ID for Dev
 
-### Environment 2: `test`
-- **Protection Rules**: Optional wait timer or automated test gate.
+### Environment 2: `Test`
+- **Protection Rules**: Optional wait timer, automated test gate, or required reviewers until provisioned.
 - **Variables**:
-  - `AZURE_RESOURCE_GROUP`: `rg-edc-test-uksouth`
-  - `AZURE_PUBLIC_FUNCTION_APP_NAME`: `func-edc-public-test-uksouth`
-  - `AZURE_ADMIN_FUNCTION_APP_NAME`: `func-edc-admin-test-uksouth`
+  - `AZURE_RESOURCE_GROUP`: `rg-edc-test`
+  - `AZURE_PUBLIC_FUNCTION_APP_NAME`: `func-edc-public-test`
+  - `AZURE_ADMIN_FUNCTION_APP_NAME`: `func-edc-admin-test`
 - **Secrets**:
   - `AZURE_CLIENT_ID`: Entra ID Application (client) ID for Test
   - `AZURE_TENANT_ID`: Azure Tenant ID
   - `AZURE_SUBSCRIPTION_ID`: Azure Subscription ID for Test
 
-### Environment 3: `production`
+### Environment 3: `Prod`
 - **Protection Rules**:
   - **Required Reviewers**: Add designated release engineers / tech leads who must approve before deployment begins.
   - **Deployment branches**: Restrict to `main`.
@@ -131,7 +132,7 @@ GitHub provides a built-in deployments dashboard at:
 *(or via the **Environments** link on the repository homepage).*
 
 This gives your team:
-- Side-by-side status of what is currently live across **Development**, **Test**, and **Production**.
+- Side-by-side status of what is currently live across **Dev**, **Test**, and **Prod**.
 - Full release history and approval audit logs.
 - Direct links to the live Function App endpoints.
 

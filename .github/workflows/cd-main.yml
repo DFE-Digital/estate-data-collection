@@ -55,7 +55,7 @@ jobs:
     needs: build-release-artifact
     runs-on: ubuntu-latest
     environment:
-      name: development
+      name: Dev
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
@@ -67,32 +67,34 @@ jobs:
         id: deploy-public
         uses: ./.github/actions/deploy-function
         with:
-          environment-name: development
+          environment-name: Dev
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
           function-app-name: ${{ vars.AZURE_PUBLIC_FUNCTION_APP_NAME || vars.AZURE_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-public-linux-x64.zip
+          health-path: /api/about
 
       - name: Deploy Admin Function App
         id: deploy-admin
         uses: ./.github/actions/deploy-function
         with:
-          environment-name: development
+          environment-name: Dev
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
           function-app-name: ${{ vars.AZURE_ADMIN_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-admin-linux-x64.zip
+          health-path: /manage
 
   deploy-test:
     name: Deploy to Test / UAT
     needs: deploy-dev
     runs-on: ubuntu-latest
     environment:
-      name: test
+      name: Test
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
@@ -104,32 +106,34 @@ jobs:
         id: deploy-public
         uses: ./.github/actions/deploy-function
         with:
-          environment-name: test
+          environment-name: Test
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
           function-app-name: ${{ vars.AZURE_PUBLIC_FUNCTION_APP_NAME || vars.AZURE_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-public-linux-x64.zip
+          health-path: /api/about
 
       - name: Deploy Admin Function App
         id: deploy-admin
         uses: ./.github/actions/deploy-function
         with:
-          environment-name: test
+          environment-name: Test
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
           function-app-name: ${{ vars.AZURE_ADMIN_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-admin-linux-x64.zip
+          health-path: /manage
 
   deploy-prod:
     name: Deploy to Production
     needs: deploy-test
     runs-on: ubuntu-latest
     environment:
-      name: production
+      name: Prod
       url: ${{ steps.deploy-public.outputs.app-url }}
     steps:
       - uses: actions/checkout@v4
@@ -141,22 +145,24 @@ jobs:
         id: deploy-public
         uses: ./.github/actions/deploy-function
         with:
-          environment-name: production
+          environment-name: Prod
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
           function-app-name: ${{ vars.AZURE_PUBLIC_FUNCTION_APP_NAME || vars.AZURE_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-public-linux-x64.zip
+          health-path: /api/about
 
       - name: Deploy Admin Function App
         id: deploy-admin
         uses: ./.github/actions/deploy-function
         with:
-          environment-name: production
+          environment-name: Prod
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
           function-app-name: ${{ vars.AZURE_ADMIN_FUNCTION_APP_NAME }}
           package-path: ./edc-functions-admin-linux-x64.zip
+          health-path: /manage

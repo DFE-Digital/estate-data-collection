@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This document is the authoritative guide for building, packaging, deploying, and verifying the **Estate Data Collection (EDC)** Azure Functions platform across all environments (**Development**, **Test**, and **Production**).
+This document is the authoritative guide for building, packaging, deploying, and verifying the **Estate Data Collection (EDC)** Azure Functions platform across all environments (**Dev**, **Test**, and **Prod**).
 
 ## Architectural Overview
 
@@ -42,13 +42,13 @@ The EDC platform operates on **Azure Functions v4 (Isolated Worker Model)** targ
 
 ## Environment Topology
 
-The platform is partitioned into three distinct Azure environments (plus optional `uat` in SHA dispatches):
+The platform is partitioned into three distinct Azure environments:
 
-| Environment | Purpose | Deployment Gate |
-| :--- | :--- | :--- 
-| **Development** | Integration testing & active development | Automated on merge to `main` |
-| **Test** | QA, automated integration, stakeholder sign-off |  Automated promotion after Dev verification |
-| **Production** | Live operational workload | **Manual Review Required** (GitHub Environment Gate) |
+| Environment | GitHub Environment Name | Purpose | Deployment Gate |
+| :--- | :--- | :--- | :--- |
+| **Development** | `Dev` | Integration testing & active development | Automated on merge to `main` |
+| **Test** | `Test` | QA, automated integration, stakeholder sign-off | Automated promotion after Dev verification (or gated until provisioned) |
+| **Production** | `Prod` | Live operational workload | **Manual Review Required** (GitHub Environment Gate) |
 
 ---
 
@@ -62,9 +62,9 @@ Continuous Delivery is driven by [`.github/workflows/cd-main.yml`](file:///.gith
 flowchart LR
     Merge["Merge PR to main"] --> Build["Test (227 Tests + Azurite) &amp; Package\n(CalVer: YYYY.MM.&lt;run&gt;)"]
     Build --> Dev["Deploy Public &amp; Admin to Dev"]
-    Dev --> SmokeDev{"Smoke Test\n/api/about"}
+    Dev --> SmokeDev{"Smoke Test\n/api/about &amp; /manage"}
     SmokeDev -- OK --> Test["Deploy Public &amp; Admin to Test"]
-    Test --> SmokeTest{"Smoke Test\n/api/about"}
+    Test --> SmokeTest{"Smoke Test\n/api/about &amp; /manage"}
     SmokeTest -- OK --> Gate{"Environment Gate\n(Approval Required)"}
     Gate -- Approved --> Prod["Deploy Public &amp; Admin to Prod"]
     Prod --> SmokeProd["Live Verification"]
@@ -75,12 +75,12 @@ flowchart LR
    - Computes CalVer (`YYYY.MM.<run_number>`, e.g., `2026.11.42`).
    - Runs all **227** unit and integration tests against an Azurite service container (each run executes inside isolated `test-{runId}-*` containers per [ADR 0021](decisions/0021-isolated-ephemeral-azurite-test-containers.md)).
    - Builds and zips `edc-functions-public-linux-x64.zip` and `edc-functions-admin-linux-x64.zip`.
-   - Deploys to **Development** via Entra ID OIDC and checks `/api/about`.
-   - Promotes the exact artifacts to **Test**, then waits at the **Production** approval gate.
+   - Deploys to **Dev** via Entra ID OIDC and checks `/api/about` (Public) and `/manage` (Admin).
+   - Promotes the exact artifacts to **Test**, then waits at the **Prod** approval gate.
 
 ### Option B: On-Demand / Historical SHA Deployment
 
-For emergency hotfixes, rollbacks, or deploying a specific commit to `development`, `test`, `uat`, or `production`, use [`.github/workflows/deploy-by-sha.yml`](file:///.github/workflows/deploy-by-sha.yml):
+For emergency hotfixes, rollbacks, or deploying a specific commit to `Dev`, `Test`, or `Prod`, use [`.github/workflows/deploy-by-sha.yml`](file:///.github/workflows/deploy-by-sha.yml):
 
 1. Navigate to **GitHub** $\to$ **Actions** $\to$ **CD: Deploy by Commit SHA**.
 2. Click **Run workflow**, supply `commit_sha` (7–40 characters) and `target_environment`.
@@ -138,9 +138,9 @@ Deployments authenticate via **OpenID Connect (OIDC)** federated credentials—n
 
 | Environment | GitHub Federated Credential Subject Format |
 | :--- | :--- |
-| **Development** | `repo:<org>/<repo>:environment:development` |
-| **Test** | `repo:<org>/<repo>:environment:test` |
-| **Production** | `repo:<org>/<repo>:environment:production` |
+| **Dev** | `repo:<org>/<repo>:environment:Dev` *(or `repo:<org>@<owner_id>/<repo>@<repo_id>:environment:Dev` with immutable subjects)* |
+| **Test** | `repo:<org>/<repo>:environment:Test` *(or `repo:<org>@<owner_id>/<repo>@<repo_id>:environment:Test` with immutable subjects)* |
+| **Prod** | `repo:<org>/<repo>:environment:Prod` *(or `repo:<org>@<owner_id>/<repo>@<repo_id>:environment:Prod` with immutable subjects)* |
 
 ### 2. Required GitHub Environment Variables & Secrets
 
@@ -243,7 +243,7 @@ Expected `/api/about` response (`200 OK`):
 3. **`Blob storage container does not exist`**
    - Ensure `schemas`, `draft-schemas`, `payloads`, and `processed` exist (or enable self-healing container initialisation per [ADR 0016](decisions/0016-self-healing-storage-container-initialisation.md)).
 4. **GitHub Actions `Federated token validation failed`**
-   - Confirm the Entra ID federated credential subject matches `repo:<org>/<repo>:environment:<environment_name>`.
+   - Confirm the Entra ID federated credential subject matches `repo:<org>/<repo>:environment:<Dev|Test|Prod>` (or the immutable subject equivalent).
 
 ---
 

@@ -3,7 +3,7 @@ description: 'Authenticates via OIDC and deploys pre-built zip artifact to Azure
 
 inputs:
   environment-name:
-    description: 'Target environment name (development, test, production)'
+    description: 'Target environment name (Dev, Test, Prod)'
     required: true
   azure-client-id:
     description: 'Entra ID Client ID'
@@ -24,6 +24,10 @@ inputs:
     description: 'Path to the deployment zip package'
     required: false
     default: './edc-functions-linux-x64.zip'
+  health-path:
+    description: 'Relative HTTP path used for the post-deploy smoke test'
+    required: false
+    default: '/api/about'
 
 outputs:
   app-url:
@@ -51,10 +55,15 @@ runs:
           --name "${{ inputs.function-app-name }}" \
           --src "${{ inputs.package-path }}"
         
-        HOSTNAME=$(az functionapp show \
+        HOSTNAME=$(az resource show \
           --resource-group "${{ inputs.resource-group }}" \
+          --resource-type Microsoft.Web/sites \
           --name "${{ inputs.function-app-name }}" \
-          --query defaultHostName -o tsv)
+          --query properties.defaultHostName -o tsv)
+        
+        if [ -z "$HOSTNAME" ]; then
+          HOSTNAME="${{ inputs.function-app-name }}.azurewebsites.net"
+        fi
         
         APP_URL="https://${HOSTNAME}"
         echo "app_url=$APP_URL" >> "$GITHUB_OUTPUT"
@@ -64,13 +73,14 @@ runs:
       shell: bash
       run: |
         APP_URL="${{ steps.deploy.outputs.app_url }}"
-        echo "🔍 Running smoke test against $APP_URL/api/about"
+        HEALTH_PATH="${{ inputs.health-path }}"
+        echo "🔍 Running smoke test against ${APP_URL}${HEALTH_PATH}"
         
-        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/api/about" || echo "000")
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${APP_URL}${HEALTH_PATH}" || echo "000")
         echo "Endpoint HTTP Status: $HTTP_STATUS"
         
         if [ "$HTTP_STATUS" = "200" ]; then
           echo "Health check passed with 200 OK"
         else
-          echo "⚠Health check returned status $HTTP_STATUS (warming up instance)"
+          echo "⚠ Health check returned status $HTTP_STATUS (warming up instance or auth gated)"
         fi
