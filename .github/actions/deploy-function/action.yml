@@ -74,7 +74,7 @@ runs:
       run: |
         APP_URL="${{ steps.deploy.outputs.app_url }}"
         HEALTH_PATH="${{ inputs.health-path }}"
-        echo "🔍 Running smoke test against ${APP_URL}${HEALTH_PATH}"
+        echo "Running smoke test against ${APP_URL}${HEALTH_PATH}"
         
         HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${APP_URL}${HEALTH_PATH}" || echo "000")
         echo "Endpoint HTTP Status: $HTTP_STATUS"
@@ -82,5 +82,5 @@ runs:
         if [ "$HTTP_STATUS" = "200" ]; then
           echo "Health check passed with 200 OK"
         else
-          echo "⚠ Health check returned status $HTTP_STATUS (warming up instance or auth gated)"
+          echo "Health check returned status $HTTP_STATUS (warming up instance or auth gated)"
         fi
