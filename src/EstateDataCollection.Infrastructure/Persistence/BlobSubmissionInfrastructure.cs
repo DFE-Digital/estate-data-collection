@@ -6,6 +6,7 @@ using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Common.Extensions;
 using EstateDataCollection.Common.Results;
@@ -20,7 +21,8 @@ public class BlobSubmissionInfrastructure(
     BlobServiceClient blobServiceClient,
     IOptions<BlobSubmissionRepositoryOptions> options,
     BlobSubmissionInfrastructureInstrumentation? instrumentation = null,
-    IOptions<ValidationOptions>? validationOptions = null
+    IOptions<ValidationOptions>? validationOptions = null,
+    IIdentifierIndexRepository? identifierIndexRepository = null
 ) : ISubmissionInfrastructure
 {
     private readonly BlobSubmissionInfrastructureInstrumentation _instrumentation =
@@ -386,6 +388,28 @@ public class BlobSubmissionInfrastructure(
 
             // Best-effort cleanup of the working draft.json snapshot; timestamped chunks under drafts/ remain for Admin inspection
             await SafeDeleteIfExistsAsync(draftBlob);
+
+            if (identifierIndexRepository is not null && !string.IsNullOrWhiteSpace(identifierValue))
+            {
+                var effectiveType = string.IsNullOrWhiteSpace(identifierType)
+                    ? _defaultIdentifierType
+                    : identifierType.Trim();
+
+                var indexEntry = new IdentifierIndexEntry(
+                    SubmissionId: submissionId,
+                    SchemaName: schemaName,
+                    SchemaVersion: schemaVersion,
+                    Status: "Finalised",
+                    UpdatedAtUtc: DateTimeOffset.UtcNow,
+                    PayloadPath: targetBlobName,
+                    ProcessedBundlePrefix: bundlePrefix);
+
+                await identifierIndexRepository.UpsertEntryAsync(
+                    effectiveType,
+                    identifierValue.Trim(),
+                    indexEntry,
+                    cancellationToken);
+            }
 
             _instrumentation.PayloadPromotedToProcessed(
                 submissionId,

@@ -30,7 +30,15 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
 
         var data = result.ShouldBeApiSuccess<GetValidationEnginesResult>(StatusCodes.Status200OK);
         data.Engines.Select(e => e.EngineId).Should().BeEquivalentTo(
-            ["json-schema", "jsonlogic", "cel", "unique", "identifier-extractor"]);
+        [
+            "json-schema",
+            "jsonlogic",
+            "cel",
+            "unique",
+            "identifier-extractor",
+            "cross-submission-enrichment",
+            "reference-data-enrichment"
+        ]);
     }
 
     [Theory]

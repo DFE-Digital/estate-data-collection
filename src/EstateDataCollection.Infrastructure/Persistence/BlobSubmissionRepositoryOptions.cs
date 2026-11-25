@@ -26,4 +26,10 @@ public class BlobSubmissionRepositoryOptions : Common.Markers.IOption<BlobSubmis
 
     [Required, MinLength(1)]
     public string ProcessedBlobNameFormat { get; init; } = "urn={establishmentIdentifier}/schema={schemaName}/v={schemaVersion}/{submissionId}/payload.json";
+
+    [Required, MinLength(1)]
+    public string IdentifierIndexPrefix { get; init; } = "identifier-index/";
+
+    [Required, MinLength(1)]
+    public string ReferenceDataContainerName { get; init; } = "reference-data";
 }

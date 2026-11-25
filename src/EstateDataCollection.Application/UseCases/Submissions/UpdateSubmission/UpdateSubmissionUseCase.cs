@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
@@ -9,7 +10,8 @@ namespace EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission
 public class UpdateSubmissionUseCase(
     ISubmissionInfrastructure infrastructure,
     ISubmissionEvaluationService evaluationService,
-    UpdateSubmissionUseCaseInstrumentation? instrumentation = null
+    UpdateSubmissionUseCaseInstrumentation? instrumentation = null,
+    IIdentifierIndexRepository? identifierIndexRepository = null
 ) : IUseCase<UpdateSubmissionResult, UpdateSubmissionRequest>
 {
     private readonly UpdateSubmissionUseCaseInstrumentation _instrumentation =
@@ -101,6 +103,25 @@ public class UpdateSubmissionUseCase(
         {
             _instrumentation.DraftPayloadSaveFailed(request.SubmissionId, save.Error.Description ?? string.Empty);
             return save.Error;
+        }
+
+        if (identifierIndexRepository is not null &&
+            evaluation.Value.IdentifierEvaluation.Identifier is { } extractedId &&
+            !string.IsNullOrWhiteSpace(extractedId.Value))
+        {
+            var indexEntry = new IdentifierIndexEntry(
+                SubmissionId: request.SubmissionId,
+                SchemaName: session.Value.SchemaName,
+                SchemaVersion: session.Value.SchemaVersion,
+                Status: "Draft",
+                UpdatedAtUtc: DateTimeOffset.UtcNow,
+                PayloadPath: $"{request.SubmissionId}/draft.json");
+
+            await identifierIndexRepository.UpsertEntryAsync(
+                extractedId.Type,
+                extractedId.Value,
+                indexEntry,
+                cancellationToken);
         }
 
         var isValid = errors.Count == 0;

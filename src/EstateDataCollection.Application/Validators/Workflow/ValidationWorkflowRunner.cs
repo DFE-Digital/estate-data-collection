@@ -49,14 +49,27 @@ public sealed class ValidationWorkflowRunner : IValidationWorkflowRunner
     public static ValidationWorkflowRunner CreateDefault(
         ISchemaValidator schemaValidator,
         IBusinessLogicValidator logicValidator,
-        ProcessExecutionInstrumentation? processInstrumentation = null)
+        ProcessExecutionInstrumentation? processInstrumentation = null,
+        IIdentifierIndexRepository? identifierIndexRepository = null,
+        IReferenceDataProvider? referenceDataProvider = null)
     {
-        IWorkflowStep[] steps =
-        [
+        var steps = new List<IWorkflowStep>
+        {
             new JsonSchemaWorkflowStep(schemaValidator),
-            new IdentifierExtractionWorkflowStep(),
-            new QualityRulesWorkflowStep(logicValidator)
-        ];
+            new IdentifierExtractionWorkflowStep()
+        };
+
+        if (identifierIndexRepository is not null)
+        {
+            steps.Add(new CrossSubmissionEnrichmentWorkflowStep(identifierIndexRepository));
+        }
+
+        if (referenceDataProvider is not null)
+        {
+            steps.Add(new ReferenceDataEnrichmentWorkflowStep(referenceDataProvider));
+        }
+
+        steps.Add(new QualityRulesWorkflowStep(logicValidator));
 
         return new ValidationWorkflowRunner(steps, definitions: null, processInstrumentation);
     }

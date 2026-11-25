@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Models.Options;
@@ -68,6 +69,21 @@ public sealed class PayloadValidationService(
             ? ValidationOperationKind.SubmissionDraft
             : ValidationOperationKind.SubmissionFinalise;
 
+        return ValidatePayloadWithTraceAsync(
+            rawPayloadJson,
+            schema,
+            operationKind,
+            ambientFixtures: null,
+            cancellationToken);
+    }
+
+    public Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceAsync(
+        string rawPayloadJson,
+        ResolvedSchema schema,
+        ValidationOperationKind operationKind,
+        IReadOnlyDictionary<string, JsonNode?>? ambientFixtures = null,
+        CancellationToken cancellationToken = default)
+    {
         var submissionId = SubmissionExecutionScope.Current?.SubmissionId is { } id && id != Guid.Empty
             ? id
             : (Guid?)null;
@@ -77,7 +93,8 @@ public sealed class PayloadValidationService(
             schema,
             rawPayloadJson,
             _options,
-            submissionId);
+            submissionId,
+            ambientFixtures);
 
         return _workflowRunner.RunAsync(context, cancellationToken);
     }

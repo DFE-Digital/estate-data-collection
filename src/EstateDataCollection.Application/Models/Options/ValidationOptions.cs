@@ -106,4 +106,15 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
     /// Optional global currency rounding tolerance override (e.g. 0.005m) for financial total equality checks.
     /// </summary>
     public decimal? CurrencyRoundingTolerance { get; init; }
+
+    /// <summary>
+    /// Optional local filesystem directory searched for reference datasets when blob storage is unavailable
+    /// or during offline test/verification runs.
+    /// </summary>
+    public string? ReferenceDataLocalPath { get; init; }
+
+    /// <summary>
+    /// Cache TTL (in seconds) for loaded reference datasets. Defaults to 300 seconds.
+    /// </summary>
+    public int ReferenceDataCacheSeconds { get; init; } = 300;
 }
