@@ -203,15 +203,19 @@ public sealed record SubmissionDetailViewModel(
         get
         {
             return _pendingErrors ??= (Detail?.PendingErrors ?? [])
-                .Select(e => new ValidationErrorItemViewModel(
-                    HasPropertyPath: !string.IsNullOrWhiteSpace(e.PropertyPath),
-                    PropertyPath: e.PropertyPath,
-                    Message: !string.IsNullOrWhiteSpace(e.RuleId) ? $"[{e.RuleId}] {e.Message}" : e.Message))
+                .Select(SeverityIssueGroupViewModel.ToItem)
                 .ToList();
         }
     }
 
     private IReadOnlyList<ValidationErrorItemViewModel>? _pendingErrors;
+
+    public IReadOnlyList<SeverityIssueGroupViewModel> PendingIssueGroups
+    {
+        get { return _pendingIssueGroups ??= SeverityIssueGroupViewModel.FromErrors(Detail?.PendingErrors); }
+    }
+
+    private IReadOnlyList<SeverityIssueGroupViewModel>? _pendingIssueGroups;
 
     public bool HasPendingErrors
     {
@@ -236,6 +240,28 @@ public sealed record SubmissionDetailViewModel(
     public string ProcessedBlobName
     {
         get { return Detail?.ProcessedArtifact?.BlobName ?? string.Empty; }
+    }
+
+    public string ProcessedBundlePrefix
+    {
+        get
+        {
+            var blobName = ProcessedBlobName;
+            if (string.IsNullOrWhiteSpace(blobName))
+            {
+                return string.Empty;
+            }
+
+            const string payloadSuffix = "/payload.json";
+            return blobName.EndsWith(payloadSuffix, StringComparison.OrdinalIgnoreCase)
+                ? blobName[..(blobName.Length - "payload.json".Length)]
+                : blobName;
+        }
+    }
+
+    public bool HasProcessedBundlePrefix
+    {
+        get { return !string.IsNullOrWhiteSpace(ProcessedBundlePrefix); }
     }
 
     public string ProcessedSha256
@@ -321,12 +347,7 @@ public sealed record SubmissionDetailViewModel(
                             };
 
                             var processErrors = (p.Errors ?? [])
-                                .Select(ve => new ValidationErrorItemViewModel(
-                                    HasPropertyPath: !string.IsNullOrWhiteSpace(ve.PropertyPath),
-                                    PropertyPath: ve.PropertyPath,
-                                    Message: !string.IsNullOrWhiteSpace(ve.RuleId)
-                                        ? $"[{ve.RuleId}] {ve.Message}"
-                                        : ve.Message))
+                                .Select(SeverityIssueGroupViewModel.ToItem)
                                 .ToList();
 
                             return new AuditProcessRowViewModel(
@@ -343,13 +364,10 @@ public sealed record SubmissionDetailViewModel(
                         .ToList();
 
                     var issues = (entry.Outcome.ValidationErrors ?? [])
-                        .Select(ve => new ValidationErrorItemViewModel(
-                            HasPropertyPath: !string.IsNullOrWhiteSpace(ve.PropertyPath),
-                            PropertyPath: ve.PropertyPath,
-                            Message: !string.IsNullOrWhiteSpace(ve.RuleId)
-                                ? $"[{ve.RuleId}] {ve.Message}"
-                                : ve.Message))
+                        .Select(SeverityIssueGroupViewModel.ToItem)
                         .ToList();
+
+                    var issueGroups = SeverityIssueGroupViewModel.FromAuditIssues(entry.Outcome.ValidationErrors);
 
                     var hasId = entry.Identifier is not null &&
                                 !string.IsNullOrWhiteSpace(entry.Identifier.Value);
@@ -378,7 +396,8 @@ public sealed record SubmissionDetailViewModel(
                         HasProcesses: processes.Count > 0,
                         ValidationIssues: issues,
                         HasValidationIssues: issues.Count > 0,
-                        RawAuditJson: JsonSerializer.Serialize(entry, AuditPrettyOptions));
+                        RawAuditJson: JsonSerializer.Serialize(entry, AuditPrettyOptions),
+                        ValidationIssueGroups: issueGroups);
                 })
                 .ToList();
         }

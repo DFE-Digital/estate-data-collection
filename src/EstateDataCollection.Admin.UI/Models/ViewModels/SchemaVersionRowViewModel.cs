@@ -18,4 +18,16 @@ public sealed record SchemaVersionRowViewModel(
     string DetailsUrl,
     string TestsUrl,
     string ScheduleUrl,
-    bool CanModifyLifecycle);
+    bool CanModifyLifecycle,
+    bool CanRunTests = true,
+    bool HasErrorReport = false,
+    string ErrorReportTagText = "",
+    string ErrorReportTagCssClass = "",
+    string ErrorSummary = "",
+    bool HasSignedOff = false,
+    string SignedOffDisplay = "",
+    bool IsDeleted = false,
+    string DeletedDisplay = "")
+{
+    public bool HasErrorSummary => !string.IsNullOrWhiteSpace(ErrorSummary);
+}

@@ -1,6 +1,8 @@
+using System.Globalization;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
@@ -35,6 +37,11 @@ public sealed record SchemaDetailViewModel(
         get { return Detail is null ? string.Empty : $"v{Detail.Version}"; }
     }
 
+    public string NextVersionDisplay
+    {
+        get { return Detail is null ? string.Empty : $"v{Detail.Version + 1}"; }
+    }
+
     public string BackToSchemaUrl
     {
         get
@@ -43,13 +50,52 @@ public sealed record SchemaDetailViewModel(
         }
     }
 
-    public bool CanModifyLifecycle
+    public bool IsRetired
+    {
+        get { return Detail is not null && string.Equals(Detail.State.Name, "Retired", StringComparison.OrdinalIgnoreCase); }
+    }
+
+    public bool IsInvalid
+    {
+        get { return Detail is not null && string.Equals(Detail.State.Name, "Invalid", StringComparison.OrdinalIgnoreCase); }
+    }
+
+    public bool IsUnvalidated
+    {
+        get { return Detail is not null && string.Equals(Detail.State.Name, "Unvalidated", StringComparison.OrdinalIgnoreCase); }
+    }
+
+    public bool IsDeleted
     {
         get
         {
             return Detail is not null &&
-                   !string.Equals(Detail.State.Name, "Retired", StringComparison.OrdinalIgnoreCase);
+                   (string.Equals(Detail.State.Name, "Deleted", StringComparison.OrdinalIgnoreCase) ||
+                    Detail.DeletedAtUtc.HasValue);
         }
+    }
+
+    public bool CanModifyLifecycle
+    {
+        get
+        {
+            return Detail is not null && !IsRetired && !IsDeleted && !IsInvalid && !IsUnvalidated;
+        }
+    }
+
+    public bool CanRunTests
+    {
+        get { return Detail is not null && !IsDeleted; }
+    }
+
+    public bool CanSignOff
+    {
+        get { return Detail is not null && IsUnvalidated; }
+    }
+
+    public bool CanDelete
+    {
+        get { return Detail is not null && !IsDeleted; }
     }
 
     public string ScheduleUrl
@@ -79,6 +125,26 @@ public sealed record SchemaDetailViewModel(
             return Detail is null
                 ? string.Empty
                 : AppRoutes.AdminUi.SchemaTestsRun(Detail.SchemaName, Detail.Version);
+        }
+    }
+
+    public string SignOffActionUrl
+    {
+        get
+        {
+            return Detail is null
+                ? string.Empty
+                : AppRoutes.AdminUi.SchemaSignOff(Detail.SchemaName, Detail.Version);
+        }
+    }
+
+    public string DeleteActionUrl
+    {
+        get
+        {
+            return Detail is null
+                ? string.Empty
+                : AppRoutes.AdminUi.SchemaDelete(Detail.SchemaName, Detail.Version);
         }
     }
 
@@ -153,6 +219,167 @@ public sealed record SchemaDetailViewModel(
                 null => "Default"
             };
         }
+    }
+
+    private SchemaValidationPolicy EffectivePolicy => Detail?.ValidationPolicy ?? SchemaValidationPolicy.Default;
+
+    public string FailOnMinimumSeverityDisplay
+    {
+        get { return EffectivePolicy.FailOnMinimumSeverity.ToString(); }
+    }
+
+    public string WorkflowPipelineKeyDisplay
+    {
+        get { return EffectivePolicy.WorkflowPipelineKey ?? "Default"; }
+    }
+
+    public string CrossSubmissionDraftPolicyDisplay
+    {
+        get { return EffectivePolicy.CrossSubmissionDraftPolicy.ToString(); }
+    }
+
+    public string NumericToleranceOverrideDisplay
+    {
+        get
+        {
+            return EffectivePolicy.NumericToleranceOverride?.ToString(CultureInfo.InvariantCulture) ?? "None";
+        }
+    }
+
+    public bool HasSignedOff
+    {
+        get { return !string.IsNullOrWhiteSpace(Detail?.SignedOffBy); }
+    }
+
+    public string SignedOffDisplay
+    {
+        get
+        {
+            if (!HasSignedOff)
+            {
+                return string.Empty;
+            }
+
+            return Detail?.SignedOffAtUtc is { } atUtc
+                ? $"{Detail.SignedOffBy} ({atUtc:yyyy-MM-dd HH:mm:ss 'UTC'})"
+                : Detail!.SignedOffBy!;
+        }
+    }
+
+    public string DeletedAtDisplay
+    {
+        get { return Detail?.DeletedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Deleted"; }
+    }
+
+    public bool HasErrorReport
+    {
+        get { return Detail?.HasErrorReport == true || Detail?.ErrorReport is not null; }
+    }
+
+    public bool HasErrorReportErrors
+    {
+        get
+        {
+            if (IsInvalid || HasErrorReportSyntaxErrors || HasErrorReportFixtureErrors)
+            {
+                return true;
+            }
+
+            var issues = Detail?.ErrorReport?.Issues;
+            return issues is not null &&
+                   ((issues.TryGetValue(RuleSeverity.Critical, out var critical) && critical.Count > 0) ||
+                    (issues.TryGetValue(RuleSeverity.Error, out var errors) && errors.Count > 0));
+        }
+    }
+
+    public string ErrorReportHeading
+    {
+        get
+        {
+            return HasErrorReportErrors
+                ? "Schema Error Report (.error.json) — Validation Failed"
+                : "Schema Diagnostic Report (.error.json) — Warnings Recorded";
+        }
+    }
+
+    public string ErrorReportTagText
+    {
+        get
+        {
+            if (IsInvalid)
+            {
+                return "Invalid (.error.json)";
+            }
+
+            return HasErrorReportErrors ? "Errors (.error.json)" : "Warnings (.error.json)";
+        }
+    }
+
+    public string ErrorReportTagCssClass
+    {
+        get { return HasErrorReportErrors ? "govuk-tag govuk-tag--red" : "govuk-tag govuk-tag--yellow"; }
+    }
+
+    public string ErrorReportSummaryText
+    {
+        get { return Detail?.ErrorReport?.Summary ?? Detail?.ErrorSummary ?? string.Empty; }
+    }
+
+    public bool HasErrorReportSummary
+    {
+        get { return !string.IsNullOrWhiteSpace(ErrorReportSummaryText); }
+    }
+
+    public bool HasErrorReportRecordedAt
+    {
+        get { return Detail?.ErrorReport is not null; }
+    }
+
+    public string ErrorReportRecordedAtDisplay
+    {
+        get { return Detail?.ErrorReport?.RecordedAtUtc.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? string.Empty; }
+    }
+
+    public IReadOnlyList<string> ErrorReportSyntaxErrors
+    {
+        get { return Detail?.ErrorReport?.SyntaxErrors ?? []; }
+    }
+
+    public bool HasErrorReportSyntaxErrors
+    {
+        get { return ErrorReportSyntaxErrors.Count > 0; }
+    }
+
+    public IReadOnlyList<string> ErrorReportFixtureErrors
+    {
+        get { return Detail?.ErrorReport?.FixtureErrors ?? []; }
+    }
+
+    public bool HasErrorReportFixtureErrors
+    {
+        get { return ErrorReportFixtureErrors.Count > 0; }
+    }
+
+    public IReadOnlyList<string> ErrorReportWarnings
+    {
+        get { return Detail?.ErrorReport?.Warnings ?? []; }
+    }
+
+    public bool HasErrorReportWarnings
+    {
+        get { return ErrorReportWarnings.Count > 0; }
+    }
+
+    public IReadOnlyList<SeverityIssueGroupViewModel> ErrorReportIssueGroups
+    {
+        get { return _errorReportIssueGroups ??= SeverityIssueGroupViewModel.FromDictionary(Detail?.ErrorReport?.Issues); }
+    }
+
+    private IReadOnlyList<SeverityIssueGroupViewModel>? _errorReportIssueGroups;
+
+    public bool HasErrorReportIssues
+    {
+        get { return ErrorReportIssueGroups.Count > 0; }
     }
 
     public bool HasLastTestRun

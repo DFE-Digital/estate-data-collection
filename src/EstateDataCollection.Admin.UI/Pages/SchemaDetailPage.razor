@@ -18,8 +18,18 @@
             </div>
         </div>
 
+        @if (Model.IsDeleted)
+        {
+            <div class="govuk-warning-text govuk-!-margin-bottom-4" id="schema-deleted-tombstone">
+                <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                <strong class="govuk-warning-text__text">
+                    <span class="govuk-visually-hidden">Warning</span>
+                    This schema version was deleted at @Model.DeletedAtDisplay. Its <code class="dfe-code-badge">.meta.json</code> and <code class="dfe-code-badge">.error.json</code> tombstones remain reserved; push any fix to <code class="dfe-code-badge">@Model.NextVersionDisplay</code>.
+                </strong>
+            </div>
+        }
+
         <div class="govuk-button-group govuk-!-margin-bottom-4">
-            <form method="post" action="@Model.RunTestsActionUrl" style="display: inline-block; margin: 0;">
             @if (Model.CanModifyLifecycle)
             {
                 <a href="@Model.ScheduleUrl"
@@ -27,15 +37,122 @@
                     Manage Schedule &amp; Lifecycle
                 </a>
             }
-            <a href="@Model.TestsUrl"
-               class="govuk-button govuk-button--secondary" data-module="govuk-button">
-                View Stored Tests (@Model.StoredTestsCount)
-            </a>
-                <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">
-                    Run Tests
-                </button>
-            </form>
+            @if (Model.CanRunTests)
+            {
+                <a href="@Model.TestsUrl"
+                   class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                    View Stored Tests (@Model.StoredTestsCount)
+                </a>
+                <form method="post" action="@Model.RunTestsActionUrl" style="display: inline-block; margin: 0;">
+                    <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                        Run Tests
+                    </button>
+                </form>
+            }
         </div>
+
+        @if (Model.CanSignOff)
+        {
+            <div class="dfe-pane govuk-!-margin-bottom-6" id="schema-signoff-panel">
+                <h2 class="govuk-heading-m govuk-!-margin-bottom-2">Sign Off Unvalidated Schema Version</h2>
+                <p class="govuk-body">
+                    This schema version completed ingestion with non-blocking warnings and requires administrator sign-off before it can be promoted to <code class="dfe-code-badge">Validated</code> and scheduled.
+                </p>
+                <form method="post" action="@Model.SignOffActionUrl">
+                    <div class="govuk-form-group">
+                        <label class="govuk-label govuk-label--s" for="signedOffBy">
+                            Signed off by (optional reviewer name or email)
+                        </label>
+                        <input class="govuk-input govuk-input--width-20" id="signedOffBy" name="signedOffBy" type="text" placeholder="admin-ui" />
+                    </div>
+                    <button type="submit" id="sign-off-schema-button" class="govuk-button govuk-!-margin-bottom-0" data-module="govuk-button">
+                        Sign Off &amp; Mark Validated
+                    </button>
+                </form>
+            </div>
+        }
+
+        @if (Model.HasErrorReport)
+        {
+            <div class="govuk-summary-card govuk-!-margin-bottom-6" id="schema-error-report-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">@Model.ErrorReportHeading</h2>
+                    <ul class="govuk-summary-card__actions">
+                        <li class="govuk-summary-card__action">
+                            <strong class="@Model.ErrorReportTagCssClass">@Model.ErrorReportTagText</strong>
+                        </li>
+                    </ul>
+                </div>
+                <div class="govuk-summary-card__content">
+                    @if (Model.HasErrorReportSummary)
+                    {
+                        <p class="govuk-body"><strong>Summary:</strong> @Model.ErrorReportSummaryText</p>
+                    }
+                    @if (Model.HasErrorReportRecordedAt)
+                    {
+                        <p class="govuk-body-s govuk-hint">Recorded at @Model.ErrorReportRecordedAtDisplay</p>
+                    }
+                    @if (Model.HasErrorReportSyntaxErrors)
+                    {
+                        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">Syntax &amp; Contract Errors</h3>
+                        <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-3">
+                            @foreach (var err in Model.ErrorReportSyntaxErrors)
+                            {
+                                <li>@err</li>
+                            }
+                        </ul>
+                    }
+                    @if (Model.HasErrorReportFixtureErrors)
+                    {
+                        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">Fixture Errors</h3>
+                        <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-3">
+                            @foreach (var err in Model.ErrorReportFixtureErrors)
+                            {
+                                <li>@err</li>
+                            }
+                        </ul>
+                    }
+                    @if (Model.HasErrorReportWarnings)
+                    {
+                        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">Warnings</h3>
+                        <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-3">
+                            @foreach (var warn in Model.ErrorReportWarnings)
+                            {
+                                <li>@warn</li>
+                            }
+                        </ul>
+                    }
+                    @if (Model.HasErrorReportIssues)
+                    {
+                        <h3 class="govuk-heading-s govuk-!-margin-bottom-2">Issues by Severity</h3>
+                        @foreach (var group in Model.ErrorReportIssueGroups)
+                        {
+                            <div class="govuk-!-margin-bottom-3">
+                                <div class="govuk-!-margin-bottom-1">
+                                    <strong class="@group.TagCssClass">@group.SeverityLabel (@group.Count)</strong>
+                                </div>
+                                <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                                    @foreach (var item in group.Items)
+                                    {
+                                        <li class="govuk-body-s">
+                                            @if (item.HasPropertyPath)
+                                            {
+                                                <code class="dfe-code-badge">@item.PropertyPath</code>
+                                            }
+                                            <span>@item.Message</span>
+                                            @if (item.HasEngineId)
+                                            {
+                                                <span class="govuk-hint">(@item.EngineId)</span>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
 
         <div class="govuk-grid-row">
             <div class="govuk-grid-column-full">
@@ -73,6 +190,29 @@
                             }
                         </dd>
                     </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Validation policy</dt>
+                        <dd class="govuk-summary-list__value">
+                            Fail-on minimum severity: <strong>@Model.FailOnMinimumSeverityDisplay</strong> &bull;
+                            Pipeline: <code class="dfe-code-badge">@Model.WorkflowPipelineKeyDisplay</code> &bull;
+                            Draft cross-submission policy: <strong>@Model.CrossSubmissionDraftPolicyDisplay</strong> &bull;
+                            Numeric tolerance override: <strong>@Model.NumericToleranceOverrideDisplay</strong>
+                        </dd>
+                    </div>
+                    @if (Model.HasSignedOff)
+                    {
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Signed off</dt>
+                            <dd class="govuk-summary-list__value">@Model.SignedOffDisplay</dd>
+                        </div>
+                    }
+                    @if (Model.IsDeleted)
+                    {
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Deleted (UTC)</dt>
+                            <dd class="govuk-summary-list__value">@Model.DeletedAtDisplay</dd>
+                        </div>
+                    }
                     <div class="govuk-summary-list__row">
                         <dt class="govuk-summary-list__key">Stored regression tests</dt>
                         <dd class="govuk-summary-list__value">
@@ -113,6 +253,21 @@
                         <pre class="dfe-code-pre">@Model.RawJsonSchema</pre>
                     </GovUkTabPanel>
                 </div>
+
+                @if (Model.CanDelete)
+                {
+                    <div class="dfe-pane govuk-!-margin-top-6 govuk-!-margin-bottom-0" id="schema-delete-panel">
+                        <h2 class="govuk-heading-m govuk-!-margin-bottom-2">Delete Schema Version (Preserve Tombstone)</h2>
+                        <p class="govuk-body">
+                            Deletes contract and fixture files for <code class="dfe-code-badge">@Model.SchemaName @Model.VersionDisplay</code> while keeping <code class="dfe-code-badge">.meta.json</code> and <code class="dfe-code-badge">.error.json</code> tombstones so this version key cannot be overwritten; fixes must be pushed to <code class="dfe-code-badge">@Model.NextVersionDisplay</code>.
+                        </p>
+                        <form method="post" action="@Model.DeleteActionUrl">
+                            <button type="submit" id="delete-schema-button" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" data-module="govuk-button">
+                                Delete Schema Version
+                            </button>
+                        </form>
+                    </div>
+                }
             </div>
         </div>
     }

@@ -1,0 +1,47 @@
+[
+  {
+    "description": "CCD-ELEM-V3-003 Critical timestamp inversion halts subsequent rule stages",
+    "expectedErrors": ["CCD-ELEM-V3-003"],
+    "mutatedFields": {
+      "survey.createdAt": "2026-04-12T10:00:00Z",
+      "survey.updatedAt": "2026-04-10T08:00:00Z"
+    }
+  },
+  {
+    "description": "CCD-ELEM-V3-001 Unknown productType triggers DependsOn skip for CCD-ELEM-V3-016 and CCD-ELEM-V3-019",
+    "expectedErrors": ["CCD-ELEM-V3-001"],
+    "mutatedFields": {
+      "elements[0].productType": "UnknownHeatPump"
+    }
+  },
+  {
+    "description": "CCD-ELEM-V3-002 & CCD-ELEM-V3-020 Grade D missing photoReference and repairs",
+    "expectedErrors": ["CCD-ELEM-V3-002", "CCD-ELEM-V3-020"],
+    "mutatedFields": {
+      "elements[0].occurrences[0].photoReference": null,
+      "elements[0].occurrences[0].repairs": []
+    }
+  },
+  {
+    "description": "CCD-ELEM-V3-019 Repair item does not belong to grandparent Boiler productType",
+    "expectedErrors": ["CCD-ELEM-V3-019"],
+    "mutatedFields": {
+      "elements[0].occurrences[0].repairs[0].repairItem": "Roof Tile"
+    }
+  },
+  {
+    "description": "CCD-ELEM-V3-026 Repair quantity exceeds parent replacementQuantity when units match",
+    "expectedErrors": ["CCD-ELEM-V3-026"],
+    "mutatedFields": {
+      "elements[0].occurrences[0].replacement.replacementQuantity": 2,
+      "elements[0].occurrences[0].replacement.replacementCost": 2400.0
+    }
+  },
+  {
+    "description": "CCD-ELEM-V3-048 & CCD-ELEM-V3-049 Real arithmetic mismatch (0.001) is not masked by float epsilon",
+    "expectedErrors": ["CCD-ELEM-V3-048", "CCD-ELEM-V3-049"],
+    "mutatedFields": {
+      "elements[0].occurrences[0].repairs[0].totalRepairCost": 0.301
+    }
+  }
+]

@@ -198,13 +198,15 @@ public sealed class AdminUiStatisticsAndSubmissionInspectorIntegrationTests(Azur
         draftFilterHtml.Should().Contain(inProgressId.ToString());
         draftFilterHtml.Should().NotContain(mergedDraftId.ToString());
 
-        // --- Admin UI Phase 4: Submission Detail Inspector (Draft + Finalised) ---
+        // --- Admin UI Phase 4 & 5: Submission Detail Inspector (Draft + Finalised + Severity + Bundle Layout) ---
         var detailPage = _harness.Get<GetSubmissionDetailPage>();
 
         var draftDetailRes = await detailPage.HandleAsync(HttpRequestBuilder.Empty(), inProgressId, CancellationToken.None);
         var draftDetailHtml = WebUtility.HtmlDecode(draftDetailRes.Should().BeOfType<ContentResult>().Subject.Content!);
         draftDetailHtml.Should().Contain(inProgressId.ToString());
         draftDetailHtml.Should().Contain("Validation Status & Next Steps");
+        draftDetailHtml.Should().Contain("Pending Validation Issues");
+        draftDetailHtml.Should().Contain("Error (");
         draftDetailHtml.Should().Contain("Current Merged Draft Preview");
         draftDetailHtml.Should().Contain("Draft Upload #1");
         draftDetailHtml.Should().Contain("Draft School");
@@ -213,6 +215,8 @@ public sealed class AdminUiStatisticsAndSubmissionInspectorIntegrationTests(Azur
         var finalisedDetailHtml = WebUtility.HtmlDecode(finalisedDetailRes.Should().BeOfType<ContentResult>().Subject.Content!);
         finalisedDetailHtml.Should().Contain(mergedDraftId.ToString());
         finalisedDetailHtml.Should().Contain("Processed Canonical Envelope");
+        finalisedDetailHtml.Should().Contain("Bundle folder:");
+        finalisedDetailHtml.Should().Contain($"urn=104521/schema={schemaA}/v=1/{mergedDraftId}/");
         finalisedDetailHtml.Should().Contain("SW1P 3BT");
         finalisedDetailHtml.Should().Contain("Draft Upload #1");
         finalisedDetailHtml.Should().Contain("Draft Upload #2");

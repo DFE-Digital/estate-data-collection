@@ -1,0 +1,112 @@
+{
+  "survey": {
+    "id": "SURV-CCD-V3-001",
+    "surveyName": "CCD Elemental Condition Survey v3",
+    "participantId": "PART-SURV-991",
+    "surveyorEmail": "lead.surveyor@education.gov.uk",
+    "surveyDate": "2026-04-10",
+    "isComplete": true,
+    "createdAt": "2026-04-10T08:30:00Z",
+    "updatedAt": "2026-04-10T15:45:00Z"
+  },
+  "school": {
+    "urn": "104521",
+    "name": "St Mary's Church of England Academy",
+    "localAuthorityCode": "380"
+  },
+  "elements": [
+    {
+      "id": "ELM-001",
+      "nrm3Code": "5.6.1",
+      "productType": "Boiler",
+      "elementCategory": "Mechanical",
+      "assetType": "block",
+      "siteId": "SITE-MAIN",
+      "blockId": "BLK-A",
+      "notAssessed": false,
+      "occurrences": [
+        {
+          "id": "OCC-001",
+          "surveyLevel": "Block",
+          "occurrenceExtentOrLocationDescription": "Plant Room Ground Floor Boiler 1",
+          "basisOfAssessment": "Seen",
+          "conditionGrade": "D",
+          "conditionScore": 18.5,
+          "conditionDescription": "Primary condensing boiler shell shows heavy corrosion and valve leakage.",
+          "priorityGrade": "4",
+          "hasAsbestosSuspected": false,
+          "photoReference": "PHOTO-BLK-A-BOILER-01.jpg",
+          "assessedAt": "2026-04-10T10:15:00Z",
+          "replacement": {
+            "uom": "nr",
+            "remLife": 2,
+            "replacementQuantity": 5,
+            "replacementRate": 1200.0,
+            "replacementCost": 6000.0
+          },
+          "repairs": [
+            {
+              "id": "REP-001",
+              "repairItem": "Boiler Valve",
+              "repairClassification": "X",
+              "repairDescription": "Replace corroded isolation valve assembly and pressure relief seal.",
+              "uom": "nr",
+              "repairQuantity": 3,
+              "repairItemRate": 0.1,
+              "year1Cost": 0.1,
+              "year2Cost": 0.2,
+              "year3Cost": 0.0,
+              "year4Cost": 0.0,
+              "year5Cost": 0.0,
+              "totalRepairCost": 0.3,
+              "urgentActionRequired": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ELM-002",
+      "nrm3Code": "2.3.1",
+      "productType": "Roof",
+      "elementCategory": "Fabric",
+      "assetType": "block",
+      "siteId": "SITE-MAIN",
+      "blockId": "BLK-B",
+      "notAssessed": false,
+      "occurrences": [
+        {
+          "id": "OCC-002",
+          "surveyLevel": "Block",
+          "occurrenceExtentOrLocationDescription": "South Wing Pitched Slate Roof",
+          "basisOfAssessment": "Seen",
+          "conditionGrade": "A",
+          "conditionScore": 95.0,
+          "conditionDescription": "Slate covering and ridge tiles intact with clean rainwater goods.",
+          "priorityGrade": "1",
+          "hasAsbestosSuspected": false,
+          "assessedAt": "2026-04-10T11:20:00Z",
+          "replacement": {
+            "uom": "m2",
+            "remLife": 25,
+            "replacementQuantity": 100.0,
+            "replacementRate": 85.0,
+            "replacementCost": 8500.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "ELM-003",
+      "nrm3Code": "2.5.1",
+      "productType": "Window",
+      "elementCategory": "Fabric",
+      "assetType": "floor",
+      "siteId": "SITE-MAIN",
+      "blockId": "BLK-B",
+      "floorId": "FLR-B1",
+      "notAssessed": true,
+      "notAssessedReason": "External scaffolding prevented safe close-up window inspection during this visit."
+    }
+  ]
+}

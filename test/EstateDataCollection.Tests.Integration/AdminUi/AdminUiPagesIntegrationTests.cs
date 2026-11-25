@@ -1,7 +1,9 @@
 using System.Net;
 using AwesomeAssertions;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
+using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.AzureFunctions.Public.Routes;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
@@ -127,6 +129,55 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
         errorContent.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
         errorContent.Content.Should().Contain("<!DOCTYPE html>");
         errorContent.Content.Should().Contain("govuk-error-summary");
+
+        // Multi-severity issues + contract analyzer findings render cleanly on failed verification
+        const string analyzerSchema = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["urn", "quantity"],
+          "properties": {
+            "urn": { "type": "integer" },
+            "quantity": { "type": "number", "maximum": 50 }
+          }
+        }
+        """;
+        const string analyzerRules = """
+        [
+          {
+            "id": "R-BAD-CASING",
+            "description": "Wrong casing field",
+            "engine": "cel",
+            "path": "/",
+            "severity": "ERROR",
+            "implementation": "this.Quantity >= 0"
+          },
+          {
+            "id": "R-WARN-LOOSE",
+            "description": "Bound exceeds schema maximum",
+            "engine": "cel",
+            "path": "/",
+            "severity": "WARNING",
+            "implementation": "this.quantity >= 100"
+          }
+        ]
+        """;
+        var analyzerReq = await CreateFormRequestAsync(
+            new Dictionary<string, string?>
+            {
+                ["inputMode"] = "json",
+                ["schemaJson"] = analyzerSchema,
+                ["rulesJson"] = analyzerRules,
+                ["validFixtureJson"] = """{"urn":100001,"quantity":10}"""
+            });
+        var analyzerPage = await workbenchVerify.HandleAsync(analyzerReq, CancellationToken.None);
+        var analyzerHtml = analyzerPage.Should().BeOfType<ContentResult>().Subject;
+        analyzerHtml.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
+        analyzerHtml.Content.Should().Contain("id=\"verify-issues-by-severity\"");
+        analyzerHtml.Content.Should().Contain("id=\"verify-analyzer-findings\"");
+        analyzerHtml.Content.Should().Contain("R-BAD-CASING");
+        analyzerHtml.Content.Should().Contain("R-WARN-LOOSE");
+        analyzerHtml.Content.Should().Contain("Warning");
     }
 
     [Fact]
@@ -283,6 +334,142 @@ public sealed class AdminUiPagesIntegrationTests(AzuriteFixture fixture)
         var publicEntry = publicSchema.ShouldBeApiSuccess<SchemaCatalogueEntry>();
         publicEntry.SchemaName.Should().Be(schemaName);
         publicEntry.ActiveVersion.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AdminUi_Should_Highlight_ErrorReports_SignOff_Unvalidated_And_Delete_Tombstone()
+    {
+        var schemaName = IntegrationEndpointHarness.UniqueName("ui_err_signoff");
+        const string schemaJson = """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["urn", "quantity"],
+          "properties": {
+            "urn": { "type": "integer", "minimum": 1 },
+            "quantity": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        }
+        """;
+        const string validFixture = """{"urn": 100001, "quantity": 60}""";
+
+        // 1. Submit v1 with hard analyzer error -> Invalid + .error.json
+        const string brokenRulesJson = """
+        [
+          {
+            "id": "R-MISSING-FIELD",
+            "description": "References missing field",
+            "engine": "cel",
+            "path": "/",
+            "severity": "ERROR",
+            "implementation": "this.nonExistentField > 0"
+          }
+        ]
+        """;
+        (await _harness.Get<PostSubmitSchemaEndpoint>().HandleAsync(
+                HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(
+                    SchemaJson: schemaJson,
+                    RulesJson: brokenRulesJson,
+                    SampleValidFixtures: [validFixture])),
+                schemaName,
+                1,
+                CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status201Created);
+
+        var dashV1Html = WebUtility.HtmlDecode(
+            (await _harness.Get<GetDashboardPage>().HandleAsync(HttpRequestBuilder.Empty(), CancellationToken.None))
+                .Should().BeOfType<ContentResult>().Subject.Content!);
+        dashV1Html.Should().Contain(schemaName);
+        dashV1Html.Should().Contain(".error.json");
+        dashV1Html.Should().Contain("Schema diagnostics require review");
+
+        var detailV1Html = WebUtility.HtmlDecode(
+            (await _harness.Get<GetSchemaDetailPage>().HandleAsync(HttpRequestBuilder.Empty(), schemaName, 1, CancellationToken.None))
+                .Should().BeOfType<ContentResult>().Subject.Content!);
+        detailV1Html.Should().Contain("id=\"schema-error-report-card\"");
+        detailV1Html.Should().Contain("Invalid (.error.json)");
+        detailV1Html.Should().Contain("R-MISSING-FIELD");
+        detailV1Html.Should().Contain("Validation policy");
+        detailV1Html.Should().NotContain("Manage Schedule & Lifecycle");
+
+        // 2. Delete v1 via Admin UI -> tombstone banner instructs pushing fix to v2
+        var deleteRes = await _harness.Get<PostSchemaDeleteEndpoint>().HandleAsync(
+            HttpRequestBuilder.Empty(),
+            schemaName,
+            1,
+            CancellationToken.None);
+        var deleteRedirect = deleteRes.Should().BeOfType<RedirectResult>().Subject;
+        deleteRedirect.Url.Should().Be($"/manage/schemas/{schemaName}/1/details?notice=deleted");
+
+        var deletedDetailHtml = WebUtility.HtmlDecode(
+            (await _harness.Get<GetSchemaDetailPage>().HandleAsync(
+                    new HttpRequestBuilder().WithQuery("notice", "deleted").Build(),
+                    schemaName,
+                    1,
+                    CancellationToken.None))
+                .Should().BeOfType<ContentResult>().Subject.Content!);
+        deletedDetailHtml.Should().Contain("id=\"schema-deleted-tombstone\"");
+        deletedDetailHtml.Should().Contain("push any fix to <code class=\"dfe-code-badge\">v2</code>");
+        deletedDetailHtml.Should().Contain("id=\"schema-error-report-card\"");
+        deletedDetailHtml.Should().Contain("Errors (.error.json)");
+        deletedDetailHtml.Should().NotContain("id=\"delete-schema-button\"");
+        deletedDetailHtml.Should().NotContain("View Stored Tests");
+
+        // 3. Submit v2 with Warning finding -> Unvalidated + .error.json + Sign-Off form
+        const string warningRulesJson = """
+        [
+          {
+            "id": "R-WARN-FLOOR",
+            "description": "Advisory quantity check",
+            "engine": "cel",
+            "path": "/",
+            "severity": "WARNING",
+            "implementation": "this.quantity >= 80"
+          }
+        ]
+        """;
+        (await _harness.Get<PostSubmitSchemaEndpoint>().HandleAsync(
+                HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(
+                    SchemaJson: schemaJson,
+                    RulesJson: warningRulesJson,
+                    SampleValidFixtures: [validFixture])),
+                schemaName,
+                2,
+                CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status201Created);
+
+        var detailV2UnvalidatedHtml = WebUtility.HtmlDecode(
+            (await _harness.Get<GetSchemaDetailPage>().HandleAsync(HttpRequestBuilder.Empty(), schemaName, 2, CancellationToken.None))
+                .Should().BeOfType<ContentResult>().Subject.Content!);
+        detailV2UnvalidatedHtml.Should().Contain("Unvalidated");
+        detailV2UnvalidatedHtml.Should().Contain("id=\"schema-signoff-panel\"");
+        detailV2UnvalidatedHtml.Should().Contain("Warnings (.error.json)");
+        detailV2UnvalidatedHtml.Should().Contain("R-WARN-FLOOR");
+        detailV2UnvalidatedHtml.Should().NotContain("Manage Schedule & Lifecycle");
+
+        // 4. Sign off v2 via Admin UI -> Validated + scheduling enabled
+        var signOffReq = await CreateFormRequestAsync(new Dictionary<string, string?>
+        {
+            ["signedOffBy"] = "qa.reviewer@education.gov.uk"
+        });
+        var signOffRes = await _harness.Get<PostSchemaSignOffEndpoint>().HandleAsync(
+            signOffReq,
+            schemaName,
+            2,
+            CancellationToken.None);
+        var signOffRedirect = signOffRes.Should().BeOfType<RedirectResult>().Subject;
+        signOffRedirect.Url.Should().Be($"/manage/schemas/{schemaName}/2/details?notice=signedoff");
+
+        var detailV2SignedOffHtml = WebUtility.HtmlDecode(
+            (await _harness.Get<GetSchemaDetailPage>().HandleAsync(
+                    new HttpRequestBuilder().WithQuery("notice", "signedoff").Build(),
+                    schemaName,
+                    2,
+                    CancellationToken.None))
+                .Should().BeOfType<ContentResult>().Subject.Content!);
+        detailV2SignedOffHtml.Should().Contain("qa.reviewer@education.gov.uk");
+        detailV2SignedOffHtml.Should().Contain("Validated");
+        detailV2SignedOffHtml.Should().Contain("Manage Schedule & Lifecycle");
     }
 
     [Fact]

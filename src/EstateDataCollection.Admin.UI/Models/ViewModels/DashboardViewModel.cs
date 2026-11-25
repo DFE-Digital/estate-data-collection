@@ -36,6 +36,36 @@ public sealed record DashboardViewModel(
         }
     }
 
+    public int ErrorReportVersionCount
+    {
+        get
+        {
+            return Schemas
+                .SelectMany(s => s.Versions)
+                .Count(v => v.HasErrorReport && !string.Equals(v.State.Name, "Deleted", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public int InvalidVersionCount
+    {
+        get
+        {
+            return Schemas
+                .SelectMany(s => s.Versions)
+                .Count(v => string.Equals(v.State.Name, "Invalid", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public int UnvalidatedVersionCount
+    {
+        get
+        {
+            return Schemas
+                .SelectMany(s => s.Versions)
+                .Count(v => string.Equals(v.State.Name, "Unvalidated", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
     public NotificationBannerViewModel? SuccessBannerModel
     {
         get { return NotificationBannerViewModel.Success(SuccessBanner); }
@@ -51,6 +81,20 @@ public sealed record DashboardViewModel(
                     title: "New version(s) ready to schedule",
                     detail:
                     "Contracts promoted from draft-schemas or submitted via the workbench remain in Validated state until you configure an effective window or activate them.")
+                : null;
+        }
+    }
+
+    public NotificationBannerViewModel? ErrorReportAttentionBannerModel
+    {
+        get
+        {
+            return ErrorReportVersionCount > 0
+                ? NotificationBannerViewModel.Info(
+                    message: $"{ErrorReportVersionCount} schema version(s) have a persisted .error.json diagnostic report ({InvalidVersionCount} Invalid, {UnvalidatedVersionCount} awaiting sign-off).",
+                    title: "Schema diagnostics require review",
+                    detail:
+                    "Inspect highlighted versions to review .error.json findings, sign off Unvalidated contracts with warnings, or delete broken versions so a fix can be published to version + 1.")
                 : null;
         }
     }

@@ -66,18 +66,28 @@
             @if (Model.HasPendingErrors)
             {
                 <h3 class="govuk-heading-s govuk-!-margin-top-3 govuk-!-margin-bottom-2">Pending Validation Issues</h3>
-                <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
-                    @foreach (var err in Model.PendingErrors)
-                    {
-                        <li>
-                            @if (err.HasPropertyPath)
+                @foreach (var group in Model.PendingIssueGroups)
+                {
+                    <div class="govuk-!-margin-bottom-2">
+                        <strong class="@group.TagCssClass">@group.SeverityLabel (@group.Count)</strong>
+                        <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                            @foreach (var err in group.Items)
                             {
-                                <code class="dfe-code-badge">@err.PropertyPath</code>
+                                <li>
+                                    @if (err.HasPropertyPath)
+                                    {
+                                        <code class="dfe-code-badge">@err.PropertyPath</code>
+                                    }
+                                    <span>@err.Message</span>
+                                    @if (err.HasEngineId)
+                                    {
+                                        <span class="govuk-hint">(@err.EngineId)</span>
+                                    }
+                                </li>
                             }
-                            <span>@err.Message</span>
-                        </li>
-                    }
-                </ul>
+                        </ul>
+                    </div>
+                }
             }
         </div>
 
@@ -126,21 +136,27 @@
                                     }
                                 </p>
 
-                                @if (audit.HasValidationIssues)
+                                @if (audit.HasValidationIssueGroups)
                                 {
                                     <h4 class="govuk-heading-s govuk-!-margin-bottom-1">Validation Issues Recorded</h4>
-                                    <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-3">
-                                        @foreach (var issue in audit.ValidationIssues)
-                                        {
-                                            <li class="govuk-body-s">
-                                                @if (issue.HasPropertyPath)
+                                    @foreach (var group in audit.ValidationIssueGroups!)
+                                    {
+                                        <div class="govuk-!-margin-bottom-2">
+                                            <strong class="@group.TagCssClass">@group.SeverityLabel (@group.Count)</strong>
+                                            <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                                                @foreach (var issue in group.Items)
                                                 {
-                                                    <code class="dfe-code-badge">@issue.PropertyPath</code>
+                                                    <li class="govuk-body-s">
+                                                        @if (issue.HasPropertyPath)
+                                                        {
+                                                            <code class="dfe-code-badge">@issue.PropertyPath</code>
+                                                        }
+                                                        <span>@issue.Message</span>
+                                                    </li>
                                                 }
-                                                <span>@issue.Message</span>
-                                            </li>
-                                        }
-                                    </ul>
+                                            </ul>
+                                        </div>
+                                    }
                                 }
 
                                 @if (audit.HasProcesses)
@@ -180,6 +196,7 @@
                                                                 @foreach (var err in proc.Errors!)
                                                                 {
                                                                     <li class="govuk-body-s">
+                                                                        <strong class="@err.SeverityTagCssClass">@err.SeverityName</strong>
                                                                         @if (err.HasPropertyPath)
                                                                         {
                                                                             <code class="dfe-code-badge">@err.PropertyPath</code>
@@ -233,6 +250,13 @@
                             </ul>
                         </div>
                         <div class="govuk-summary-card__content">
+                            @if (Model.HasProcessedBundlePrefix)
+                            {
+                                <p class="govuk-body-s govuk-!-margin-bottom-2">
+                                    Bundle folder: <code class="dfe-code-badge">@Model.ProcessedBundlePrefix</code>
+                                    (<code class="dfe-code-badge">payload.json</code>, <code class="dfe-code-badge">session.json</code>, <code class="dfe-code-badge">audit/*.json</code>)
+                                </p>
+                            }
                             <p class="govuk-body-s govuk-!-margin-bottom-2">
                                 Size: <strong>@Model.ProcessedSizeDisplay</strong> &bull;
                                 SHA-256: <code class="dfe-code-badge">@Model.ProcessedSha256</code>

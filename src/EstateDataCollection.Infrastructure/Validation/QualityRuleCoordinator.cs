@@ -541,16 +541,42 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
         IReadOnlyDictionary<string, JsonNode?>? additionalAmbientContext)
     {
         var baseAmbient = RuleTargetResolver.BuildAmbientContext(rootNode, _contextEnrichers);
-        if (additionalAmbientContext is null || additionalAmbientContext.Count == 0)
+        var merged = new Dictionary<string, JsonNode?>(baseAmbient, StringComparer.Ordinal);
+        if (additionalAmbientContext is not null)
         {
-            return baseAmbient;
+            foreach (var (key, value) in additionalAmbientContext)
+            {
+                merged[key] = value?.DeepClone();
+            }
         }
 
-        var merged = new Dictionary<string, JsonNode?>(baseAmbient, StringComparer.Ordinal);
-        foreach (var (key, value) in additionalAmbientContext)
+        var ambientRoot = merged.TryGetValue("ambient", out var existingAmbient) && existingAmbient is JsonObject existingObj
+            ? existingObj.DeepClone().AsObject()
+            : new JsonObject();
+
+        if (merged.TryGetValue("reference", out var refNode) && refNode is not null && !ambientRoot.ContainsKey("reference"))
         {
-            merged[key] = value?.DeepClone();
+            ambientRoot["reference"] = refNode.DeepClone();
         }
+        else if (ambientRoot.TryGetPropertyValue("reference", out var nestedRef) && nestedRef is not null && !merged.ContainsKey("reference"))
+        {
+            merged["reference"] = nestedRef.DeepClone();
+        }
+
+        if (merged.TryGetValue("cross_submission", out var crossNode) && crossNode is not null && !ambientRoot.ContainsKey("cross_submission"))
+        {
+            ambientRoot["cross_submission"] = crossNode.DeepClone();
+        }
+        else if (ambientRoot.TryGetPropertyValue("cross_submission", out var nestedCross) && nestedCross is not null && !merged.ContainsKey("cross_submission"))
+        {
+            merged["cross_submission"] = nestedCross.DeepClone();
+        }
+
+        if (ambientRoot.Count > 0)
+        {
+            merged["ambient"] = ambientRoot;
+        }
+
         return merged;
     }
 

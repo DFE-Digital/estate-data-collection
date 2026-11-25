@@ -78,10 +78,7 @@ public static class RuleTargetResolver
         {
             foreach (var (key, value) in childObj)
             {
-                if (!enriched.ContainsKey(key))
-                {
-                    enriched[key] = value?.DeepClone();
-                }
+                enriched[key] = value?.DeepClone();
             }
         }
 
@@ -199,11 +196,12 @@ public static class RuleTargetResolver
         {
             var targetPath = $"{currentJsonPointer}/{propertyName}";
             currentObj.TryGetPropertyValue(propertyName, out var childNode);
+            JsonNode[] targetAncestors = [.. ancestors, currentNode];
             accumulator.Add(new ResolvedRuleTarget(
                 targetPath,
                 currentNode,
                 childNode,
-                ancestors.ToArray(),
+                targetAncestors,
                 currentIndex));
             return;
         }

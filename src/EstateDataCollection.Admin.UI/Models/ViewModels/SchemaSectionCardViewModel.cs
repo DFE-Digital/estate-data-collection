@@ -23,15 +23,41 @@ public sealed record SchemaSectionCardViewModel(
                     string.Equals(v.IdentifierConfig!.Type, "None", StringComparison.OrdinalIgnoreCase);
                 var hasCustomId = hasIdConfig && !isIdDisabled;
 
-                var (testStatusTagText, testStatusTagCssClass) = ResolveTestStatus(v);
+                var stateName = v.State.Name;
+                var isRetired = string.Equals(stateName, "Retired", StringComparison.OrdinalIgnoreCase);
+                var isDeleted = string.Equals(stateName, "Deleted", StringComparison.OrdinalIgnoreCase) || v.DeletedAtUtc.HasValue;
+                var isInvalid = string.Equals(stateName, "Invalid", StringComparison.OrdinalIgnoreCase);
+                var isUnvalidated = string.Equals(stateName, "Unvalidated", StringComparison.OrdinalIgnoreCase);
+
+                var (testStatusTagText, testStatusTagCssClass) = ResolveTestStatus(v, isDeleted);
                 var hasTimestamp = v.LastTestRunAtUtc.HasValue;
                 var timestampDisplay = hasTimestamp
                     ? v.LastTestRunAtUtc!.Value.ToString("yyyy-MM-dd HH:mm 'UTC'")
                     : string.Empty;
 
+                var errorTagText = isInvalid
+                    ? ".error.json"
+                    : v.HasErrorReport
+                        ? "Warnings (.error.json)"
+                        : string.Empty;
+                var errorTagCss = isInvalid
+                    ? "govuk-tag govuk-tag--red"
+                    : "govuk-tag govuk-tag--yellow";
+
+                var hasSignedOff = !string.IsNullOrWhiteSpace(v.SignedOffBy);
+                var signedOffDisplay = hasSignedOff
+                    ? (v.SignedOffAtUtc.HasValue
+                        ? $"Signed off by {v.SignedOffBy} ({v.SignedOffAtUtc.Value:yyyy-MM-dd HH:mm} UTC)"
+                        : $"Signed off by {v.SignedOffBy}")
+                    : string.Empty;
+
+                var deletedDisplay = v.DeletedAtUtc.HasValue
+                    ? $"Deleted {v.DeletedAtUtc.Value:yyyy-MM-dd HH:mm} UTC (push fixes to v{v.Version + 1})"
+                    : (isDeleted ? $"Deleted (push fixes to v{v.Version + 1})" : string.Empty);
+
                 return new SchemaVersionRowViewModel(
                     Version: v.Version,
-                    StateTag: LifecycleTagViewModel.From(v.State.Name),
+                    StateTag: LifecycleTagViewModel.From(stateName),
                     TestStatusTagText: testStatusTagText,
                     TestStatusTagCssClass: testStatusTagCssClass,
                     HasTestRunTimestamp: hasTimestamp,
@@ -47,7 +73,16 @@ public sealed record SchemaSectionCardViewModel(
                     DetailsUrl: AppRoutes.AdminUi.SchemaDetail(v.SchemaName, v.Version),
                     TestsUrl: AppRoutes.AdminUi.SchemaTests(v.SchemaName, v.Version),
                     ScheduleUrl: AppRoutes.AdminUi.SchemaSchedule(v.SchemaName, v.Version),
-                    CanModifyLifecycle: !string.Equals(v.State.Name, "Retired", StringComparison.OrdinalIgnoreCase));
+                    CanModifyLifecycle: !isRetired && !isDeleted && !isInvalid && !isUnvalidated,
+                    CanRunTests: !isDeleted,
+                    HasErrorReport: v.HasErrorReport,
+                    ErrorReportTagText: errorTagText,
+                    ErrorReportTagCssClass: errorTagCss,
+                    ErrorSummary: v.ErrorSummary ?? string.Empty,
+                    HasSignedOff: hasSignedOff,
+                    SignedOffDisplay: signedOffDisplay,
+                    IsDeleted: isDeleted,
+                    DeletedDisplay: deletedDisplay);
             })
             .ToList();
 
@@ -61,8 +96,13 @@ public sealed record SchemaSectionCardViewModel(
             Versions: versions);
     }
 
-    private static (string TagText, string TagCssClass) ResolveTestStatus(SchemaVersionSummary v)
+    private static (string TagText, string TagCssClass) ResolveTestStatus(SchemaVersionSummary v, bool isDeleted)
     {
+        if (isDeleted)
+        {
+            return ("Tombstone", "govuk-tag govuk-tag--grey");
+        }
+
         if (v.LastTestRunPassed is null && !v.LastTestRunAtUtc.HasValue)
         {
             return ("Not run", "govuk-tag govuk-tag--grey");

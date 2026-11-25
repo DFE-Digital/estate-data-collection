@@ -1,0 +1,75 @@
+{
+  "cross_submission": {
+    "identifierType": "URN",
+    "identifierValue": "104521",
+    "known_site_ids": [
+      "SITE-MAIN",
+      "SITE-ANNEX"
+    ],
+    "known_block_ids": [
+      "BLK-A",
+      "BLK-B",
+      "BLK-C"
+    ],
+    "known_evidence_ids": [
+      "EVD-001"
+    ],
+    "has_draft_references": false,
+    "draft_submission_ids": [],
+    "submissions": [
+      {
+        "submissionId": "11111111-1111-1111-1111-111111111111",
+        "schemaName": "edc-survey-sites",
+        "schemaVersion": 1,
+        "status": "Finalised",
+        "siteIds": [
+          "SITE-MAIN",
+          "SITE-ANNEX"
+        ],
+        "blockIds": [
+          "BLK-A",
+          "BLK-B",
+          "BLK-C"
+        ]
+      }
+    ]
+  },
+  "reference": {
+    "product_types": [
+      "Boiler",
+      "Roof",
+      "Window",
+      "Electrical Distribution",
+      "Fire Alarm",
+      "External Paving"
+    ],
+    "nrm3_codes": [
+      "2.3.1",
+      "2.3.2",
+      "2.5.1",
+      "5.1.1",
+      "5.6.1",
+      "5.8.1",
+      "8.1.1"
+    ],
+    "repair_items_by_product_type": {
+      "Boiler": [
+        "Boiler Valve",
+        "Burner Assembly",
+        "Flue Replacement",
+        "Circulation Pump"
+      ],
+      "Roof": [
+        "Roof Tile",
+        "Lead Flashing",
+        "Flat Roof Felt",
+        "Gutter Replacement"
+      ],
+      "Window": [
+        "Window Glazing Unit",
+        "Window Frame",
+        "Ironmongery"
+      ]
+    }
+  }
+}

@@ -28,6 +28,11 @@ public sealed record WorkbenchVerifyViewModel(
         get { return HasRun && Error is null && Result is not null; }
     }
 
+    public bool HasReport
+    {
+        get { return HasRun && Result is not null; }
+    }
+
     public NotificationBannerViewModel? SuccessBanner
     {
         get
@@ -50,6 +55,79 @@ public sealed record WorkbenchVerifyViewModel(
     public int WarningCount
     {
         get { return Result?.Warnings?.Count ?? 0; }
+    }
+
+    public IReadOnlyList<string> Warnings
+    {
+        get { return Result?.Warnings ?? []; }
+    }
+
+    public bool AllWarningsAreUnknownInvalidFixtures
+    {
+        get
+        {
+            if (!HasWarnings || Result?.InvalidFixtureOutcomes is not { Count: > 0 } outcomes)
+            {
+                return false;
+            }
+
+            var unknownCount = outcomes.Count(o => o.ExpectedErrors is not { Count: > 0 });
+            return unknownCount > 0 && unknownCount == WarningCount;
+        }
+    }
+
+    public bool ShowWarningBullets
+    {
+        get { return HasWarnings && !AllWarningsAreUnknownInvalidFixtures; }
+    }
+
+    public IReadOnlyList<SeverityIssueGroupViewModel> IssueGroups
+    {
+        get { return _issueGroups ??= SeverityIssueGroupViewModel.FromDictionary(Result?.Issues); }
+    }
+
+    private IReadOnlyList<SeverityIssueGroupViewModel>? _issueGroups;
+
+    public bool HasIssueGroups
+    {
+        get { return IssueGroups.Count > 0; }
+    }
+
+    public IReadOnlyList<ValidationErrorItemViewModel> AnalyzerFindings
+    {
+        get
+        {
+            return _analyzerFindings ??= (Result?.AnalyzerFindings ?? [])
+                .Select(SeverityIssueGroupViewModel.ToItem)
+                .ToList();
+        }
+    }
+
+    private IReadOnlyList<ValidationErrorItemViewModel>? _analyzerFindings;
+
+    public bool HasAnalyzerFindings
+    {
+        get { return AnalyzerFindings.Count > 0; }
+    }
+
+    public IReadOnlyList<string> SyntaxErrors
+    {
+        get { return Result?.SyntaxErrors ?? []; }
+    }
+
+    public bool HasSyntaxErrors
+    {
+        get { return SyntaxErrors.Count > 0; }
+    }
+
+    public IReadOnlyList<string> FixtureErrors
+    {
+        get { return Result?.FixtureErrors ?? []; }
+    }
+
+    public bool HasFixtureErrors
+    {
+        get { return FixtureErrors.Count > 0; }
     }
 
     public bool HasInvalidFixtureOutcomes
@@ -129,7 +207,15 @@ public sealed record WorkbenchVerifyViewModel(
 
     public bool HasSummaryDetails
     {
-        get { return HasInvalidFixtureOutcomes || HasResolvedIdentifierConfig; }
+        get
+        {
+            return HasIssueGroups ||
+                   HasAnalyzerFindings ||
+                   HasSyntaxErrors ||
+                   HasFixtureErrors ||
+                   HasInvalidFixtureOutcomes ||
+                   HasResolvedIdentifierConfig;
+        }
     }
 
     public bool NoSummaryDetails

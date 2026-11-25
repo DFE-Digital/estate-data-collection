@@ -1,0 +1,1111 @@
+version: "3.0.0"
+kind: DataContract
+apiVersion: v3.2.0
+
+id: ccd-elemental-v3
+name: ccd-elemental-v3
+status: draft
+
+domain: capital-delivery
+tenant: DfE
+
+customProperties:
+  - property: failOnMinimumSeverity
+    value: Error
+  - property: crossSubmissionDraftPolicy
+    value: WarnOnDraftReferences
+
+servers:
+  - server: databricks
+    type: databricks
+    environment: dev
+    description: CCD Elemental Dataset v3 stored in Databricks Silver layer
+    catalog: eed_catalogue_30_bronze
+    schema: cde_edc_integration
+
+description:
+  purpose: >
+    Captures DfE Capital Condition Data (CCD) Elemental Dataset v3 submissions including
+    survey metadata, establishment identifier, surveyed elements, occurrences, replacement data,
+    and multi-year repair schedules.
+  usage: >
+    Used for public collection, multi-engine quality validation (JsonLogic, CEL, unique),
+    cross-submission site/block integrity, and reference-data verification.
+  limitations: >
+    Binary photo attachment upload and Microsoft Defender malware scanning are handled separately
+    by the upload manifest workflow; this contract validates photoReference format and requiredness.
+
+schema:
+  - name: submission
+    logicalType: object
+    description: Top-level CCD Elemental Dataset v3 payload container
+    quality:
+      - id: CCD-ELEM-V3-006
+        type: custom
+        engine: cel
+        severity: CRITICAL
+        stage: 10
+        order: 4
+        stopOnFailure: true
+        path: "/"
+        description: Submission must contain at least one surveyed element.
+        message: Submission must contain at least one element in 'elements'.
+        implementation: "size(this.elements) > 0"
+
+    properties:
+      - name: survey
+        logicalType: object
+        required: true
+        quality:
+          - id: CCD-ELEM-V3-003
+            type: custom
+            engine: jsonlogic
+            severity: CRITICAL
+            stage: 10
+            order: 1
+            stopOnFailure: true
+            path: survey
+            description: Survey updatedAt timestamp must be greater than or equal to createdAt.
+            message: Survey updatedAt cannot precede createdAt.
+            implementation:
+              ">=":
+                - var: survey.updatedAt
+                - var: survey.createdAt
+
+          - id: CCD-ELEM-V3-004
+            type: custom
+            engine: cel
+            severity: CRITICAL
+            stage: 10
+            order: 2
+            stopOnFailure: true
+            path: survey
+            description: Core survey identifiers (id, surveyName, participantId) must be non-empty.
+            message: Survey id, surveyName, and participantId must be populated.
+            implementation: "size(this.id) > 0 && size(this.surveyName) > 0 && size(this.participantId) > 0"
+
+          - id: CCD-ELEM-V3-056
+            type: custom
+            engine: cel
+            severity: ERROR
+            stage: 20
+            order: 10
+            path: survey
+            description: Completed surveys must include a surveyorEmail contact address.
+            message: surveyorEmail is required when survey.isComplete is true.
+            implementation: "!this.isComplete || (has(this.surveyorEmail) && this.surveyorEmail != null && size(this.surveyorEmail) > 0)"
+
+        properties:
+          - name: id
+            physicalType: string
+            logicalType: string
+            required: true
+            logicalTypeOptions:
+              pattern: "^SURV-[A-Za-z0-9-]+$"
+
+          - name: surveyName
+            physicalType: string
+            logicalType: string
+            required: true
+
+          - name: participantId
+            physicalType: string
+            logicalType: string
+            required: true
+
+          - name: surveyorEmail
+            physicalType: string
+            logicalType: string
+            required: false
+            logicalTypeOptions:
+              format: email
+
+          - name: surveyDate
+            physicalType: string
+            logicalType: date
+            required: true
+
+          - name: isComplete
+            physicalType: boolean
+            logicalType: boolean
+            required: true
+
+          - name: createdAt
+            physicalType: string
+            logicalType: timestamp
+            required: true
+
+          - name: updatedAt
+            physicalType: string
+            logicalType: timestamp
+            required: true
+
+      - name: school
+        logicalType: object
+        required: true
+        quality:
+          - id: CCD-ELEM-V3-005
+            type: custom
+            engine: cel
+            severity: CRITICAL
+            stage: 10
+            order: 3
+            stopOnFailure: true
+            path: school
+            description: Establishment identifier value must be non-empty.
+            message: Establishment identifier (school.urn) must not be blank.
+            implementation: "size(this.urn) > 0"
+
+        properties:
+          - name: urn
+            physicalType: string
+            logicalType: string
+            required: true
+
+          - name: name
+            physicalType: string
+            logicalType: string
+            required: true
+
+          - name: localAuthorityCode
+            physicalType: string
+            logicalType: string
+            required: false
+
+      - name: elements
+        logicalType: array
+        required: true
+        items:
+          logicalType: object
+          required: true
+          quality:
+            - id: CCD-ELEM-V3-001
+              type: custom
+              engine: cel
+              severity: ERROR
+              stage: 20
+              order: 1
+              dependsOn:
+                - CCD-ELEM-V3-006
+              path: "elements[]"
+              description: Element productType must exist in the authoritative CCD reference catalogue.
+              message: productType is not present in the CCD reference dataset.
+              implementation: "this.productType in ambient.reference.product_types"
+
+            - id: CCD-ELEM-V3-007
+              type: custom
+              engine: cel
+              severity: ERROR
+              stage: 20
+              order: 2
+              dependsOn:
+                - CCD-ELEM-V3-006
+              path: "elements[]"
+              description: Element nrm3Code must exist in the NRM3 reference dataset.
+              message: nrm3Code is not present in the NRM3 reference dataset.
+              implementation: "this.nrm3Code in ambient.reference.nrm3_codes"
+
+            - id: CCD-ELEM-V3-008
+              type: custom
+              engine: cel
+              severity: ERROR
+              stage: 20
+              order: 3
+              dependsOn:
+                - CCD-ELEM-V3-006
+              path: "elements[]"
+              description: Element siteId must match a site identifier in sibling cross-submission records.
+              message: siteId was not found in cross-submission known_site_ids for this establishment.
+              implementation: "this.siteId in ambient.cross_submission.known_site_ids"
+
+            - id: CCD-ELEM-V3-009
+              type: custom
+              engine: cel
+              severity: ERROR
+              stage: 20
+              order: 4
+              dependsOn:
+                - CCD-ELEM-V3-008
+              path: "elements[]"
+              description: Non-site elements must reference a valid blockId from sibling cross-submission records.
+              message: blockId must be provided and exist in cross-submission known_block_ids when assetType is block, floor, or space.
+              implementation: "this.assetType == 'site' || (has(this.blockId) && this.blockId != null && this.blockId in ambient.cross_submission.known_block_ids)"
+
+            - id: CCD-ELEM-V3-010
+              type: custom
+              engine: cel
+              severity: ERROR
+              stage: 20
+              order: 5
+              path: "elements[]"
+              description: Floor-level elements must specify floorId.
+              message: floorId is required when assetType is 'floor'.
+              implementation: "this.assetType != 'floor' || (has(this.floorId) && this.floorId != null && size(this.floorId) > 0)"
+
+            - id: CCD-ELEM-V3-011
+              type: custom
+              engine: cel
+              severity: ERROR
+              stage: 20
+              order: 6
+              path: "elements[]"
+              description: Space-level elements must specify both floorId and spaceId.
+              message: floorId and spaceId are required when assetType is 'space'.
+              implementation: "this.assetType != 'space' || (has(this.floorId) && this.floorId != null && size(this.floorId) > 0 && has(this.spaceId) && this.spaceId != null && size(this.spaceId) > 0)"
+
+            - id: CCD-ELEM-V3-012
+              type: custom
+              engine: jsonlogic
+              severity: ERROR
+              stage: 20
+              order: 7
+              path: "elements[]"
+              description: Elements marked as notAssessed must provide a non-empty notAssessedReason.
+              message: notAssessedReason is required when notAssessed is true.
+              implementation:
+                "if":
+                  - "==":
+                      - var: notAssessed
+                      - true
+                  - "and":
+                      - "!=":
+                          - var: notAssessedReason
+                          - null
+                      - ">":
+                          - var: notAssessedReason.length
+                          - 0
+                  - true
+
+            - id: CCD-ELEM-V3-013
+              type: custom
+              engine: cel
+              severity: ERROR
+              stage: 20
+              order: 8
+              path: "elements[]"
+              description: Assessed elements (notAssessed != true) must contain at least one occurrence.
+              message: Assessed elements must include at least one occurrence.
+              implementation: "(has(this.notAssessed) && this.notAssessed == true) || (has(this.occurrences) && this.occurrences != null && size(this.occurrences) > 0)"
+
+            - id: CCD-ELEM-V3-014
+              type: unique
+              engine: unique
+              severity: ERROR
+              stage: 20
+              order: 9
+              path: "elements[]"
+              description: Element id must be unique across the submission.
+              message: Duplicate element id detected in submission.
+              fields:
+                - id
+
+            - id: CCD-ELEM-V3-015
+              type: custom
+              engine: cel
+              severity: WARNING
+              stage: 20
+              order: 10
+              path: "elements[]"
+              description: Elements marked notAssessed should not normally contain occurrences.
+              message: Element is marked notAssessed but still includes occurrences.
+              implementation: "!(has(this.notAssessed) && this.notAssessed == true) || !has(this.occurrences) || this.occurrences == null || size(this.occurrences) == 0"
+
+          properties:
+            - name: id
+              physicalType: string
+              logicalType: string
+              required: true
+              logicalTypeOptions:
+                pattern: "^ELM-[A-Za-z0-9-]+$"
+
+            - name: nrm3Code
+              physicalType: string
+              logicalType: string
+              required: true
+
+            - name: productType
+              physicalType: string
+              logicalType: string
+              required: true
+
+            - name: elementCategory
+              physicalType: string
+              logicalType: string
+              required: true
+              enum:
+                - value: Fabric
+                - value: Mechanical
+                - value: Electrical
+                - value: External
+                - value: Special
+
+            - name: assetType
+              physicalType: string
+              logicalType: string
+              required: true
+              enum:
+                - value: site
+                - value: block
+                - value: floor
+                - value: space
+
+            - name: siteId
+              physicalType: string
+              logicalType: string
+              required: true
+
+            - name: blockId
+              physicalType: string
+              logicalType: string
+              required: false
+
+            - name: floorId
+              physicalType: string
+              logicalType: string
+              required: false
+
+            - name: spaceId
+              physicalType: string
+              logicalType: string
+              required: false
+
+            - name: notAssessed
+              physicalType: boolean
+              logicalType: boolean
+              required: false
+
+            - name: notAssessedReason
+              physicalType: string
+              logicalType: string
+              required: false
+
+            - name: occurrences
+              logicalType: array
+              required: false
+              items:
+                logicalType: object
+                quality:
+                  - id: CCD-ELEM-V3-016
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 1
+                    dependsOn:
+                      - CCD-ELEM-V3-001
+                    path: "elements[].occurrences[]"
+                    description: Assessed element occurrences must specify basisOfAssessment.
+                    message: basisOfAssessment is required for assessed element occurrences.
+                    implementation: "(has($parent.notAssessed) && $parent.notAssessed == true) || (has(this.basisOfAssessment) && this.basisOfAssessment != null)"
+
+                  - id: CCD-ELEM-V3-017
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 2
+                    path: "elements[].occurrences[]"
+                    description: Assessed element occurrences must specify conditionGrade.
+                    message: conditionGrade is required for assessed element occurrences.
+                    implementation: "(has($parent.notAssessed) && $parent.notAssessed == true) || (has(this.conditionGrade) && this.conditionGrade != null)"
+
+                  - id: CCD-ELEM-V3-018
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 3
+                    dependsOn:
+                      - CCD-ELEM-V3-017
+                    path: "elements[].occurrences[]"
+                    description: Condition grades B, C, and D require a descriptive conditionDescription (min 5 chars).
+                    message: conditionDescription (minimum 5 characters) is required when conditionGrade is B, C, or D.
+                    implementation: "!(has(this.conditionGrade) && this.conditionGrade in ['B', 'C', 'D']) || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) >= 5)"
+
+                  - id: CCD-ELEM-V3-002
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 4
+                    dependsOn:
+                      - CCD-ELEM-V3-017
+                    path: "elements[].occurrences[]"
+                    description: Grade C or D occurrences must declare a photoReference (binary attachment existence verified by upload manifest workflow).
+                    message: photoReference is required when conditionGrade is C or D.
+                    implementation: "!(has(this.conditionGrade) && this.conditionGrade in ['C', 'D']) || (has(this.photoReference) && this.photoReference != null && size(this.photoReference) > 0)"
+
+                  - id: CCD-ELEM-V3-020
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 5
+                    dependsOn:
+                      - CCD-ELEM-V3-017
+                    path: "elements[].occurrences[]"
+                    description: Grade D (Life Expired) occurrences must include at least one repair item.
+                    message: At least one repair entry is required when conditionGrade is D.
+                    implementation: "!(has(this.conditionGrade) && this.conditionGrade == 'D') || (has(this.repairs) && this.repairs != null && size(this.repairs) > 0)"
+
+                  - id: CCD-ELEM-V3-021
+                    type: custom
+                    engine: cel
+                    severity: WARNING
+                    stage: 30
+                    order: 6
+                    dependsOn:
+                      - CCD-ELEM-V3-017
+                    path: "elements[].occurrences[]"
+                    description: Grade C (Poor) occurrences should normally include at least one repair item.
+                    message: Grade C occurrence does not include any repair entries.
+                    implementation: "!(has(this.conditionGrade) && this.conditionGrade == 'C') || (has(this.repairs) && this.repairs != null && size(this.repairs) > 0)"
+
+                  - id: CCD-ELEM-V3-022
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 7
+                    path: "elements[].occurrences[]"
+                    description: Grade A occurrences may only carry priorityGrade '1' when specified.
+                    message: Grade A occurrence cannot have a priorityGrade above 1.
+                    implementation: "!(has(this.conditionGrade) && this.conditionGrade == 'A' && has(this.priorityGrade) && this.priorityGrade != null) || this.priorityGrade == '1'"
+
+                  - id: CCD-ELEM-V3-023
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 8
+                    path: "elements[].occurrences[]"
+                    description: Grade D occurrences must carry priorityGrade '3' or '4'.
+                    message: Grade D occurrence must specify priorityGrade '3' or '4'.
+                    implementation: "!(has(this.conditionGrade) && this.conditionGrade == 'D') || (has(this.priorityGrade) && this.priorityGrade in ['3', '4'])"
+
+                  - id: CCD-ELEM-V3-024
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 9
+                    path: "elements[].occurrences[]"
+                    description: Assumed ('Not Seen') occurrences must explain the basis in conditionDescription.
+                    message: conditionDescription is required when basisOfAssessment is 'Not Seen'.
+                    implementation: "!(has(this.basisOfAssessment) && this.basisOfAssessment == 'Not Seen') || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) > 0)"
+
+                  - id: CCD-ELEM-V3-025
+                    type: custom
+                    engine: cel
+                    severity: WARNING
+                    stage: 30
+                    order: 10
+                    path: "elements[].occurrences[]"
+                    description: Suspected asbestos occurrences should include explanatory notes in conditionDescription.
+                    message: conditionDescription should be populated when hasAsbestosSuspected is true.
+                    implementation: "!(has(this.hasAsbestosSuspected) && this.hasAsbestosSuspected == true) || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) > 0)"
+
+                  - id: CCD-ELEM-V3-027
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 11
+                    path: "elements[].occurrences[]"
+                    description: Condition score when provided must be between 0 and 100 inclusive.
+                    message: conditionScore must be between 0 and 100.
+                    implementation: "!has(this.conditionScore) || this.conditionScore == null || (this.conditionScore >= 0.0 && this.conditionScore <= 100.0)"
+
+                  - id: CCD-ELEM-V3-028
+                    type: custom
+                    engine: cel
+                    severity: WARNING
+                    stage: 30
+                    order: 12
+                    path: "elements[].occurrences[]"
+                    description: Grade A occurrences should normally have a conditionScore of at least 85.
+                    message: Grade A occurrence has a conditionScore below 85.
+                    implementation: "!(has(this.conditionGrade) && this.conditionGrade == 'A' && has(this.conditionScore) && this.conditionScore != null) || this.conditionScore >= 85.0"
+
+                  - id: CCD-ELEM-V3-029
+                    type: custom
+                    engine: cel
+                    severity: WARNING
+                    stage: 30
+                    order: 13
+                    path: "elements[].occurrences[]"
+                    description: Grade D occurrences should normally have a conditionScore of 25 or lower.
+                    message: Grade D occurrence has a conditionScore above 25.
+                    implementation: "!(has(this.conditionGrade) && this.conditionGrade == 'D' && has(this.conditionScore) && this.conditionScore != null) || this.conditionScore <= 25.0"
+
+                  - id: CCD-ELEM-V3-030
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 14
+                    path: "elements[].occurrences[]"
+                    description: Occurrence surveyLevel must align with parent element assetType.
+                    message: Occurrence surveyLevel does not align with parent element assetType.
+                    implementation: "(this.surveyLevel == 'Site' && $parent.assetType == 'site') || (this.surveyLevel == 'Block' && $parent.assetType == 'block') || (this.surveyLevel == 'Floor' && $parent.assetType == 'floor') || (this.surveyLevel == 'Space' && $parent.assetType == 'space')"
+
+                  - id: CCD-ELEM-V3-031
+                    type: unique
+                    engine: unique
+                    severity: ERROR
+                    stage: 30
+                    order: 15
+                    path: "elements[].occurrences[]"
+                    description: Occurrence id must be unique across all elements.
+                    message: Duplicate occurrence id detected in submission.
+                    fields:
+                      - id
+
+                  - id: CCD-ELEM-V3-032
+                    type: unique
+                    engine: unique
+                    severity: ERROR
+                    stage: 30
+                    order: 16
+                    path: "elements[].occurrences[]"
+                    description: Duplicate occurrence combination across productType, surveyLevel, location, and conditionGrade.
+                    message: Duplicate occurrence combination detected across productType, surveyLevel, occurrenceExtentOrLocationDescription, and conditionGrade.
+                    fields:
+                      - "$parent.productType"
+                      - surveyLevel
+                      - occurrenceExtentOrLocationDescription
+                      - conditionGrade
+
+                  - id: CCD-ELEM-V3-033
+                    type: custom
+                    engine: cel
+                    severity: ERROR
+                    stage: 30
+                    order: 17
+                    path: "elements[].occurrences[]"
+                    description: Occurrence assessedAt timestamp when specified must not precede survey createdAt.
+                    message: Occurrence assessedAt timestamp precedes survey.createdAt.
+                    implementation: "!has(this.assessedAt) || this.assessedAt == null || timestamp(this.assessedAt) >= timestamp($root.survey.createdAt)"
+
+                  - id: CCD-ELEM-V3-034
+                    type: unique
+                    engine: unique
+                    severity: WARNING
+                    stage: 30
+                    order: 18
+                    path: "elements[].occurrences[]"
+                    description: Advisory uniqueness check across nrm3Code, siteId, blockId, surveyLevel, and location.
+                    message: Potential duplicate NRM3 occurrence detected at the same site/block/level/location.
+                    fields:
+                      - "$parent.nrm3Code"
+                      - "$parent.siteId"
+                      - "$parent.blockId"
+                      - surveyLevel
+                      - occurrenceExtentOrLocationDescription
+
+                  - id: CCD-ELEM-V3-038
+                    type: custom
+                    engine: cel
+                    severity: INFO
+                    stage: 30
+                    order: 19
+                    path: "elements[].occurrences[]"
+                    description: Advisory notice that all recorded occurrences are included in DfE statutory lifecycle capital forecasting.
+                    message: Occurrence included in statutory lifecycle capital forecasting.
+
+                  - id: CCD-ELEM-V3-057
+                    type: custom
+                    engine: cel
+                    severity: WARNING
+                    stage: 30
+                    order: 20
+                    path: "elements[].occurrences[]"
+                    description: Completed surveys with 'Assumed' basisOfAssessment should include detailed justification (>= 10 chars).
+                    message: Completed survey occurrence with basisOfAssessment 'Assumed' should provide at least 10 characters in conditionDescription.
+                    implementation: "!($root.survey.isComplete && has(this.basisOfAssessment) && this.basisOfAssessment == 'Assumed') || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) >= 10)"
+
+                properties:
+                  - name: id
+                    physicalType: string
+                    logicalType: string
+                    required: true
+                    logicalTypeOptions:
+                      pattern: "^OCC-[A-Za-z0-9-]+$"
+
+                  - name: surveyLevel
+                    physicalType: string
+                    logicalType: string
+                    required: true
+                    enum:
+                      - value: Site
+                      - value: Block
+                      - value: Floor
+                      - value: Space
+
+                  - name: occurrenceExtentOrLocationDescription
+                    physicalType: string
+                    logicalType: string
+                    required: true
+
+                  - name: basisOfAssessment
+                    physicalType: string
+                    logicalType: string
+                    required: false
+                    enum:
+                      - value: Seen
+                      - value: Not Seen
+                      - value: Assumed
+
+                  - name: conditionGrade
+                    physicalType: string
+                    logicalType: string
+                    required: false
+                    enum:
+                      - value: A
+                      - value: B
+                      - value: C
+                      - value: D
+
+                  - name: conditionScore
+                    physicalType: number
+                    logicalType: number
+                    required: false
+
+                  - name: conditionDescription
+                    physicalType: string
+                    logicalType: string
+                    required: false
+
+                  - name: priorityGrade
+                    physicalType: string
+                    logicalType: string
+                    required: false
+                    enum:
+                      - value: "1"
+                      - value: "2"
+                      - value: "3"
+                      - value: "4"
+
+                  - name: hasAsbestosSuspected
+                    physicalType: boolean
+                    logicalType: boolean
+                    required: false
+
+                  - name: photoReference
+                    physicalType: string
+                    logicalType: string
+                    required: false
+                    logicalTypeOptions:
+                      pattern: "^PHOTO-[A-Za-z0-9_.-]+$"
+
+                  - name: assessedAt
+                    physicalType: string
+                    logicalType: timestamp
+                    required: false
+
+                  - name: replacement
+                    logicalType: object
+                    required: false
+                    quality:
+                      - id: CCD-ELEM-V3-035
+                        type: custom
+                        engine: cel
+                        severity: ERROR
+                        stage: 40
+                        order: 1
+                        path: "elements[].occurrences[].replacement"
+                        description: Remaining life (remLife) cannot be negative.
+                        message: remLife must be greater than or equal to 0.
+                        implementation: "!has(this.remLife) || this.remLife == null || this.remLife >= 0"
+
+                      - id: CCD-ELEM-V3-036
+                        type: custom
+                        engine: cel
+                        severity: WARNING
+                        stage: 40
+                        order: 2
+                        path: "elements[].occurrences[].replacement"
+                        description: Remaining life (remLife) should not exceed 100 years.
+                        message: remLife exceeds typical 100-year maximum lifecycle.
+                        implementation: "!has(this.remLife) || this.remLife == null || this.remLife <= 100"
+
+                      - id: CCD-ELEM-V3-037
+                        type: custom
+                        engine: cel
+                        severity: ERROR
+                        stage: 40
+                        order: 3
+                        path: "elements[].occurrences[].replacement"
+                        description: Grade D occurrences must report remLife <= 5 years.
+                        message: Grade D occurrence cannot have remLife greater than 5 years.
+                        implementation: "!(has($parent.conditionGrade) && $parent.conditionGrade == 'D' && has(this.remLife) && this.remLife != null) || this.remLife <= 5"
+
+                      - id: CCD-ELEM-V3-039
+                        type: custom
+                        engine: cel
+                        severity: ERROR
+                        stage: 40
+                        order: 4
+                        path: "elements[].occurrences[].replacement"
+                        description: replacementQuantity when provided must be strictly positive.
+                        message: replacementQuantity must be greater than 0.
+                        implementation: "!has(this.replacementQuantity) || this.replacementQuantity == null || this.replacementQuantity > 0.0"
+
+                      - id: CCD-ELEM-V3-040
+                        type: custom
+                        engine: cel
+                        severity: ERROR
+                        stage: 40
+                        order: 5
+                        path: "elements[].occurrences[].replacement"
+                        description: replacementRate when provided must be non-negative.
+                        message: replacementRate must be greater than or equal to 0.
+                        implementation: "!has(this.replacementRate) || this.replacementRate == null || this.replacementRate >= 0.0"
+
+                      - id: CCD-ELEM-V3-041
+                        type: custom
+                        engine: cel
+                        severity: ERROR
+                        stage: 40
+                        order: 6
+                        dependsOn:
+                          - CCD-ELEM-V3-039
+                          - CCD-ELEM-V3-040
+                        path: "elements[].occurrences[].replacement"
+                        description: replacementCost must equal replacementQuantity * replacementRate within automatic float tolerance.
+                        message: replacementCost does not match replacementQuantity * replacementRate.
+                        implementation: "!has(this.replacementCost) || this.replacementCost == null || !has(this.replacementQuantity) || this.replacementQuantity == null || !has(this.replacementRate) || this.replacementRate == null || this.replacementCost == this.replacementQuantity * this.replacementRate"
+
+                      - id: CCD-ELEM-V3-042
+                        type: custom
+                        engine: cel
+                        severity: ERROR
+                        stage: 40
+                        order: 7
+                        path: "elements[].occurrences[].replacement"
+                        description: Unit of measure (uom) must be populated when replacementQuantity is provided.
+                        message: replacement.uom is required when replacementQuantity is specified.
+                        implementation: "!has(this.replacementQuantity) || this.replacementQuantity == null || (has(this.uom) && this.uom != null)"
+
+                    properties:
+                      - name: uom
+                        physicalType: string
+                        logicalType: string
+                        required: false
+                        enum:
+                          - value: m2
+                          - value: m
+                          - value: nr
+                          - value: item
+                          - value: sum
+
+                      - name: remLife
+                        physicalType: integer
+                        logicalType: integer
+                        required: false
+
+                      - name: replacementQuantity
+                        physicalType: number
+                        logicalType: number
+                        required: false
+
+                      - name: replacementRate
+                        physicalType: number
+                        logicalType: number
+                        required: false
+
+                      - name: replacementCost
+                        physicalType: number
+                        logicalType: number
+                        required: false
+
+                  - name: repairs
+                    logicalType: array
+                    required: false
+                    items:
+                      logicalType: object
+                      quality:
+                        - id: CCD-ELEM-V3-019
+                          type: custom
+                          engine: cel
+                          severity: ERROR
+                          stage: 50
+                          order: 1
+                          dependsOn:
+                            - CCD-ELEM-V3-001
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Repair item must be valid for the grandparent element productType.
+                          message: repairItem is not in ambient.reference.repair_items_by_product_type for this element's productType.
+                          implementation: "has(this.repairItem) && this.repairItem != null && ($parent.$parent.productType in ambient.reference.repair_items_by_product_type) && (this.repairItem in ambient.reference.repair_items_by_product_type[$parent.$parent.productType])"
+
+                        - id: CCD-ELEM-V3-043
+                          type: unique
+                          engine: unique
+                          severity: ERROR
+                          stage: 50
+                          order: 2
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Repair id must be unique across all repairs.
+                          message: Duplicate repair id detected in submission.
+                          fields:
+                            - id
+
+                        - id: CCD-ELEM-V3-044
+                          type: custom
+                          engine: cel
+                          severity: ERROR
+                          stage: 50
+                          order: 3
+                          path: "elements[].occurrences[].repairs[]"
+                          description: repairQuantity must be strictly positive.
+                          message: repairQuantity must be greater than 0.
+                          implementation: "has(this.repairQuantity) && this.repairQuantity != null && this.repairQuantity > 0.0"
+
+                        - id: CCD-ELEM-V3-026
+                          type: custom
+                          engine: cel
+                          severity: ERROR
+                          stage: 50
+                          order: 4
+                          dependsOn:
+                            - CCD-ELEM-V3-039
+                            - CCD-ELEM-V3-044
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Repair quantity must not exceed parent occurrence replacementQuantity when units match.
+                          message: repairQuantity cannot exceed parent replacement.replacementQuantity when using the same uom.
+                          implementation: "!has($parent.replacement) || $parent.replacement == null || !has($parent.replacement.replacementQuantity) || $parent.replacement.replacementQuantity == null || !has(this.uom) || this.uom == null || !has($parent.replacement.uom) || $parent.replacement.uom == null || this.uom != $parent.replacement.uom || $parent.replacement.replacementQuantity >= this.repairQuantity"
+
+                        - id: CCD-ELEM-V3-045
+                          type: custom
+                          engine: cel
+                          severity: ERROR
+                          stage: 50
+                          order: 5
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Urgent repairs must populate repairDescription and repairClassification.
+                          message: repairDescription and repairClassification are required when urgentActionRequired is true.
+                          implementation: "!(has(this.urgentActionRequired) && this.urgentActionRequired == true) || (has(this.repairDescription) && this.repairDescription != null && size(this.repairDescription) > 0 && has(this.repairClassification) && this.repairClassification != null)"
+
+                        - id: CCD-ELEM-V3-046
+                          type: custom
+                          engine: cel
+                          severity: ERROR
+                          stage: 50
+                          order: 6
+                          path: "elements[].occurrences[].repairs[]"
+                          description: repairItemRate must be non-negative.
+                          message: repairItemRate must be greater than or equal to 0.
+                          implementation: "has(this.repairItemRate) && this.repairItemRate != null && this.repairItemRate >= 0.0"
+
+                        - id: CCD-ELEM-V3-047
+                          type: custom
+                          engine: jsonlogic
+                          severity: ERROR
+                          stage: 50
+                          order: 7
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Annual phased costs (year1Cost through year5Cost) must be non-negative.
+                          message: Year 1..5 repair costs must all be greater than or equal to 0.
+                          implementation:
+                            "and":
+                              - ">=": [{ var: year1Cost }, 0]
+                              - ">=": [{ var: year2Cost }, 0]
+                              - ">=": [{ var: year3Cost }, 0]
+                              - ">=": [{ var: year4Cost }, 0]
+                              - ">=": [{ var: year5Cost }, 0]
+
+                        - id: CCD-ELEM-V3-048
+                          type: custom
+                          engine: cel
+                          severity: ERROR
+                          stage: 50
+                          order: 8
+                          dependsOn:
+                            - CCD-ELEM-V3-044
+                            - CCD-ELEM-V3-046
+                            - CCD-ELEM-V3-047
+                          path: "elements[].occurrences[].repairs[]"
+                          description: totalRepairCost must equal the sum of year1Cost..year5Cost within automatic float tolerance.
+                          message: totalRepairCost must equal year1Cost + year2Cost + year3Cost + year4Cost + year5Cost.
+                          implementation: "this.totalRepairCost == this.year1Cost + this.year2Cost + this.year3Cost + this.year4Cost + this.year5Cost"
+
+                        - id: CCD-ELEM-V3-049
+                          type: custom
+                          engine: jsonlogic
+                          severity: ERROR
+                          stage: 50
+                          order: 9
+                          dependsOn:
+                            - CCD-ELEM-V3-044
+                            - CCD-ELEM-V3-046
+                          path: "elements[].occurrences[].repairs[]"
+                          description: totalRepairCost must equal repairQuantity * repairItemRate within automatic float tolerance.
+                          message: totalRepairCost must match repairQuantity * repairItemRate.
+                          implementation:
+                            "==":
+                              - var: totalRepairCost
+                              - "*":
+                                  - var: repairQuantity
+                                  - var: repairItemRate
+
+                        - id: CCD-ELEM-V3-050
+                          type: custom
+                          engine: cel
+                          severity: ERROR
+                          stage: 50
+                          order: 10
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Classification 'X' (Immediate/Urgent) repairs must schedule non-zero spend in year1Cost.
+                          message: year1Cost must be greater than 0 for repairClassification 'X'.
+                          implementation: "!(has(this.repairClassification) && this.repairClassification == 'X') || this.year1Cost > 0.0"
+
+                        - id: CCD-ELEM-V3-051
+                          type: custom
+                          engine: cel
+                          severity: WARNING
+                          stage: 50
+                          order: 11
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Classification 'Z' (Longer-term) repairs should normally schedule 0 in year1Cost.
+                          message: repairClassification 'Z' typically has year1Cost equal to 0.
+                          implementation: "!(has(this.repairClassification) && this.repairClassification == 'Z') || this.year1Cost == 0.0"
+
+                        - id: CCD-ELEM-V3-052
+                          type: custom
+                          engine: cel
+                          severity: ERROR
+                          stage: 50
+                          order: 12
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Grade D occurrence repairs with classification 'X' must mark urgentActionRequired = true.
+                          message: urgentActionRequired must be true for classification 'X' repairs on Grade D occurrences.
+                          implementation: "!(has($parent.conditionGrade) && $parent.conditionGrade == 'D' && has(this.repairClassification) && this.repairClassification == 'X') || (has(this.urgentActionRequired) && this.urgentActionRequired == true)"
+
+                        - id: CCD-ELEM-V3-053
+                          type: custom
+                          engine: cel
+                          severity: WARNING
+                          stage: 50
+                          order: 13
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Repair descriptions when supplied should be at least 10 characters long.
+                          message: repairDescription should be at least 10 characters long for clarity.
+                          implementation: "!has(this.repairDescription) || this.repairDescription == null || size(this.repairDescription) >= 10"
+
+                        - id: CCD-ELEM-V3-054
+                          type: custom
+                          engine: cel
+                          severity: INFO
+                          stage: 50
+                          order: 14
+                          path: "elements[].occurrences[].repairs[]"
+                          description: High-value repair items exceeding 50,000 GBP are flagged for capital programme review.
+                          message: High-value repair item exceeds 50,000 GBP threshold (advisory capital review).
+                          implementation: "this.totalRepairCost <= 50000.0"
+
+                        - id: CCD-ELEM-V3-055
+                          type: custom
+                          engine: cel
+                          severity: ERROR
+                          stage: 50
+                          order: 15
+                          path: "elements[].occurrences[].repairs[]"
+                          description: Repair unit of measure (uom) must match parent replacement.uom when both are provided.
+                          message: Repair uom must match parent replacement.uom.
+                          implementation: "!has($parent.replacement) || $parent.replacement == null || !has($parent.replacement.uom) || $parent.replacement.uom == null || !has(this.uom) || this.uom == null || this.uom == $parent.replacement.uom"
+
+                      properties:
+                        - name: id
+                          physicalType: string
+                          logicalType: string
+                          required: true
+                          logicalTypeOptions:
+                            pattern: "^REP-[A-Za-z0-9-]+$"
+
+                        - name: repairItem
+                          physicalType: string
+                          logicalType: string
+                          required: false
+
+                        - name: repairClassification
+                          physicalType: string
+                          logicalType: string
+                          required: false
+                          enum:
+                            - value: X
+                            - value: Y
+                            - value: Z
+
+                        - name: repairDescription
+                          physicalType: string
+                          logicalType: string
+                          required: false
+
+                        - name: uom
+                          physicalType: string
+                          logicalType: string
+                          required: false
+                          enum:
+                            - value: m2
+                            - value: m
+                            - value: nr
+                            - value: item
+                            - value: sum
+
+                        - name: repairQuantity
+                          physicalType: number
+                          logicalType: number
+                          required: true
+
+                        - name: repairItemRate
+                          physicalType: number
+                          logicalType: number
+                          required: true
+
+                        - name: year1Cost
+                          physicalType: number
+                          logicalType: number
+                          required: true
+
+                        - name: year2Cost
+                          physicalType: number
+                          logicalType: number
+                          required: true
+
+                        - name: year3Cost
+                          physicalType: number
+                          logicalType: number
+                          required: true
+
+                        - name: year4Cost
+                          physicalType: number
+                          logicalType: number
+                          required: true
+
+                        - name: year5Cost
+                          physicalType: number
+                          logicalType: number
+                          required: true
+
+                        - name: totalRepairCost
+                          physicalType: number
+                          logicalType: number
+                          required: true
+
+                        - name: urgentActionRequired
+                          physicalType: boolean
+                          logicalType: boolean
+                          required: false
+
+team:
+  name: CDC2 Geospatial Programme
+  members:
+    - username: data-owner
+      role: owner
+
+tags:
+  - cdc2
+  - ccd-elemental-v3
+  - odcs-v3.2.0
+  - geospatial
+  - school-estate

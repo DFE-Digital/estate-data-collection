@@ -1,0 +1,34 @@
+{
+  "Boiler": [
+    "Boiler Valve",
+    "Burner Assembly",
+    "Flue Replacement",
+    "Circulation Pump"
+  ],
+  "Roof": [
+    "Roof Tile",
+    "Lead Flashing",
+    "Flat Roof Felt",
+    "Gutter Replacement"
+  ],
+  "Window": [
+    "Window Glazing Unit",
+    "Window Frame",
+    "Ironmongery"
+  ],
+  "Electrical Distribution": [
+    "Distribution Board",
+    "Sub-Main Cable",
+    "Circuit Breaker"
+  ],
+  "Fire Alarm": [
+    "Smoke Detector",
+    "Control Panel",
+    "Sounder Beacon"
+  ],
+  "External Paving": [
+    "Tarmac Resurfacing",
+    "Kerb Replacement",
+    "Drainage Channel"
+  ]
+}
