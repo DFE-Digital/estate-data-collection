@@ -7,7 +7,7 @@ using Microsoft.Azure.Functions.Worker;
 namespace EstateDataCollection.AzureFunctions.Admin.Events;
 
 /// <summary>
-/// Blob-triggered event handler that automatically ingests contract files (.odcs.yaml, .schema.json, .rules.json)
+/// Event Grid-backed blob-triggered event handler that automatically ingests contract files (.odcs.yaml, .schema.json, .rules.json)
 /// as soon as they are uploaded into the "draft-schemas" blob container.
 /// Validates structural schema + quality rules (JsonLogic / CEL) + optional companion fixtures,
 /// promotes valid contracts to the "schemas" container as Validated (without effective dates), and removes the processed draft file.
@@ -21,7 +21,7 @@ public sealed class IngestDraftSchemaEvent(
 
     [Function(EventName)]
     public Task<Result<IngestDraftSchemaResult>> HandleAsync(
-        [BlobTrigger("draft-schemas/{blobPath}", Connection = "AzureWebJobsStorage")] Stream blobStream,
+        [BlobTrigger("draft-schemas/{blobPath}", Source = BlobTriggerSource.EventGrid, Connection = "AzureWebJobsStorage")] Stream blobStream,
         string blobPath,
         CancellationToken cancellationToken)
     {
