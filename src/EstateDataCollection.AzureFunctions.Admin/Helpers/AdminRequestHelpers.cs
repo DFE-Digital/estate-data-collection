@@ -69,7 +69,7 @@ internal static class AdminRequestHelpers
         return new SchemaIdentifierConfig
         {
             Type = string.IsNullOrWhiteSpace(identifierType)
-                ? SchemaIdentifierConfig.DefaultUrnType
+                ? SchemaIdentifierConfig.DefaultIdentifierType
                 : identifierType.Trim(),
             JsonPointer = string.IsNullOrWhiteSpace(identifierPointer) ? null : identifierPointer.Trim(),
             Required = required

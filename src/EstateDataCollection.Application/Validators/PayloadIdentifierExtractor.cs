@@ -8,7 +8,7 @@ using EstateDataCollection.Domain.Submission;
 namespace EstateDataCollection.Application.Validators;
 
 /// <summary>
-/// Shared runtime helper for extracting and validating the configured school/establishment identifier
+/// Shared runtime helper for extracting and validating the configured establishment identifier
 /// from submission payloads according to the schema's <see cref="SchemaIdentifierConfig"/>,
 /// schema-derived requiredness, and <see cref="ValidationOptions"/>.
 /// </summary>
@@ -18,7 +18,7 @@ public static class PayloadIdentifierExtractor
         EngineId: "identifier-extractor",
         DisplayName: "Submission Identifier Extractor",
         Kind: ValidationEngineKinds.IdentifierExtraction,
-        Description: "Extracts and validates configured school or establishment identifiers (URN, UKPRN, LAEstab, custom JSON Pointer) against schema requiredness and storage key safety constraints.");
+        Description: "Extracts and validates configured establishment identifiers against schema requiredness and storage key safety constraints.");
 
     public sealed record ExtractionEvaluation(
         bool IsEnabled,
@@ -47,11 +47,11 @@ public static class PayloadIdentifierExtractor
 
         var identifierType = !string.IsNullOrWhiteSpace(identifierConfig?.Type)
             ? identifierConfig.Type.Trim()
-            : SchemaIdentifierConfig.DefaultUrnType;
+            : options.DefaultIdentifierType;
 
         var searchPaths = !string.IsNullOrWhiteSpace(identifierConfig?.JsonPointer)
             ? [identifierConfig.JsonPointer]
-            : options.UrnJsonPaths;
+            : options.DefaultIdentifierJsonPaths;
 
         // Derive requiredness directly from the JSON Schema when present; fall back to metadata/options when stubbed
         var schemaDerivedRequired = IdentifierSchemaValidator.TryResolveRequiredFromSchema(
@@ -60,13 +60,13 @@ public static class PayloadIdentifierExtractor
 
         var isRequired = schemaDerivedRequired
                          ?? identifierConfig?.Required
-                         ?? options.RequireUrnOnFinalise;
+                         ?? options.RequireIdentifierOnFinalise;
 
         var inspection = SubmissionIdentifier.InspectPayload(rawPayloadJson, searchPaths, identifierType);
         if (inspection.IsFailure)
         {
             var errMsg = inspection.Error.Description ?? $"Failed to extract identifier '{identifierType}'.";
-            var fallbackPtr = FormatPointer(searchPaths.FirstOrDefault());
+            var fallbackPtr = FormatPointer(searchPaths.FirstOrDefault(), options.DefaultIdentifierPointerFallback);
             return new ExtractionEvaluation(
                 IsEnabled: true,
                 IsValid: false,
@@ -77,7 +77,7 @@ public static class PayloadIdentifierExtractor
         }
 
         var outcome = inspection.Value;
-        var pointer = outcome.MatchedPath ?? FormatPointer(searchPaths.FirstOrDefault());
+        var pointer = outcome.MatchedPath ?? FormatPointer(searchPaths.FirstOrDefault(), options.DefaultIdentifierPointerFallback);
 
         if (outcome.Status == IdentifierExtractionStatus.Found)
         {
@@ -104,9 +104,7 @@ public static class PayloadIdentifierExtractor
         var message = outcome.ErrorMessage
                       ?? $"Required identifier '{identifierType}' was missing or null at '{pointer}'.";
 
-        var error = string.Equals(identifierType, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase)
-            ? Error.Validation(ErrorCodes.PayloadInvalidUrn, message)
-            : Error.Validation(ErrorCodes.PayloadInvalidIdentifier, new { Message = message });
+        var error = Error.Validation(ErrorCodes.PayloadInvalidIdentifier, new { Message = message });
 
         return new ExtractionEvaluation(
             IsEnabled: true,
@@ -142,10 +140,10 @@ public static class PayloadIdentifierExtractor
         return trimmed.TrimEnd('/');
     }
 
-    private static string FormatPointer(string? rawPath)
+    private static string FormatPointer(string? rawPath, string fallbackPointer)
     {
         return SchemaIdentifierConfig.TryParsePointerSegments(rawPath, out var segments)
             ? SchemaIdentifierConfig.ToJsonPointer(segments)
-            : "/urn";
+            : fallbackPointer;
     }
 }

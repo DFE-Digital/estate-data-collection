@@ -271,8 +271,8 @@ public sealed class SchemaVerificationService(
         var identifierAlignment = IdentifierSchemaValidator.ValidateAndAlign(
             candidateSchema is not null ? rawSchemaJson : null,
             identifierConfig,
-            _validationOptions.UrnJsonPaths,
-            _validationOptions.RequireUrnOnFinalise);
+            _validationOptions.DefaultIdentifierJsonPaths,
+            _validationOptions.RequireIdentifierOnFinalise);
         identifierTrace.ElapsedTicks += Stopwatch.GetTimestamp() - idAlignStart;
 
         if (identifierAlignment.IsEnabled && candidateSchema is not null)
@@ -287,7 +287,7 @@ public sealed class SchemaVerificationService(
             syntaxErrors.AddRange(identifierAlignment.Errors);
         }
 
-        var effectiveIdentifierType = identifierAlignment.EffectiveConfig?.Type ?? SchemaIdentifierConfig.DefaultUrnType;
+        var effectiveIdentifierType = identifierAlignment.EffectiveConfig?.Type ?? _validationOptions.DefaultIdentifierType;
         var effectiveIdentifierLabel = FormatIdentifierLabel(identifierAlignment, effectiveIdentifierType);
 
         if (syntaxErrors.Count > 0)
@@ -457,7 +457,7 @@ public sealed class SchemaVerificationService(
                     {
                         var expectedPath = idInspect.Value.MatchedPath
                             ?? identifierAlignment.ResolvedPaths.FirstOrDefault()
-                            ?? "/urn";
+                            ?? _validationOptions.DefaultIdentifierPointerFallback;
                         var msg = $"{fixtureId} is missing required '{effectiveIdentifierType}' identifier at '{expectedPath}'.";
                         identifierTrace.ViolationCount++;
                         identifierTrace.FirstIssue ??= msg;
@@ -609,7 +609,7 @@ public sealed class SchemaVerificationService(
                         identifierTrace.InvalidTriggers++;
                         var expectedPath = idInspect.Value.MatchedPath
                             ?? identifierAlignment.ResolvedPaths.FirstOrDefault()
-                            ?? "/urn";
+                            ?? _validationOptions.DefaultIdentifierPointerFallback;
                         triggeredErrors.Add(ValidationMessage.For(
                             ValidationSources.Identifier,
                             $"Missing required '{effectiveIdentifierType}' identifier at '{expectedPath}'.",

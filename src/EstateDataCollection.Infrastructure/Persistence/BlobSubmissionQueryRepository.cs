@@ -241,6 +241,16 @@ public sealed class BlobSubmissionQueryRepository(
                 return (SubmissionProcessedArtifact?)null;
             }
 
+            if (!string.IsNullOrWhiteSpace(session.ProcessedBundlePrefix))
+            {
+                var bundlePayloadName = SubmissionBlobPathResolver.BuildProcessedPayloadBlobName(session.ProcessedBundlePrefix);
+                var bundleBlob = processedContainer.GetBlobClient(bundlePayloadName);
+                if ((await bundleBlob.ExistsAsync(cancellationToken)).Value)
+                {
+                    return await ReadProcessedArtefactAsync(bundleBlob, cancellationToken);
+                }
+            }
+
             var expectedName = SubmissionBlobPathResolver.ResolveProcessedBlobName(
                 options.Value.ProcessedBlobNameFormat,
                 session.IdentifierType,
@@ -255,10 +265,13 @@ public sealed class BlobSubmissionQueryRepository(
                 return await ReadProcessedArtefactAsync(directBlob, cancellationToken);
             }
 
-            var suffix = $"/{session.SubmissionId}.json";
+            var bundleSuffix = $"/{session.SubmissionId}/payload.json";
+            var legacySuffix = $"/{session.SubmissionId}.json";
             await foreach (var blobItem in processedContainer.GetBlobsAsync(cancellationToken: cancellationToken))
             {
-                if (blobItem.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ||
+                if (blobItem.Name.EndsWith(bundleSuffix, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(blobItem.Name, $"{session.SubmissionId}/payload.json", StringComparison.OrdinalIgnoreCase) ||
+                    blobItem.Name.EndsWith(legacySuffix, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(blobItem.Name, $"{session.SubmissionId}.json", StringComparison.OrdinalIgnoreCase))
                 {
                     var matchBlob = processedContainer.GetBlobClient(blobItem.Name);

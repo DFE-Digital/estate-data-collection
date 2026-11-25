@@ -50,8 +50,8 @@ public sealed class ScheduleSchemaUseCase(
             var alignment = IdentifierSchemaValidator.ValidateAndAlign(
                 metadata.RawJsonSchema,
                 effectiveCandidate,
-                _validationOptions.UrnJsonPaths,
-                _validationOptions.RequireUrnOnFinalise);
+                _validationOptions.DefaultIdentifierJsonPaths,
+                _validationOptions.RequireIdentifierOnFinalise);
 
             if (!alignment.IsValid)
             {

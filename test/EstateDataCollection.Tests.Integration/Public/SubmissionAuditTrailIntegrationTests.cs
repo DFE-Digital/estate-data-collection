@@ -180,5 +180,25 @@ public sealed class SubmissionAuditTrailIntegrationTests(AzuriteFixture fixture)
         entries[7].Outcome.Status.Should().Be("Rejected");
         entries[7].Outcome.HttpStatus.Should().Be(403);
         entries[7].Outcome.ErrorCode.Should().Be("Submission.AlreadyFinalised");
+
+        // Verify self-contained processed bundle contains payload.json, session.json, and mirrored audit/*.json
+        var processedContainer = _harness.BlobClient.GetBlobContainerClient(_harness.ProcessedContainerName);
+        var bundlePrefix = $"urn=104521/schema={schemaName}/v=1/{subId}/";
+        var bundleBlobs = new List<string>();
+        await foreach (var blob in processedContainer.GetBlobsAsync(traits: Azure.Storage.Blobs.Models.BlobTraits.None, states: Azure.Storage.Blobs.Models.BlobStates.None, prefix: bundlePrefix, cancellationToken: CancellationToken.None))
+        {
+            bundleBlobs.Add(blob.Name);
+        }
+
+        bundleBlobs.Should().Contain($"{bundlePrefix}payload.json");
+        bundleBlobs.Should().Contain($"{bundlePrefix}session.json");
+        bundleBlobs.Where(b => b.StartsWith($"{bundlePrefix}audit/", StringComparison.Ordinal) && b.EndsWith(".json", StringComparison.Ordinal))
+            .Should().HaveCount(8);
+
+        var bundleSessionRaw = (await processedContainer.GetBlobClient($"{bundlePrefix}session.json").DownloadContentAsync()).Value.Content.ToString();
+        var bundleSession = JsonSerializer.Deserialize<SubmissionSession>(bundleSessionRaw);
+        bundleSession.Should().NotBeNull();
+        bundleSession!.IsFinalised.Should().BeTrue();
+        bundleSession.ProcessedBundlePrefix.Should().Be(bundlePrefix);
     }
 }

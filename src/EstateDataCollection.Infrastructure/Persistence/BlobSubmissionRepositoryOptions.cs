@@ -25,5 +25,5 @@ public class BlobSubmissionRepositoryOptions : Common.Markers.IOption<BlobSubmis
     public string AuditBlobPrefixFormat { get; init; } = "{submissionId}/audit/";
 
     [Required, MinLength(1)]
-    public string ProcessedBlobNameFormat { get; init; } = "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json";
+    public string ProcessedBlobNameFormat { get; init; } = "urn={establishmentIdentifier}/schema={schemaName}/v={schemaVersion}/{submissionId}/payload.json";
 }

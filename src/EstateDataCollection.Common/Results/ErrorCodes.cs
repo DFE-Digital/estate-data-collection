@@ -28,7 +28,7 @@ public enum ErrorCodes
     
     [Display(Name = "Schema.PersistFailed", Description = "Could not save schema to blob container: {Message}")]
     SchemaPersistFailed = 1006,
-
+    
     [Display(Name = "Schema.NotActive", Description = "Schema '{SchemaName}' v{Version} is not active or has not been scheduled yet.")]
     SchemaNotActive = 1007,
 
@@ -41,9 +41,6 @@ public enum ErrorCodes
     
     [Display(Name = "Payload.Empty", Description = "Payload cannot be empty.")]
     PayloadEmpty = 2000,
-
-    [Display(Name = "Payload.InvalidUrn", Description = "The 'urn' property must be a positive integer.")]
-    PayloadInvalidUrn = 2001,
 
     [Display(Name = "Payload.NotFound", Description = "Payload not found.")]
     PayloadNotFound = 2002,
@@ -67,13 +64,13 @@ public enum ErrorCodes
     
     [Display(Name = "Storage.UploadFailed", Description = "{Message}")]
     StorageUploadFailed = 4000,
-
+    
     [Display(Name = "Storage.ReadFailed", Description = "{Message}")]
     StorageReadFailed = 4001,
-
+    
     [Display(Name = "Storage.SerialisationError", Description = "{Message}")]
     StorageSerialisationError = 4002,
-
+    
     [Display(Name = "Storage.PromotionFailed", Description = "{Message}")]
     StoragePromotionFailed = 4003,
     

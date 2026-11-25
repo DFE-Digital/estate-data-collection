@@ -35,7 +35,7 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
     public bool RunQualityRulesOnDraftUpdate { get; init; } = true;
 
     /// <summary>
-    /// Whether school/establishment identifier extraction is checked during draft updates (PUT /submissions/{id})
+    /// Whether establishment identifier extraction is checked during draft updates (PUT /submissions/{id})
     /// and surfaced in PendingErrors.
     /// </summary>
     public bool ValidateIdentifierOnDraftUpdate { get; init; } = true;
@@ -65,17 +65,31 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
     ];
 
     /// <summary>
-    /// Whether a school identifier (URN) is required by default when a schema lacks an explicit IdentifierConfig
+    /// Whether an establishment identifier is required by default when a schema lacks an explicit IdentifierConfig
     /// and does not declare one as optional.
     /// </summary>
-    public bool RequireUrnOnFinalise { get; init; } = true;
+    public bool RequireIdentifierOnFinalise { get; init; } = true;
+
+    /// <summary>
+    /// Default identifier type/label used when a schema does not specify an explicit IdentifierConfig.Type.
+    /// Defaults to "URN".
+    /// </summary>
+    [Required, MinLength(1)]
+    public string DefaultIdentifierType { get; init; } = "URN";
 
     /// <summary>
     /// Ordered JSON paths searched to extract the identifier when a schema does not specify an explicit JsonPointer.
-    /// Supports both nested ODCS schemas ("school.urn") and flat schemas ("urn").
+    /// Defaults to ["school.urn", "urn"].
     /// </summary>
     [Required]
-    public IReadOnlyList<string> UrnJsonPaths { get; init; } = ["school.urn", "urn"];
+    public IReadOnlyList<string> DefaultIdentifierJsonPaths { get; init; } = ["school.urn", "urn"];
+
+    /// <summary>
+    /// Fallback JSON Pointer reported in diagnostics when no explicit or matched identifier pointer is available.
+    /// Defaults to "/urn".
+    /// </summary>
+    [Required, MinLength(1)]
+    public string DefaultIdentifierPointerFallback { get; init; } = "/urn";
 
     /// <summary>
     /// Maximum comprehension/loop iterations allowed per CEL evaluation.

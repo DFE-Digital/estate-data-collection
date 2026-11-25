@@ -6,8 +6,10 @@ using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Common.Extensions;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -17,11 +19,17 @@ namespace EstateDataCollection.Infrastructure.Persistence;
 public class BlobSubmissionInfrastructure(
     BlobServiceClient blobServiceClient,
     IOptions<BlobSubmissionRepositoryOptions> options,
-    BlobSubmissionInfrastructureInstrumentation? instrumentation = null
+    BlobSubmissionInfrastructureInstrumentation? instrumentation = null,
+    IOptions<ValidationOptions>? validationOptions = null
 ) : ISubmissionInfrastructure
 {
     private readonly BlobSubmissionInfrastructureInstrumentation _instrumentation =
         instrumentation ?? new BlobSubmissionInfrastructureInstrumentation(NullLogger<BlobSubmissionInfrastructure>.Instance);
+
+    private readonly string _defaultIdentifierType =
+        validationOptions?.Value?.DefaultIdentifierType is { Length: > 0 } dt
+            ? dt
+            : SchemaIdentifierConfig.DefaultIdentifierType;
 
     public async Task<Result<Guid>> CreateSessionAsync(SubmissionSession session, CancellationToken cancellationToken = default)
     {
@@ -256,12 +264,22 @@ public class BlobSubmissionInfrastructure(
             identifierValue,
             schemaName,
             schemaVersion,
-            submissionId);
+            submissionId,
+            _defaultIdentifierType);
+
+        var bundlePrefix = SubmissionBlobPathResolver.ResolveProcessedBundlePrefix(
+            options.Value.ProcessedBlobNameFormat,
+            identifierType,
+            identifierValue,
+            schemaName,
+            schemaVersion,
+            submissionId,
+            _defaultIdentifierType);
 
         var processedContainer = blobServiceClient.GetBlobContainerClient(options.Value.ProcessedContainerName);
         var processedBlob = processedContainer.GetBlobClient(targetBlobName);
 
-        Response<BlobContentInfo>? processedUpload = null;
+        var uploadedBundleBlobs = new List<BlobClient>();
         SubmissionSession? originalSessionSnapshot = null;
         var sessionUpdated = false;
 
@@ -320,7 +338,20 @@ public class BlobSubmissionInfrastructure(
                 Metadata = metadata
             };
 
-            processedUpload = await processedBlob.UploadAsync(stream, uploadOptions, cancellationToken);
+            var processedUpload = await processedBlob.UploadAsync(stream, uploadOptions, cancellationToken);
+            if (processedUpload?.HasValue == true || processedUpload is not null)
+            {
+                uploadedBundleBlobs.Add(processedBlob);
+            }
+
+            // Copy all existing audit entries into processed/{bundlePrefix}audit/
+            await CopyExistingAuditBlobsToBundleAsync(
+                payloadContainer,
+                processedContainer,
+                submissionId,
+                bundlePrefix,
+                uploadedBundleBlobs,
+                cancellationToken);
 
             var sessionResult = await GetSessionAsync(submissionId, cancellationToken);
             if (sessionResult.IsSuccess)
@@ -329,7 +360,7 @@ public class BlobSubmissionInfrastructure(
                 // Keep a pre-finalised snapshot so if any subsequent step fails, session.json is restored to Draft
                 originalSessionSnapshot = JsonSerializer.Deserialize<SubmissionSession>(JsonSerializer.Serialize(session));
 
-                session.Finalise();
+                session.Finalise(bundlePrefix);
                 if (!string.IsNullOrWhiteSpace(identifierValue))
                 {
                     session.AssignIdentifier(identifierType, identifierValue);
@@ -338,13 +369,19 @@ public class BlobSubmissionInfrastructure(
                 var sessionSaveResult = await CreateSessionAsync(session, cancellationToken);
                 if (sessionSaveResult.IsFailure)
                 {
-                    if (processedUpload?.HasValue == true)
-                    {
-                        await SafeDeleteIfExistsAsync(processedBlob);
-                    }
+                    await RollbackBundleBlobsAsync(uploadedBundleBlobs);
                     return sessionSaveResult.Error;
                 }
                 sessionUpdated = true;
+
+                // Write session envelope copy inside the self-contained processed bundle folder
+                var bundleSessionBlob = processedContainer.GetBlobClient(
+                    SubmissionBlobPathResolver.BuildProcessedSessionBlobName(bundlePrefix));
+                if (bundleSessionBlob is not null)
+                {
+                    await UploadSessionBlobAsync(bundleSessionBlob, session, cancellationToken);
+                    uploadedBundleBlobs.Add(bundleSessionBlob);
+                }
             }
 
             // Best-effort cleanup of the working draft.json snapshot; timestamped chunks under drafts/ remain for Admin inspection
@@ -359,11 +396,10 @@ public class BlobSubmissionInfrastructure(
         }
         catch (Exception ex)
         {
-            var rollbackTasks = new List<Task>(2);
-
-            if (processedUpload?.HasValue == true)
+            var rollbackTasks = new List<Task>(uploadedBundleBlobs.Count + 1);
+            foreach (var uploadedBlob in uploadedBundleBlobs)
             {
-                rollbackTasks.Add(SafeDeleteIfExistsAsync(processedBlob));
+                rollbackTasks.Add(SafeDeleteIfExistsAsync(uploadedBlob));
             }
 
             if (sessionUpdated && originalSessionSnapshot is not null)
@@ -378,6 +414,66 @@ public class BlobSubmissionInfrastructure(
 
             _instrumentation.StorageOperationFailed(nameof(PromoteToProcessedAsync), ex.Message);
             return Error.Failure(ErrorCodes.StoragePromotionFailed, new { ex.Message });
+        }
+    }
+
+    private async Task CopyExistingAuditBlobsToBundleAsync(
+        BlobContainerClient payloadContainer,
+        BlobContainerClient processedContainer,
+        Guid submissionId,
+        string bundlePrefix,
+        List<BlobClient> uploadedBundleBlobs,
+        CancellationToken cancellationToken)
+    {
+        var auditPrefix = SubmissionBlobPathResolver.ResolveAuditPrefix(options.Value.AuditBlobPrefixFormat, submissionId);
+        var blobs = payloadContainer.GetBlobsAsync(traits: BlobTraits.Metadata, states: BlobStates.None, prefix: auditPrefix, cancellationToken: cancellationToken);
+        if (blobs is null)
+        {
+            return;
+        }
+
+        await foreach (var blobItem in blobs)
+        {
+            if (!blobItem.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var sourceBlob = payloadContainer.GetBlobClient(blobItem.Name);
+            if (sourceBlob is null)
+            {
+                continue;
+            }
+
+            var download = await sourceBlob.DownloadContentAsync(cancellationToken);
+            if (download?.Value is null)
+            {
+                continue;
+            }
+
+            var fileName = blobItem.Name.StartsWith(auditPrefix, StringComparison.OrdinalIgnoreCase)
+                ? blobItem.Name[auditPrefix.Length..]
+                : Path.GetFileName(blobItem.Name);
+
+            var targetName = SubmissionBlobPathResolver.BuildProcessedAuditBlobName(bundlePrefix, fileName);
+            var targetBlob = processedContainer.GetBlobClient(targetName);
+            if (targetBlob is null)
+            {
+                continue;
+            }
+
+            var bytes = download.Value.Content.ToArray();
+            using var copyStream = new MemoryStream(bytes);
+            var uploadOptions = new BlobUploadOptions
+            {
+                HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" },
+                Metadata = blobItem.Metadata is { Count: > 0 }
+                    ? new Dictionary<string, string>(blobItem.Metadata)
+                    : null
+            };
+
+            await targetBlob.UploadAsync(copyStream, uploadOptions, cancellationToken);
+            uploadedBundleBlobs.Add(targetBlob);
         }
     }
 
@@ -486,6 +582,16 @@ public class BlobSubmissionInfrastructure(
         };
 
         return await chunkBlob.UploadAsync(stream, uploadOptions, cancellationToken);
+    }
+
+    private static async Task RollbackBundleBlobsAsync(IReadOnlyList<BlobClient> uploadedBlobs)
+    {
+        if (uploadedBlobs.Count == 0)
+        {
+            return;
+        }
+
+        await Task.WhenAll(uploadedBlobs.Select(SafeDeleteIfExistsAsync));
     }
 
     private static async Task RollbackDraftPayloadAsync(

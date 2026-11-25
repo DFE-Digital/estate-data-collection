@@ -73,7 +73,7 @@ public class IntegrationEndpointHarness : IDisposable, IAsyncDisposable
             [$"{BlobSubmissionRepositoryOptions.SectionName}:PayloadContainerName"] = fixture.PayloadsContainerName,
             [$"{BlobSubmissionRepositoryOptions.SectionName}:ProcessedContainerName"] = fixture.ProcessedContainerName,
             [$"{ValidationOptions.SectionName}:UnknownEngineBehavior"] = nameof(UnknownEngineBehavior.Fail),
-            [$"{ValidationOptions.SectionName}:RequireUrnOnFinalise"] = bool.TrueString
+            [$"{ValidationOptions.SectionName}:RequireIdentifierOnFinalise"] = bool.TrueString
         };
 
         if (configurationOverrides is not null)

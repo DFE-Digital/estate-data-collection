@@ -58,7 +58,7 @@ public sealed class NonUrnSubmissionPromotionIntegrationTests(AzuriteFixture fix
         finaliseData.Identifier.Should().BeNull();
         finaliseData.IdentifierType.Should().BeNull();
         finaliseData.ProcessedBlobUri.Should().NotContain("urn");
-        finaliseData.ProcessedBlobUri.Should().Contain($"schema%3D{nonUrnSchemaName}/v%3D1/{subId}.json");
+        finaliseData.ProcessedBlobUri.Should().Contain($"schema%3D{nonUrnSchemaName}/v%3D1/{subId}/payload.json");
     }
 
     [Fact]
@@ -117,6 +117,6 @@ public sealed class NonUrnSubmissionPromotionIntegrationTests(AzuriteFixture fix
 
         finaliseData.Identifier.Should().Be("201-3614");
         finaliseData.IdentifierType.Should().Be("LAEstab");
-        finaliseData.ProcessedBlobUri.Should().Contain($"laestab%3D201-3614/schema%3D{laestabSchemaName}/v%3D1/{subId}.json");
+        finaliseData.ProcessedBlobUri.Should().Contain($"laestab%3D201-3614/schema%3D{laestabSchemaName}/v%3D1/{subId}/payload.json");
     }
 }

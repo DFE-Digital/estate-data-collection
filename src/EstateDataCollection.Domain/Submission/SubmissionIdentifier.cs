@@ -6,13 +6,11 @@ using EstateDataCollection.Domain.Schema;
 namespace EstateDataCollection.Domain.Submission;
 
 /// <summary>
-/// Represents an extracted school / establishment identifier (URN, UKPRN, LAEstab, or custom scalar key)
+/// Represents an extracted establishment identifier (e.g. URN, UKPRN, LAEstab, or custom scalar key)
 /// resolved from a submission payload using the schema's configured pointer.
 /// </summary>
 public readonly record struct SubmissionIdentifier
 {
-    private static readonly IReadOnlyList<string> DefaultIdentifierPaths = ["school.urn", "urn"];
-
     public string Type { get; }
     public string Value { get; }
 
@@ -35,29 +33,19 @@ public readonly record struct SubmissionIdentifier
     public static Result<SubmissionIdentifier> Create(string? type, string? rawValue)
     {
         var effectiveType = string.IsNullOrWhiteSpace(type)
-            ? SchemaIdentifierConfig.DefaultUrnType
+            ? SchemaIdentifierConfig.DefaultIdentifierType
             : type.Trim();
 
         if (string.IsNullOrWhiteSpace(rawValue))
         {
-            return CreateValidationError(effectiveType, $"Identifier '{effectiveType}' cannot be empty.");
+            return CreateValidationError($"Identifier '{effectiveType}' cannot be empty.");
         }
 
         var trimmed = rawValue.Trim();
         if (trimmed.Contains('/') || trimmed.Contains('\\') || trimmed.Contains("..", StringComparison.Ordinal))
         {
             return CreateValidationError(
-                effectiveType,
                 $"Identifier '{effectiveType}' value '{trimmed}' contains characters not permitted for storage partitioning ('/', '\\', or '..').");
-        }
-
-        if (string.Equals(effectiveType, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase) &&
-            decimal.TryParse(trimmed, NumberStyles.Number, CultureInfo.InvariantCulture, out var numVal) &&
-            (numVal <= 0 || decimal.Truncate(numVal) != numVal))
-        {
-            return Error.Validation(
-                ErrorCodes.PayloadInvalidUrn,
-                "The 'urn' identifier must be a positive integer or valid identifier string.");
         }
 
         return new SubmissionIdentifier(effectiveType, trimmed);
@@ -65,7 +53,8 @@ public readonly record struct SubmissionIdentifier
 
     /// <summary>
     /// Extracts an identifier from a JSON payload along the configured path(s), distinguishing between
-    /// "NotPresent" (absent or explicit JSON null) and "Invalid" (wrong type, empty, non-positive URN, unsafe path chars).
+    /// "NotPresent" (absent or explicit JSON null) and "Invalid" (wrong type, empty, unsafe path chars).
+    /// Format or range rules belong in the schema contract rather than identifier type labels.
     /// </summary>
     public static Result<IdentifierExtractionOutcome> InspectPayload(
         string? jsonPayload,
@@ -78,10 +67,10 @@ public readonly record struct SubmissionIdentifier
         }
 
         var effectiveType = string.IsNullOrWhiteSpace(identifierType)
-            ? SchemaIdentifierConfig.DefaultUrnType
+            ? SchemaIdentifierConfig.DefaultIdentifierType
             : identifierType.Trim();
 
-        var pathsToSearch = jsonPaths is { Count: > 0 } ? jsonPaths : DefaultIdentifierPaths;
+        var pathsToSearch = jsonPaths ?? [];
 
         try
         {
@@ -110,23 +99,6 @@ public readonly record struct SubmissionIdentifier
 
                 if (element.ValueKind == JsonValueKind.Number)
                 {
-                    var isUrn = string.Equals(effectiveType, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase);
-                    if (isUrn)
-                    {
-                        if (!element.TryGetInt32(out var urnInt) || urnInt <= 0)
-                        {
-                            return new IdentifierExtractionOutcome(
-                                IdentifierExtractionStatus.Invalid,
-                                MatchedPath: pointerPath,
-                                ErrorMessage: $"Identifier '{effectiveType}' at '{pointerPath}' must be a positive integer.");
-                        }
-
-                        return new IdentifierExtractionOutcome(
-                            IdentifierExtractionStatus.Found,
-                            new SubmissionIdentifier(effectiveType, urnInt.ToString(CultureInfo.InvariantCulture)),
-                            pointerPath);
-                    }
-
                     var numText = element.GetRawText();
                     var createNum = Create(effectiveType, numText);
                     return createNum.IsSuccess
@@ -167,11 +139,9 @@ public readonly record struct SubmissionIdentifier
         }
     }
 
-    private static Error CreateValidationError(string effectiveType, string message)
+    private static Error CreateValidationError(string message)
     {
-        return string.Equals(effectiveType, SchemaIdentifierConfig.DefaultUrnType, StringComparison.OrdinalIgnoreCase)
-            ? Error.Validation(ErrorCodes.PayloadInvalidUrn, message)
-            : Error.Validation(ErrorCodes.PayloadInvalidIdentifier, new { Message = message });
+        return Error.Validation(ErrorCodes.PayloadInvalidIdentifier, new { Message = message });
     }
 
     private static string? TryFormatPointer(string? rawPath)

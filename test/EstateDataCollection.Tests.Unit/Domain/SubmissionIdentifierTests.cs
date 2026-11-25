@@ -8,12 +8,16 @@ namespace EstateDataCollection.Tests.Unit.Domain;
 public sealed class SubmissionIdentifierTests
 {
     [Fact]
-    public void InspectPayload_Should_Extract_Integer_Urn_String_Urn_And_Custom_String_Identifier()
+    public void InspectPayload_Should_Extract_Integer_String_And_Custom_Scalar_Identifiers_Uniformly()
     {
         var intUrn = SubmissionIdentifier.InspectPayload("""{"school":{"urn":123456}}""", ["/school/urn"], "URN").ShouldSucceed();
         intUrn.Status.Should().Be(IdentifierExtractionStatus.Found);
         intUrn.Identifier!.Value.Value.Should().Be("123456");
         intUrn.Identifier.Value.AsPositiveInt.Should().Be(123456);
+
+        var zeroScalar = SubmissionIdentifier.InspectPayload("""{"urn":0}""", ["/urn"], "URN").ShouldSucceed();
+        zeroScalar.Status.Should().Be(IdentifierExtractionStatus.Found);
+        zeroScalar.Identifier!.Value.Value.Should().Be("0");
 
         var strLaestab = SubmissionIdentifier.InspectPayload("""{"establishment":{"laestab":"201-3614"}}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
         strLaestab.Status.Should().Be(IdentifierExtractionStatus.Found);
@@ -34,13 +38,22 @@ public sealed class SubmissionIdentifierTests
         var emptyStr = SubmissionIdentifier.InspectPayload("""{"establishment":{"laestab":"  "}}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
         emptyStr.Status.Should().Be(IdentifierExtractionStatus.Invalid);
 
-        var zeroUrn = SubmissionIdentifier.InspectPayload("""{"urn":0}""", ["/urn"], "URN").ShouldSucceed();
-        zeroUrn.Status.Should().Be(IdentifierExtractionStatus.Invalid);
-
         var unsafeSlash = SubmissionIdentifier.InspectPayload("""{"establishment":{"laestab":"201/3614"}}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
         unsafeSlash.Status.Should().Be(IdentifierExtractionStatus.Invalid);
 
         var boolWrongType = SubmissionIdentifier.InspectPayload("""{"establishment":{"laestab":true}}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
         boolWrongType.Status.Should().Be(IdentifierExtractionStatus.Invalid);
+    }
+
+    [Fact]
+    public void Create_Should_Emit_Generic_PayloadInvalidIdentifier_For_Any_Type()
+    {
+        var urnUnsafe = SubmissionIdentifier.Create("URN", "123/456");
+        urnUnsafe.IsFailure.Should().BeTrue();
+        urnUnsafe.Error.Code.Should().Be("Payload.InvalidIdentifier");
+
+        var empty = SubmissionIdentifier.Create("CustomId", "  ");
+        empty.IsFailure.Should().BeTrue();
+        empty.Error.Code.Should().Be("Payload.InvalidIdentifier");
     }
 }

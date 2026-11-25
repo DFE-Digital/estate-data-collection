@@ -4,21 +4,21 @@ using EstateDataCollection.Common.Results;
 namespace EstateDataCollection.Domain.Schema;
 
 /// <summary>
-/// Per-schema-version metadata configuration for extracting an establishment / school identifier
-/// (e.g. URN, UKPRN, LAEstab, or any custom property) from a submission payload.
+/// Per-schema-version metadata configuration for extracting an establishment identifier
+/// (e.g. URN, UKPRN, LAEstab, or any custom scalar property) from a submission payload.
 /// Stored in {schemaName}/v{version}.meta.json so that ODCS data contracts
 /// remain agnostic of EDC storage partitioning and identifier extraction mechanics.
 /// </summary>
 public sealed record SchemaIdentifierConfig
 {
     public const string NoneType = "None";
-    public const string DefaultUrnType = "URN";
+    public const string DefaultIdentifierType = "URN";
 
     /// <summary>
     /// Identifier type/label (e.g. "URN", "UKPRN", "LAEstab", custom label, or "None" to disable).
-    /// Defaults to "URN".
+    /// Defaults to <see cref="DefaultIdentifierType"/>.
     /// </summary>
-    public string Type { get; init; } = DefaultUrnType;
+    public string Type { get; init; } = DefaultIdentifierType;
 
     /// <summary>
     /// JSON Pointer or dot-notation path to the identifier within the submission payload
@@ -29,7 +29,7 @@ public sealed record SchemaIdentifierConfig
 
     /// <summary>
     /// Automatically derived from the JSON Schema's 'required' declaration along <see cref="JsonPointer"/>
-    /// (falling back to ValidationOptions.RequireUrnOnFinalise when schema metadata is unavailable).
+    /// (falling back to ValidationOptions.RequireIdentifierOnFinalise when schema metadata is unavailable).
     /// </summary>
     public bool? Required { get; init; }
 
@@ -80,15 +80,16 @@ public sealed record SchemaIdentifierConfig
             return Error.Validation(
                 ErrorCodes.SchemaInvalidIdentifierConfig,
                 new { Message = $"Identifier JsonPointer '{JsonPointer}' is not a valid JSON Pointer or dot-notation object path." },
-                [new ValidationError("identifierConfig.jsonPointer", $"JsonPointer '{JsonPointer}' is not a valid object property path (examples: '/urn', '/school/urn').")]);
+                [new ValidationError("identifierConfig.jsonPointer", $"JsonPointer '{JsonPointer}' is not a valid object property path (examples: '/establishment/id', '/school/urn').")]);
         }
 
         return Result.Success();
     }
 
-    public SchemaIdentifierConfig Normalise()
+    public SchemaIdentifierConfig Normalise(string? defaultType = null)
     {
-        var trimmedType = string.IsNullOrWhiteSpace(Type) ? DefaultUrnType : Type.Trim();
+        var fallbackType = string.IsNullOrWhiteSpace(defaultType) ? DefaultIdentifierType : defaultType.Trim();
+        var trimmedType = string.IsNullOrWhiteSpace(Type) ? fallbackType : Type.Trim();
         if (string.Equals(trimmedType, NoneType, StringComparison.OrdinalIgnoreCase))
         {
             return new SchemaIdentifierConfig
@@ -99,9 +100,9 @@ public sealed record SchemaIdentifierConfig
             };
         }
 
-        if (string.Equals(trimmedType, DefaultUrnType, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(trimmedType, fallbackType, StringComparison.OrdinalIgnoreCase))
         {
-            trimmedType = DefaultUrnType;
+            trimmedType = fallbackType;
         }
 
         var pointer = string.IsNullOrWhiteSpace(JsonPointer) ? null : JsonPointer.Trim();

@@ -217,10 +217,10 @@ public sealed class SubmissionExecutionScopeTests
         var idStep = scope.Processes[2];
         idStep.ProcessName.Should().Be("IdentifierExtractor");
         idStep.Outcome.Should().Be(SubmissionProcessOutcome.ValidationErrorsFound);
-        idStep.ErrorCode.Should().Be("Payload.InvalidUrn");
+        idStep.ErrorCode.Should().Be("Payload.InvalidIdentifier");
         idStep.Errors.Should().ContainSingle();
         idStep.Errors![0].PropertyPath.Should().Be("#/urn");
-        idStep.Errors[0].RuleId.Should().Be("Payload.InvalidUrn");
+        idStep.Errors[0].RuleId.Should().Be("Payload.InvalidIdentifier");
     }
 
     [Fact]

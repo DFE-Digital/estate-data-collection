@@ -72,7 +72,7 @@ public static class IdentifierPropertyDiscovery
             return fallbackType.Trim();
         }
 
-        return SchemaIdentifierConfig.DefaultUrnType;
+        return SchemaIdentifierConfig.DefaultIdentifierType;
     }
 
     public static IReadOnlyList<SchemaIdentifierPropertyOption> FromFieldDescriptors(

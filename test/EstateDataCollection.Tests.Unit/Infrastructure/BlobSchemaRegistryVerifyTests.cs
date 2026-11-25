@@ -35,7 +35,7 @@ public class BlobSchemaRegistryVerifyTests
       "type": "object",
       "required": ["surveyName"],
       "properties": {
-        "urn": { "type": "integer" },
+        "urn": { "type": "integer", "minimum": 1 },
         "surveyName": { "type": "string" }
       }
     }

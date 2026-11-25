@@ -55,7 +55,7 @@ public static class IdentifierSchemaValidator
             }
         }
 
-        var fallbackPaths = defaultPaths is { Count: > 0 } ? defaultPaths : ["school.urn", "urn"];
+        var fallbackPaths = defaultPaths is { Count: > 0 } ? defaultPaths : [];
 
         // Rules-only verification (no JSON schema in this payload): validate definition only.
         if (string.IsNullOrWhiteSpace(rawJsonSchema))
@@ -208,7 +208,7 @@ public static class IdentifierSchemaValidator
                 new ValidationMessage(
                     typeof(IdentifierSchemaValidator),
                     "identifierConfig.jsonPointer",
-                    $"Schema does not declare a compatible school identifier property at any default path ({searchedFormatted}). Configure IdentifierConfig.JsonPointer (or upload a .meta.json), or set IdentifierConfig.Type to 'None'.",
+                    $"Schema does not declare a compatible establishment identifier property at any default path ({searchedFormatted}). Configure IdentifierConfig.JsonPointer (or upload a .meta.json), or set IdentifierConfig.Type to 'None'.",
                     source: ValidationSources.Identifier)
             ]);
     }

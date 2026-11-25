@@ -149,9 +149,9 @@ public sealed class AdminUiStatisticsAndSubmissionInspectorIntegrationTests(Azur
         finaliseRes.Identifier.Should().Be("104521");
         finaliseRes.IdentifierType.Should().Be("URN");
 
-        // Verify processed blob actually contains the merged data from BOTH timestamped chunks
+        // Verify processed blob bundle actually contains the merged data from BOTH timestamped chunks
         var processedContainer = _harness.BlobClient.GetBlobContainerClient(_harness.ProcessedContainerName);
-        var processedBlob = processedContainer.GetBlobClient($"urn=104521/schema={schemaA}/v=1/{mergedDraftId}.json");
+        var processedBlob = processedContainer.GetBlobClient($"urn=104521/schema={schemaA}/v=1/{mergedDraftId}/payload.json");
         (await processedBlob.ExistsAsync()).Value.Should().BeTrue();
         var processedContent = (await processedBlob.DownloadContentAsync()).Value.Content.ToString();
         using (var processedDoc = JsonDocument.Parse(processedContent))
