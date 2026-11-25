@@ -117,6 +117,26 @@ public class FunctionEndpointAndEventArchitectureTests
 
     [Theory]
     [MemberData(nameof(FunctionHostAssemblies))]
+    public void Every_BlobTrigger_Should_Use_EventGrid_Source_For_Flex_Consumption(Assembly hostAssembly)
+    {
+        var blobTriggers = hostAssembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false })
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .SelectMany(m => m.GetParameters())
+                .Select(p => (Type: t, Trigger: p.GetCustomAttribute<BlobTriggerAttribute>()))
+                .Where(x => x.Trigger is not null))
+            .ToList();
+
+        foreach (var (type, trigger) in blobTriggers)
+        {
+            trigger!.Source.Should().Be(
+                BlobTriggerSource.EventGrid,
+                $"{type.Name} runs on Azure Functions Flex Consumption, which only supports EventGrid as the BlobTrigger source.");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(FunctionHostAssemblies))]
     public void AddFunctions_Should_Resolve_All_Registered_Endpoints_And_Events_From_DI(Assembly hostAssembly)
     {
         var config = BuildBaseConfiguration();
