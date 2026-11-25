@@ -14,8 +14,6 @@ All contracts, generated schemas, and the CI workflow from `DFE-Digital/cde-data
 | [`edc-survey-elements.odcs.yaml`](file:///Users/chriskelly/Downloads/edc-mvp/src-dotnet-corrolation/estate-data-collection/.worktrees/latest-odcs-schemas/cde-data-contracts/contracts/edc-survey-elements.odcs.yaml) | [`edc-survey-elements.schema.json`](file:///Users/chriskelly/Downloads/edc-mvp/src-dotnet-corrolation/estate-data-collection/.worktrees/latest-odcs-schemas/cde-data-contracts/schemas/edc-survey-elements.schema.json) | `edc-survey-elements.rules.json` | `edc-survey-elements` | `CDC-DQ1-JSONLogic` (`engine: jsonlogic` on `survey`) |
 | [`edc-survey-evidenceandanswers.odcs.yaml`](file:///Users/chriskelly/Downloads/edc-mvp/src-dotnet-corrolation/estate-data-collection/.worktrees/latest-odcs-schemas/cde-data-contracts/contracts/edc-survey-evidenceandanswers.odcs.yaml) | [`edc-survey-evidenceandanswers.schema.json`](file:///Users/chriskelly/Downloads/edc-mvp/src-dotnet-corrolation/estate-data-collection/.worktrees/latest-odcs-schemas/cde-data-contracts/schemas/edc-survey-evidenceandanswers.schema.json) | `edc-survey-evidenceandanswers.rules.json` | `edc-survey-answers-evidence` | `CDC-DQ1-JSONLogic` (`engine: jsonlogic` on `survey`) |
 
----
-
 ## 2. Dual-Route Contract Ingestion & Draft Container Event Grid Pipeline
 
 Because `datacontract-cli` strips `quality` blocks when exporting `.schema.json`, EDC supports **two ingestion routes** (automatically routed by file type / content format) across both **HTTP endpoints** and **Azure Event Grid (`Microsoft.Storage.BlobCreated`) on the `draft-schemas` container**:
@@ -71,8 +69,6 @@ flowchart LR
   - Valid contracts are promoted to the `schemas` container and deleted from `draft-schemas`.
   - Invalid contracts remain in `draft-schemas` with a companion `{blobPath}.error.json` diagnostic report.
 
----
-
 ## 3. High-Performance Multi-Engine Quality Validation (`FrozenDictionary` + Path Grouping)
 
 ### 1. Unified `BusinessRule` Model
@@ -101,8 +97,6 @@ Unifies ODCS v3.2.0 `quality` definitions and standalone `.rules.json` definitio
 2. **`CelQualityEngine` (`engine: "cel"`)**:
    - Compiles and evaluates Common Expression Language (CEL) string expressions with AST caching (`Celly`).
    - Supports logical/comparison operators (`&&`, `||`, `!`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `? :`), `timestamp()`, `int()`, `double()`, `string()`, `size()`, `has()`, `in`, and string functions.
-
----
 
 ## 4. Configuration (`ValidationOptions`) & Schema/URN Tweaks
 

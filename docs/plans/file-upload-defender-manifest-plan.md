@@ -5,8 +5,6 @@
   - [Validation Workflow Engine Plan](validation-workflow-engine-plan.md)
   - [ADR 0010 — Direct-to-Storage Landing Zone & User-Delegation SAS](../decisions/0010-direct-to-storage-landing-zone-and-user-delegation-sas.md)
 
----
-
 ## 1. Problem & Security Requirement
 
 Rules such as `CCD-ELEM-V3-002` and `CCD-ELEM-V3-045` verify that `photoReference` (and future attachment identifiers) correspond to actual files uploaded alongside a submission. However, user-uploaded binary files cannot be indexed, trusted in validation, or promoted into the `processed` bundle folder until:
@@ -14,8 +12,6 @@ Rules such as `CCD-ELEM-V3-002` and `CCD-ELEM-V3-045` verify that `photoReferenc
 1. The upload is correlated with an active `submissionId` (and optionally `fileId` / metadata) **before** or **at** landing so scan results route back to the right submission.
 2. **Microsoft Defender for Storage** scans the uploaded blob asynchronously and emits a scan verdict (`No threats found` vs `Malicious`).
 3. The application **never consumes, trusts, or promotes** un-scanned or malicious files—and cleanly blocks/reports pending or failed scans when the submission runs validation or `/finalise`.
-
----
 
 ## 2. Proposed Architecture & Storage Flow
 
@@ -31,8 +27,6 @@ flowchart LR
     Verified -->|"5. On Validate / Finalise"| WorkflowStep["file-manifest-enrichment\nIWorkflowStep"]
     Verified -->|"6. On Finalise Promotion"| Processed["processed/.../{submissionId}/files/"]
 ```
-
----
 
 ## 3. Key Design Areas to Finalise
 
@@ -75,8 +69,6 @@ flowchart LR
 ### 3.4 Processed Bundle Archival
 - Once all required files are `Clean`, `BlobSubmissionInfrastructure.PromoteToProcessedAsync` copies `{submissionId}/files/*` (both verified binaries and `.manifest.json` files) into:
   `processed/{identifierType}={establishmentIdentifier}/schema={schemaName}/v={schemaVersion}/{submissionId}/files/`
-
----
 
 ## 4. Open Investigation Items Before Implementation
 

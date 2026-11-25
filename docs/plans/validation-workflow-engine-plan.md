@@ -4,8 +4,6 @@
 - **Branch:** `feature/validation-workflow-engine` (branched from `main` at `7379317`)
 - **Status:** Proposed Plan (Ready for Review)
 
----
-
 ## Goals & Architectural Principles
 
 1. **Make all code-level identifier concepts agnostic** (`identifierType` + `identifierValue` / `establishmentIdentifier`, generic option/property names, uniform scalar validation, generic UI labels) while **preserving `URN` as the configuration default** (`ValidationOptions`, `BlobSubmissionRepositoryOptions`, `local.settings*.json`) so existing deployments continue working seamlessly.
@@ -16,15 +14,56 @@
 6. **Support cross-submission lookups (draft + finalised)** governed by per-schema draft policy.
 7. **Turn `POST /schemas/verify` into a non-failing diagnostic report** and expand `SchemaLifecycleState` with **`Invalid`**, **`Unvalidated`** (warning-level sign-off), and **`Deleted`** (tombstone preserving `.meta.json` + `.error.json` so consumed version keys cannot be overwritten and fixes must advance to `version + 1`).
 
----
+### Architecture Overview
+
+```mermaid
+flowchart LR
+    subgraph Entry["Entry Operations"]
+        OP1["SubmissionDraft / SubmissionFinalise"]
+        OP2["SchemaVerify / SchemaIngest"]
+    end
+
+    subgraph Policy["Per-Schema Policy"]
+        POL["SchemaValidationPolicy\nFailOnMinimumSeverity\nWorkflowPipelineKey (null = Default)\nCrossSubmissionDraftPolicy\nNumericToleranceOverride"]
+    end
+
+    subgraph Pipeline["IValidationWorkflowRunner"]
+        S1["1. json-schema"]
+        S2["2. identifier-extraction"]
+        S3["3. cross-submission-enrichment"]
+        S4["4. reference-data-enrichment"]
+        S5["5. quality-rules\n(QualityRuleCoordinator)"]
+        S6["contract-consistency-analyzer\n(Verify & Ingest)"]
+    end
+
+    subgraph Engines["IQualityRuleEngine Registry"]
+        E1["jsonlogic\n(Decimal + Tolerance)"]
+        E2["cel\n(Epsilon Float Equality)"]
+        E3["unique\n(O(N) Composite Keys)"]
+    end
+
+    subgraph Storage["Azure Blob Containers"]
+        B1["payloads/\n{submissionId}/ + identifier-index/"]
+        B2["schemas/\n.schema .rules .meta .error"]
+        B3["processed/\n{type}={estId}/schema=.../v=.../{submissionId}/"]
+    end
+
+    OP1 --> POL
+    OP2 --> POL
+    POL --> Pipeline
+    S1 --> S2 --> S3 --> S4 --> S5
+    S5 --> Engines
+    OP2 -.-> S6
+    S3 <--> B1
+    OP1 -->|Finalise| B3
+    OP2 -->|Persist State| B2
+```
 
 ## Deferred / Separate Plans
 
 The following capabilities depend on additional discovery/infrastructure and are tracked in their own dedicated plans under `docs/plans/`:
 - **Submission File Uploads, Defender Malware Scanning & Per-File Manifests:** See [File Upload, Defender Scan & Per-File Manifest Plan](file-upload-defender-manifest-plan.md).
 - **SQL Quality Validation Engine (`type: sql` / `engine: sql`):** See [SQL Quality Validation Engine Plan](sql-quality-engine-plan.md).
-
----
 
 ## Phase 0 — Identifier-Agnostic Codebase (Keeping `URN` in Configuration Defaults) & Processed Submission Bundle Folder
 
@@ -53,6 +92,39 @@ Building on [ADR 0019](../decisions/0019-configurable-schema-verified-identifier
   - Update unit/integration tests for the renamed generic symbols (`RequireIdentifierOnFinalise`, `DefaultIdentifierJsonPaths`, `PayloadInvalidIdentifier`) while preserving config-default tests.
 
 ### 0.2 Processed Submission Bundle Folder (`{submissionId}/`)
+
+```mermaid
+flowchart LR
+    subgraph Working["payloads Container (Working & Lookup Pointer)"]
+        WS["{submissionId}/session.json\n(retains ProcessedBundlePrefix)"]
+        WD["{submissionId}/draft.json\n(deleted on promotion)"]
+        WC["{submissionId}/drafts/*.json"]
+        WA["{submissionId}/audit/*.json"]
+    end
+
+    subgraph Promote["Promotion & Audit Mirroring"]
+        P1["BlobSubmissionInfrastructure\nPromoteToProcessedAsync"]
+        P2["SubmissionUseCaseAuditDecorator\n+ BlobSubmissionAuditStore"]
+    end
+
+    subgraph Bundle["processed Container: {idType}={establishmentIdentifier}/schema={schema}/v={ver}/{submissionId}/"]
+        BP["payload.json\n(merged + SHA-256)"]
+        BS["session.json\n(finalised envelope)"]
+        BA["audit/{ts}_{eventId}.json\n(prior + FinaliseSubmission audit)"]
+    end
+
+    WD -->|Merge & SHA-256| P1
+    WA -->|Copy existing| P1
+    WS -->|Finalise + Prefix| P1
+    P1 -->|Upload| BP
+    P1 -->|Write copy| BS
+    P1 -->|Copy history| BA
+    P1 -.->|Update pointer| WS
+    P1 -->|Post-return audit| P2
+    P2 -->|Mirror Finalise entry| BA
+    P2 -->|Append| WA
+```
+
 - **Configuration Defaults (`BlobSubmissionRepositoryOptions.cs` & `local.settings*.json`):**
   - Update `ProcessedBlobNameFormat` default in [`BlobSubmissionRepositoryOptions.cs`](../../src/EstateDataCollection.Infrastructure/Persistence/BlobSubmissionRepositoryOptions.cs) and `src/EstateDataCollection.AzureFunctions.*/local.settings.example.json` to:
     `"urn={establishmentIdentifier}/schema={schemaName}/v={schemaVersion}/{submissionId}/payload.json"`
@@ -63,14 +135,6 @@ Building on [ADR 0019](../decisions/0019-configurable-schema-verified-identifier
     - `{bundlePrefix}payload.json`
     - `{bundlePrefix}session.json`
     - `{bundlePrefix}audit/{timestamp}_{eventId}.json`
-- **Self-Contained Processed Bundle Structure (`processed` container):**
-  ```text
-  {identifierType}={establishmentIdentifier}/schema={schemaName}/v={schemaVersion}/{submissionId}/
-    payload.json                 # Merged validated submission payload
-    session.json                 # Finalised SubmissionSession envelope (incl. ProcessedBundlePrefix)
-    audit/
-      {ts}_{eventId}.json        # Complete audit trail including the FinaliseSubmission outcome
-  ```
 - **Session Envelope, Promotion & Audit Mirroring:**
   - [`SubmissionSession.cs`](../../src/EstateDataCollection.Domain/Submission/SubmissionSession.cs): Add `[JsonInclude] public string? ProcessedBundlePrefix { get; private set; }` (recorded on `Finalise(string? processedBundlePrefix)`).
   - [`BlobSubmissionInfrastructure.PromoteToProcessedAsync`](../../src/EstateDataCollection.Infrastructure/Persistence/BlobSubmissionInfrastructure.cs):
@@ -83,8 +147,6 @@ Building on [ADR 0019](../decisions/0019-configurable-schema-verified-identifier
     - Because `SubmissionUseCaseAuditDecorator` writes the `"FinaliseSubmission"` `"Succeeded"` audit entry *after* `FinaliseSubmissionUseCase` returns, `PromoteToProcessedAsync` surfaces the resolved `ProcessedBundlePrefix` (via scope/session context), and `BlobSubmissionAuditStore.AppendAsync` mirrors any audit entry written after promotion into `processed/{ProcessedBundlePrefix}audit/{ts}_{eventId}.json` as well as `payloads/{submissionId}/audit/{ts}_{eventId}.json`.
   - [`BlobSubmissionQueryRepository.GetProcessedArtefactAsync`](../../src/EstateDataCollection.Infrastructure/Persistence/BlobSubmissionQueryRepository.cs):
     - Resolves `session.ProcessedBundlePrefix + "payload.json"` (or `ProcessedBlobNameFormat`), with fallback matching both `/{submissionId}/payload.json` and legacy `/{submissionId}.json` blobs so historical records stay readable.
-
----
 
 ## Phase 1 — `RuleSeverity` Enum, `Issues` Dictionary, Runbook Ordering & Per-Schema Policy
 
@@ -126,17 +188,47 @@ Building on [ADR 0019](../decisions/0019-configurable-schema-verified-identifier
 ### 1.3 Runbook / Stage Execution Across All Quality Rule Engines (`IBusinessLogicValidator`)
 > **Note:** [`JsonLogicValidator`](../../src/EstateDataCollection.Infrastructure/Validation/JsonLogicValidator.cs) implements `IBusinessLogicValidator` and is actually the central quality-rule coordinator that dispatches to **all** registered `IQualityRuleEngine` implementations (`JsonLogicQualityEngine` for `jsonlogic`, `CelQualityEngine` for `cel`, and in Phase 2 `UniqueCombinationQualityEngine` for `unique`). As part of this phase, rename/alias it to `QualityRuleCoordinator` (keeping backwards-compatible registration if needed) so the architecture accurately reflects that severity, ordering, and target enrichment govern **every** quality engine equally—not just JSON Logic.
 
+```mermaid
+flowchart TD
+    R["Enabled Rules\n(Critical, Error, Warning, Info)"] --> SORT["Topological & Stage Sort\nby Stage, Order, DependsOn"]
+    SORT --> STG["For Each Stage"]
+    STG --> GRP["Group Rules by Target Path\n(Traverse & Enrich Once per Path)"]
+    GRP --> DEP{"Dependency in DependsOn\nFailed Earlier?"}
+    DEP -->|Yes| SKP["Record Skipped in Engine Trace\n(Suppress Cascading Noise)"]
+    DEP -->|No| DISP["Dispatch to Engine\n(jsonlogic | cel | unique)"]
+    DISP --> PASS{"Passed?"}
+    PASS -->|Yes| NEXT["Continue Stage"]
+    PASS -->|No| BUCKET["Add ValidationError to\nIssues Bucket by Severity"]
+    BUCKET --> HALT{"Critical or\nStopOnFailure?"}
+    HALT -->|Yes| END["Halt Subsequent Stages"]
+    HALT -->|No| NEXT
+    NEXT --> GATE["Evaluate SchemaValidationPolicy\nFailOnMinimumSeverity"]
+    END --> GATE
+    GATE --> OUT["isSuccessful = !HasIssuesAtOrAbove(Threshold)"]
+```
+
 - Update the coordinator (`JsonLogicValidator` / `QualityRuleCoordinator`) so it **evaluates all enabled severities** (`Critical`, `Error`, `Warning`, `Info`) across `jsonlogic`, `cel`, and `unique` instead of skipping `WARNING`.
 - Execution order:
   1. Topological/stage sort by `(Stage, Order)` honoring `DependsOn` across all quality rules regardless of which `IQualityRuleEngine` evaluates each rule.
   2. Within each stage, group by `rule.Path` so target traversal (`RuleTargetResolver`) and context enrichment still happen **once per path per stage** for all engines (`jsonlogic`, `cel`, `unique`).
   3. Track `failedRuleIds`: if any dependency in `rule.DependsOn` failed, mark the dependent rule `Skipped` in traces rather than emitting cascading noise; if a `Critical` (or `StopOnFailure`) rule fails, halt subsequent stages.
 
----
-
 ## Phase 2 — Pluggable Workflow Pipeline & Engine Enhancements
 
 ### 2.1 `IValidationWorkflowRunner` & `IWorkflowStep`
+
+```mermaid
+flowchart LR
+    OP["OperationKind\n(Draft | Finalise | Verify | Ingest)"] --> RES{"Resolve Pipeline Key\nPolicy.WorkflowPipelineKey ?? Default"}
+    RES --> DEF["ValidationWorkflowDefinition\nOrdered WorkflowStepBindings"]
+    DEF --> S1["Step 1: json-schema"]
+    S1 -->|RunCondition Check| S2["Step 2: identifier-extraction"]
+    S2 -->|Extracted ID Available| S3["Step 3: cross-submission-enrichment"]
+    S3 --> S4["Step 4: reference-data-enrichment"]
+    S4 --> S5["Step 5: quality-rules\n(With Ancestor Context + Tolerance + Unique)"]
+    S5 --> TRACE["Automatic Emission:\nSubmissionExecutionScope + ValidationEngineTraces"]
+```
+
 - Extract orchestration out of [`PayloadValidationService`](../../src/EstateDataCollection.Application/Validators/PayloadValidationService.cs) into a modular pipeline engine:
   - **`IWorkflowStep`**:
     - `string StepId { get; }`
@@ -155,6 +247,15 @@ Building on [ADR 0019](../decisions/0019-configurable-schema-verified-identifier
   5. `quality-rules` (`QualityRuleCoordinator` → `JsonLogicQualityEngine`, `CelQualityEngine`, `UniqueCombinationQualityEngine`)
 
 ### 2.2 Ancestor Context (`RuleTargetResolver`)
+
+```mermaid
+flowchart TD
+    ROOT["rootNode ($root)"] --> EL["elements[i] ($ancestors[0], $parent for occurrences)"]
+    EL --> OCC["occurrences[j] ($parent for repairs)"]
+    OCC --> REP["repairs[k] ($index = k)"]
+    REP --> CTX["Enriched Context Node\n(All repair fields + $parent + $ancestors + $root + $index + ambient)"]
+```
+
 - Update [`RuleTargetResolver`](../../src/EstateDataCollection.Infrastructure/Validation/RuleTargetResolver.cs) to track the ancestor stack while descending `elements[].occurrences[].repairs[]`:
   - Inject `$parent` (immediate parent object), `$ancestors` (ordered parent chain), `$root` (full root payload), and `$index` (current array element index) into the enriched context node without overwriting real payload properties (`CelQualityEngine` and `JsonLogicQualityEngine` both consume `enrichedContextNode`).
   - Enables cross-level rules like `CCD-ELEM-V3-019` (`repairItem` vs `$parent.$parent.productType`) and `CCD-ELEM-V3-026` (`$parent.replacement.replacementQuantity > repairQuantity`) while still reporting the exact failing leaf JSON pointer.
@@ -171,8 +272,6 @@ Building on [ADR 0019](../decisions/0019-configurable-schema-verified-identifier
   - Accepts `path` (e.g. `elements[].occurrences[]`) and `fields` (`["$parent.productType", "surveyLevel", "occurrenceExtentOrLocationDescription", "conditionGrade"]`).
   - Evaluates in $O(N)$ using a `HashSet` in C#, avoiding CEL's $O(N^2)$ `CelMaxIterations` cap and reporting the exact duplicate item JSON pointer (covers `CCD-ELEM-V3-032` and `CCD-ELEM-V3-034`).
 
----
-
 ## Phase 3 — Cross-Submission Index & Reference Data Engines
 
 ### 3.1 Async Enrichment Architecture
@@ -183,6 +282,25 @@ Building on [ADR 0019](../decisions/0019-configurable-schema-verified-identifier
   - Optional `AmbientFixtures` (for `POST /schemas/verify` dry-runs without live blob storage)
 
 ### 3.2 Establishment Identifier Index & Cross-Submission Enrichment Engine
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Public API (Update / Finalise)
+    participant Idx as identifier-index/{type}/{val}.json
+    participant Enrich as cross-submission-enrichment
+    participant Sib as Sibling Storage (payloads / processed)
+
+    Client->>API: PUT Draft / POST Finalise
+    API->>Idx: Upsert entry (submissionId, status = Draft or Finalised)
+    API->>Enrich: Run step with ExtractedIdentifier
+    Enrich->>Idx: Lookup sibling submissions for identifier
+    Enrich->>Sib: Load sibling payloads (drafts + finalised)
+    Enrich-->>API: Inject ambient.cross_submission (tagged by status)
+    Note over API: On POST /finalise check CrossSubmissionDraftPolicy
+    API-->>Client: Block / Warn / Allow if Draft sibling referenced
+```
+
 - **Problem solved:** `payloads` is keyed by `{submissionId}/...`, so scanning all draft containers by identifier on every request does not scale, and unfinalised sibling drafts can change before `/finalise`.
 - **Design:**
   - Maintain a lightweight index in Blob Storage (e.g., `identifier-index/{identifierType}/{identifierValue}.json` in `payloads` or a dedicated index container) updated when a session receives its identifier on `PUT` or transitions to `Finalised`.
@@ -198,8 +316,6 @@ Building on [ADR 0019](../decisions/0019-configurable-schema-verified-identifier
   - Loads versioned reference datasets (e.g. `reference-data/ccd-elemental-v3/product-types.json`, `repair-items-by-product-type.json`) with memory caching.
   - Injects `ambient.reference.<datasetName>` into rule evaluation context so `CCD-ELEM-V3-001` and `CCD-ELEM-V3-019` work without hardcoding thousands of enum/if-then entries into JSON Schema.
 
----
-
 ## Phase 4 — Contract Consistency Analyzer, `Verify` Report & Schema Ingestion Lifecycle
 
 ### 4.1 Contract Consistency Analyzer Engine (`contract-consistency-analyzer`)
@@ -214,6 +330,26 @@ Runs during `SchemaVerify` and `SchemaIngest` pipelines and emits `issues` group
 - Always returns **`200 OK`** with a full structured verification report (`issues` dictionary across `critical`/`error`/`warning`/`info`, analyzer findings, valid/invalid fixture outcomes, and engine traces) — **never** fails HTTP status because of schema/rule/fixture issues (only `400` on completely unreadable HTTP request body).
 
 ### 4.3 Schema Lifecycle States (`Invalid`, `Unvalidated`, `Deleted`) & `.error.json`
+
+```mermaid
+stateDiagram-v2
+    [*] --> Ingesting : HTTP Submit or Event Grid Draft Drop
+    Ingesting --> Conflict409 : Version key exists (incl. Deleted tombstone)
+    Ingesting --> Invalid : Hard errors (writes .meta.json + .error.json)
+    Ingesting --> Unvalidated : Warnings only (writes .meta.json + .error.json)
+    Ingesting --> Validated : 0 hard errors and 0 warnings
+
+    Invalid --> Deleted : DELETE version (keeps .meta.json + .error.json)
+    Unvalidated --> Validated : PATCH signoff (records SignedOffBy)
+    Unvalidated --> Deleted : DELETE version (keeps .meta.json + .error.json)
+    Validated --> Scheduled : Schedule activation date
+    Scheduled --> Active : Activation window reached
+    Active --> Retired : Superseded or retired
+    Validated --> Deleted : DELETE version (keeps .meta.json + .error.json)
+
+    Deleted --> Conflict409 : Subsequent v drop rejected (must push v+1)
+```
+
 Update [`SchemaLifecycleState`](../../src/EstateDataCollection.Domain/Schema/SchemaLifecycleState.cs) and [`BlobSchemaRegistryOptions`](../../src/EstateDataCollection.Infrastructure/Registry/BlobSchemaRegistryOptions.cs):
 - Add `{schemaName}/v{version}.error.json` inside the `schemas` container (`ErrorBlobDirectory = "{schemaName}/v{version}.error.json"`).
 - New states:
@@ -224,8 +360,6 @@ Update [`SchemaLifecycleState`](../../src/EstateDataCollection.Domain/Schema/Sch
     - Any subsequent `POST /schemas/{schemaName}/versions/{version}` or Event Grid draft drop targeting that consumed version key returns **`409 Conflict`** (requiring fixes to be pushed as `version + 1`).
     - Admin API & UI surface `.error.json` highlights for `Invalid` / `Unvalidated` schemas and show `Deleted` tombstones as audit records; Public discovery hides `Invalid`, `Unvalidated`, and `Deleted`.
 
----
-
 ## Phase 5 — CCD Elemental Dataset v3 Verification & Surfaces Update
 
 1. **CCD Elemental Dataset v3 ODCS Contract & Fixtures:**
@@ -233,8 +367,6 @@ Update [`SchemaLifecycleState`](../../src/EstateDataCollection.Domain/Schema/Sch
 2. **Admin UI & Postman Updates:**
    - Update Admin UI (`SchemaDetailPage`, `SchemaVersionsPage`, `WorkbenchPage`, `SubmissionDetailPage`, `SubmissionsPage`) to render the `issues` dictionary by severity, highlight `.error.json` diagnostics, support `Unvalidated` sign-off and `Deleted` tombstones, and show pipeline step traces.
    - Update [`EstateDataCollection.postman_collection.json`](../postman/EstateDataCollection.postman_collection.json) to cover the new workflow, `issues` dictionary, cross-submission lookups, processed bundle layout, and `Invalid`/`Unvalidated`/`Deleted` schema states.
-
----
 
 ## Verification Plan (Per Phase)
 

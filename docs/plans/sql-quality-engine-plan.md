@@ -38,6 +38,37 @@ The data team generates ODCS contracts from Databricks / Open Metadata and wants
 
 ## 3. Data Mapping & Query Execution Model
 
+```mermaid
+flowchart LR
+    subgraph Input["Nested JSON + Enrichers"]
+        PAY["Payload JSON\n(survey -> elements -> occurrences -> repairs)"]
+        AMB["Ambient Context\n(reference datasets, cross_submission)"]
+    end
+
+    subgraph Guard["Verify & Pre-Flight Sandbox"]
+        AST["Read-Only SQL AST Guard\n(Allow SELECT/WITH only;\nReject DDL/DML/External I/O)"]
+    end
+
+    subgraph Engine["SqlQualityEngine (:memory: DuckDB / SQLite)"]
+        PROJ["Relational Projection\n(elements, occurrences, repairs + _json_pointer)"]
+        MODE{"ODCS Rule Mode"}
+        M1["Metric Assertion\n(COUNT/SUM vs mustBe)"]
+        M2["Violation Rows\n(SELECT non-compliant rows)"]
+        M3["Scoped Predicate\n(WHERE NOT condition)"]
+    end
+
+    PAY --> PROJ
+    AMB --> PROJ
+    AST --> MODE
+    PROJ --> MODE
+    MODE --> M1
+    MODE --> M2
+    MODE --> M3
+    M1 --> OUT["ValidationError[] + Issues Bucket"]
+    M2 --> OUT
+    M3 --> OUT
+```
+
 ### 3.1 Relational Table Projection from Hierarchical Payload
 Given a nested JSON payload, expose predictable relational views/tables to SQL rules without mutating source data:
 - Root object fields → `payload` / `root` (and top-level schema object name from ODCS, e.g., `survey` or `submission`)
