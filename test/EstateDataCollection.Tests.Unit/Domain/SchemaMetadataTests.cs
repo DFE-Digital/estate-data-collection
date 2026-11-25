@@ -1,6 +1,6 @@
+using AwesomeAssertions;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Builders;
-using AwesomeAssertions;
 using Xunit;
 
 namespace EstateDataCollection.Tests.Unit.Domain;
@@ -10,8 +10,11 @@ public class SchemaMetadataTests
     [Fact]
     public void When_Creating_A_Valid_Draft_Schema_It_Should_Calculate_Sha256_Hash_And_Activate()
     {
+        // Arrange
+        var builder = new SchemaMetadataBuilder();
+
         // Act
-        var meta = new SchemaMetadataBuilder().Build();
+        var meta = builder.Build();
 
         // Assert
         meta.Sha256Hash.Should().NotBeNullOrWhiteSpace();
@@ -25,10 +28,14 @@ public class SchemaMetadataTests
         // Arrange
         var meta = new SchemaMetadataBuilder().ScheduledInFuture(5).Build();
 
-        // Act & Assert
+        // Act
+        var activeToday = meta.IsActiveAt(DateTimeOffset.UtcNow);
+        var activeInFuture = meta.IsActiveAt(DateTimeOffset.UtcNow.AddDays(6));
+
+        // Assert
         meta.State.Should().Be(SchemaLifecycleState.Scheduled);
-        meta.IsActiveAt(DateTimeOffset.UtcNow).Should().BeFalse();
-        meta.IsActiveAt(DateTimeOffset.UtcNow.AddDays(6)).Should().BeTrue();
+        activeToday.Should().BeFalse();
+        activeInFuture.Should().BeTrue();
     }
 
     [Fact]

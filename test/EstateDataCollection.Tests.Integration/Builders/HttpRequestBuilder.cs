@@ -8,6 +8,7 @@ namespace EstateDataCollection.Tests.Integration.Builders;
 public sealed class HttpRequestBuilder
 {
     private string _body = string.Empty;
+    private byte[]? _bodyBytes;
     private string _contentType = "application/json";
     private readonly Dictionary<string, StringValues> _query = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _headers = new(StringComparer.OrdinalIgnoreCase);
@@ -27,9 +28,27 @@ public sealed class HttpRequestBuilder
         return new HttpRequestBuilder().WithRawBody(rawBody, contentType).Build();
     }
 
+    public static async Task<HttpRequest> FromFormAsync(
+        IReadOnlyDictionary<string, string?> fields,
+        IReadOnlyDictionary<string, string>? headers = null)
+    {
+        var builder = new HttpRequestBuilder();
+        await builder.WithFormBodyAsync(fields);
+        if (headers is not null)
+        {
+            foreach (var (key, value) in headers)
+            {
+                builder.WithHeader(key, value);
+            }
+        }
+
+        return builder.Build();
+    }
+
     public HttpRequestBuilder WithJsonBody<T>(T dto)
     {
         _body = JsonSerializer.Serialize(dto);
+        _bodyBytes = null;
         _contentType = "application/json";
         return this;
     }
@@ -37,7 +56,17 @@ public sealed class HttpRequestBuilder
     public HttpRequestBuilder WithRawBody(string body, string contentType = "application/json")
     {
         _body = body;
+        _bodyBytes = null;
         _contentType = contentType;
+        return this;
+    }
+
+    public async Task<HttpRequestBuilder> WithFormBodyAsync(IReadOnlyDictionary<string, string?> fields)
+    {
+        var content = new FormUrlEncodedContent(
+            fields.Select(kv => new KeyValuePair<string?, string?>(kv.Key, kv.Value)));
+        _bodyBytes = await content.ReadAsByteArrayAsync();
+        _contentType = "application/x-www-form-urlencoded";
         return this;
     }
 
@@ -84,7 +113,8 @@ public sealed class HttpRequestBuilder
             context.Request.Headers[key] = new StringValues(value);
         }
 
-        var stream = new MemoryStream(Encoding.UTF8.GetBytes(_body));
+        var bytes = _bodyBytes ?? Encoding.UTF8.GetBytes(_body);
+        var stream = new MemoryStream(bytes);
         context.Request.Body = stream;
         context.Request.ContentLength = stream.Length;
         context.Request.ContentType = _contentType;

@@ -48,12 +48,6 @@ public class BlobSchemaRegistryOptions : Common.Markers.IOption<BlobSchemaRegist
     public string RulesBlobDirectory { get; init; } = "{schemaName}/v{version}.rules.json";
 
     /// <summary>
-    /// Legacy alias for RulesBlobDirectory ({schemaName}/v{version}.logic.json) checked as fallback on read.
-    /// </summary>
-    [Required, MinLength(1)]
-    public string LogicBlobDirectory { get; init; } = "{schemaName}/v{version}.logic.json";
-
-    /// <summary>
     /// Blob path format when raw ODCS YAML contracts are uploaded directly ({schemaName}/v{version}.odcs.yaml).
     /// </summary>
     [Required, MinLength(1)]

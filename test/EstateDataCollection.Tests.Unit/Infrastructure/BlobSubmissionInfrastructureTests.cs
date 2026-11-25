@@ -18,6 +18,7 @@ public class BlobSubmissionInfrastructureTests
     [Fact]
     public async Task PromoteToProcessedAsync_DefaultFormat_When_Identifier_Is_Unassigned_Should_Omit_Identifier_And_Target_Bundle_Payload()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         var blobServiceClient = Substitute.For<BlobServiceClient>();
         var payloadContainer = Substitute.For<BlobContainerClient>();
@@ -34,8 +35,10 @@ public class BlobSubmissionInfrastructureTests
             blobServiceClient,
             Options.Create(new BlobSubmissionRepositoryOptions()));
 
+        // Act
         await infra.PromoteToProcessedAsync(submissionId, null, null, "edc-survey-elements", 1, CancellationToken.None);
 
+        // Assert
         processedContainer.Received(1).GetBlobClient($"schema=edc-survey-elements/v=1/{submissionId}/payload.json");
         processedContainer.DidNotReceive().GetBlobClient($"urn=0/schema=edc-survey-elements/v=1/{submissionId}/payload.json");
     }
@@ -43,6 +46,7 @@ public class BlobSubmissionInfrastructureTests
     [Fact]
     public async Task PromoteToProcessedAsync_With_Custom_Identifier_Should_Partition_By_Type_And_Value_Into_Bundle_Folder()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         var blobServiceClient = Substitute.For<BlobServiceClient>();
         var payloadContainer = Substitute.For<BlobContainerClient>();
@@ -73,6 +77,7 @@ public class BlobSubmissionInfrastructureTests
             blobServiceClient,
             Options.Create(new BlobSubmissionRepositoryOptions()));
 
+        // Act
         var uri = (await infra.PromoteToProcessedAsync(
             submissionId,
             "LAEstab",
@@ -81,6 +86,7 @@ public class BlobSubmissionInfrastructureTests
             1,
             CancellationToken.None)).ShouldSucceed();
 
+        // Assert
         uri.Should().Contain($"laestab=201-3614/schema=edc-estab/v=1/{submissionId}/payload.json");
         processedContainer.Received(1).GetBlobClient($"laestab=201-3614/schema=edc-estab/v=1/{submissionId}/payload.json");
         await processedBlob.Received(1).UploadAsync(
@@ -94,6 +100,7 @@ public class BlobSubmissionInfrastructureTests
     [Fact]
     public async Task PromoteToProcessedAsync_Should_Write_Session_Envelope_Into_Processed_Bundle_With_BundlePrefix()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         var session = new SubmissionSession
         {
@@ -157,6 +164,7 @@ public class BlobSubmissionInfrastructureTests
             blobServiceClient,
             Options.Create(new BlobSubmissionRepositoryOptions()));
 
+        // Act
         var uri = (await infra.PromoteToProcessedAsync(
             submissionId,
             "URN",
@@ -165,6 +173,7 @@ public class BlobSubmissionInfrastructureTests
             2,
             CancellationToken.None)).ShouldSucceed();
 
+        // Assert
         uri.Should().EndWith($"{expectedPrefix}payload.json");
         savedWorkingSessionJson.Should().NotBeNull();
         savedBundleSessionJson.Should().NotBeNull();
@@ -179,6 +188,7 @@ public class BlobSubmissionInfrastructureTests
     [Fact]
     public async Task PromoteToProcessedAsync_With_Legacy_ProcessedBlobNameFormat_Should_Still_Resolve_Flat_Payload_Path()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         var blobServiceClient = Substitute.For<BlobServiceClient>();
         var payloadContainer = Substitute.For<BlobContainerClient>();
@@ -200,8 +210,10 @@ public class BlobSubmissionInfrastructureTests
                 ProcessedBlobNameFormat = "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
             }));
 
+        // Act
         await infra.PromoteToProcessedAsync(submissionId, "URN", "104521", "edc-survey-elements", 1, CancellationToken.None);
 
+        // Assert
         processedContainer.Received(1).GetBlobClient($"urn=104521/schema=edc-survey-elements/v=1/{submissionId}.json");
     }
 }

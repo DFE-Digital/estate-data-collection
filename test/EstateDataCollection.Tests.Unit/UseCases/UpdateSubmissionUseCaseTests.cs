@@ -1,3 +1,4 @@
+using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Models.Options;
@@ -11,7 +12,6 @@ using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Validation;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
-using AwesomeAssertions;
 using Json.Schema;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -29,7 +29,7 @@ public class UpdateSubmissionUseCaseTests
     public UpdateSubmissionUseCaseTests()
     {
         var draftOptions = Options.Create(new ValidationOptions { ValidateIdentifierOnDraftUpdate = false });
-        var validationService = new PayloadValidationService(_validator, new JsonLogicValidator(), draftOptions);
+        var validationService = new PayloadValidationService(_validator, new QualityRuleCoordinator(), draftOptions);
         var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService, draftOptions);
         _sut = new UpdateSubmissionUseCase(_infrastructure, evaluationService);
     }
@@ -58,7 +58,7 @@ public class UpdateSubmissionUseCaseTests
         // Arrange
         var submissionId = Guid.NewGuid();
         var session = SubmissionSession.Create("edc_payload", 1);
-        session.Finalise(); // Mark as finalized
+        session.Finalise();
 
         _infrastructure.GetSessionAsync(submissionId, Arg.Any<CancellationToken>())
             .Returns(Result<SubmissionSession>.Success(session));
@@ -92,10 +92,10 @@ public class UpdateSubmissionUseCaseTests
         _registry.GetExplicitSchemaAsync("edc_payload", 1, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Success(new ResolvedSchema(schemaMetadata, compiledSchema)));
 
-        var pendingErrors = new List<ValidationError>
-        {
+        List<ValidationError> pendingErrors =
+        [
             new("#/school_address", "Required property 'school_address' not found")
-        };
+        ];
 
         _validator.ValidateAsync(SurveyPayloadFixtures.MissingUrnJson, compiledSchema, Arg.Any<CancellationToken>())
             .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult(pendingErrors)));
@@ -110,11 +110,10 @@ public class UpdateSubmissionUseCaseTests
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Value.IsSuccessful.Should().BeFalse(); // Not completely valid yet
+        result.Value.IsSuccessful.Should().BeFalse();
         result.Value.PendingErrors.Should().HaveCount(1);
         result.Value.PendingErrors[0].PropertyPath.Should().Be("#/school_address");
 
-        // Verify draft WAS saved to storage despite being incomplete
         await _infrastructure.Received(1).SaveDraftPayloadAsync(
             submissionId, SurveyPayloadFixtures.MissingUrnJson, Arg.Any<CancellationToken>());
     }
@@ -122,6 +121,7 @@ public class UpdateSubmissionUseCaseTests
     [Fact]
     public async Task When_Draft_Payload_Has_Missing_Or_Invalid_Custom_Identifier_With_ValidationService_Should_Include_In_PendingErrors_And_Deduplicate()
     {
+        // Arrange
         const string laestabSchema = """
         {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -158,12 +158,15 @@ public class UpdateSubmissionUseCaseTests
         _infrastructure.SaveDraftPayloadAsync(submissionId, invalidUnsafePayload, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var validationService = new PayloadValidationService(new JsonSchemaNetValidator(), new JsonLogicValidator());
+        var validationService = new PayloadValidationService(new JsonSchemaNetValidator(), new QualityRuleCoordinator());
         var evaluationService = new SubmissionEvaluationService(_infrastructure, _registry, validationService);
         var sut = new UpdateSubmissionUseCase(_infrastructure, evaluationService);
+        var request = new UpdateSubmissionRequest(submissionId, invalidUnsafePayload);
 
-        var result = await sut.ExecuteAsync(new UpdateSubmissionRequest(submissionId, invalidUnsafePayload));
+        // Act
+        var result = await sut.ExecuteAsync(request);
 
+        // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.IsSuccessful.Should().BeFalse();
         result.Value.PendingErrors.Should().ContainSingle(e =>

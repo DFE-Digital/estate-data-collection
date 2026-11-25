@@ -8,52 +8,80 @@ namespace EstateDataCollection.Tests.Unit.Domain;
 public sealed class SubmissionIdentifierTests
 {
     [Fact]
-    public void InspectPayload_Should_Extract_Integer_String_And_Custom_Scalar_Identifiers_Uniformly()
+    public void InspectPayload_Should_Extract_Integer_Identifier()
     {
-        var intUrn = SubmissionIdentifier.InspectPayload("""{"school":{"urn":123456}}""", ["/school/urn"], "URN").ShouldSucceed();
-        intUrn.Status.Should().Be(IdentifierExtractionStatus.Found);
-        intUrn.Identifier!.Value.Value.Should().Be("123456");
-        intUrn.Identifier.Value.AsPositiveInt.Should().Be(123456);
+        // Arrange
+        const string payload = """{"school":{"urn":123456}}""";
 
-        var zeroScalar = SubmissionIdentifier.InspectPayload("""{"urn":0}""", ["/urn"], "URN").ShouldSucceed();
-        zeroScalar.Status.Should().Be(IdentifierExtractionStatus.Found);
-        zeroScalar.Identifier!.Value.Value.Should().Be("0");
+        // Act
+        var extraction = SubmissionIdentifier.InspectPayload(payload, ["/school/urn"], "URN").ShouldSucceed();
 
-        var strLaestab = SubmissionIdentifier.InspectPayload("""{"establishment":{"laestab":"201-3614"}}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
-        strLaestab.Status.Should().Be(IdentifierExtractionStatus.Found);
-        strLaestab.Identifier!.Value.Type.Should().Be("LAEstab");
-        strLaestab.Identifier.Value.Value.Should().Be("201-3614");
-        strLaestab.Identifier.Value.AsPositiveInt.Should().BeNull();
+        // Assert
+        extraction.Status.Should().Be(IdentifierExtractionStatus.Found);
+        extraction.Identifier!.Value.Value.Should().Be("123456");
+        extraction.Identifier.Value.AsPositiveInt.Should().Be(123456);
     }
 
     [Fact]
-    public void InspectPayload_Should_Distinguish_NotPresent_From_Invalid()
+    public void InspectPayload_Should_Extract_Zero_Scalar_Identifier()
     {
-        var missing = SubmissionIdentifier.InspectPayload("""{"other":"x"}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
-        missing.Status.Should().Be(IdentifierExtractionStatus.NotPresent);
+        // Arrange
+        const string payload = """{"urn":0}""";
 
-        var explicitNull = SubmissionIdentifier.InspectPayload("""{"establishment":{"laestab":null}}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
-        explicitNull.Status.Should().Be(IdentifierExtractionStatus.NotPresent);
+        // Act
+        var extraction = SubmissionIdentifier.InspectPayload(payload, ["/urn"], "URN").ShouldSucceed();
 
-        var emptyStr = SubmissionIdentifier.InspectPayload("""{"establishment":{"laestab":"  "}}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
-        emptyStr.Status.Should().Be(IdentifierExtractionStatus.Invalid);
-
-        var unsafeSlash = SubmissionIdentifier.InspectPayload("""{"establishment":{"laestab":"201/3614"}}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
-        unsafeSlash.Status.Should().Be(IdentifierExtractionStatus.Invalid);
-
-        var boolWrongType = SubmissionIdentifier.InspectPayload("""{"establishment":{"laestab":true}}""", ["/establishment/laestab"], "LAEstab").ShouldSucceed();
-        boolWrongType.Status.Should().Be(IdentifierExtractionStatus.Invalid);
+        // Assert
+        extraction.Status.Should().Be(IdentifierExtractionStatus.Found);
+        extraction.Identifier!.Value.Value.Should().Be("0");
     }
 
     [Fact]
-    public void Create_Should_Emit_Generic_PayloadInvalidIdentifier_For_Any_Type()
+    public void InspectPayload_Should_Extract_Custom_String_Identifier()
     {
-        var urnUnsafe = SubmissionIdentifier.Create("URN", "123/456");
-        urnUnsafe.IsFailure.Should().BeTrue();
-        urnUnsafe.Error.Code.Should().Be("Payload.InvalidIdentifier");
+        // Arrange
+        const string payload = """{"establishment":{"laestab":"201-3614"}}""";
 
-        var empty = SubmissionIdentifier.Create("CustomId", "  ");
-        empty.IsFailure.Should().BeTrue();
-        empty.Error.Code.Should().Be("Payload.InvalidIdentifier");
+        // Act
+        var extraction = SubmissionIdentifier.InspectPayload(payload, ["/establishment/laestab"], "LAEstab").ShouldSucceed();
+
+        // Assert
+        extraction.Status.Should().Be(IdentifierExtractionStatus.Found);
+        extraction.Identifier!.Value.Type.Should().Be("LAEstab");
+        extraction.Identifier.Value.Value.Should().Be("201-3614");
+        extraction.Identifier.Value.AsPositiveInt.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("""{"other":"x"}""", IdentifierExtractionStatus.NotPresent)]
+    [InlineData("""{"establishment":{"laestab":null}}""", IdentifierExtractionStatus.NotPresent)]
+    [InlineData("""{"establishment":{"laestab":"  "}}""", IdentifierExtractionStatus.Invalid)]
+    [InlineData("""{"establishment":{"laestab":"201/3614"}}""", IdentifierExtractionStatus.Invalid)]
+    [InlineData("""{"establishment":{"laestab":true}}""", IdentifierExtractionStatus.Invalid)]
+    public void InspectPayload_Should_Distinguish_NotPresent_From_Invalid(
+        string payloadJson,
+        IdentifierExtractionStatus expectedStatus)
+    {
+        // Arrange — payloadJson supplied by theory data
+
+        // Act
+        var result = SubmissionIdentifier.InspectPayload(payloadJson, ["/establishment/laestab"], "LAEstab").ShouldSucceed();
+
+        // Assert
+        result.Status.Should().Be(expectedStatus);
+    }
+
+    [Theory]
+    [InlineData("URN", "123/456")]
+    [InlineData("CustomId", "  ")]
+    public void Create_Should_Emit_Generic_PayloadInvalidIdentifier_For_Any_Type(string type, string value)
+    {
+        // Arrange — type and value supplied by theory data
+
+        // Act
+        var result = SubmissionIdentifier.Create(type, value);
+
+        // Assert
+        result.ShouldFailWith("Payload.InvalidIdentifier");
     }
 }

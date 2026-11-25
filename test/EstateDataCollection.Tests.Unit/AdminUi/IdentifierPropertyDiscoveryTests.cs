@@ -21,7 +21,13 @@ public sealed class IdentifierPropertyDiscoveryTests
     [InlineData(null, "URN")]
     public void DeriveTypeFromPointer_Should_Resolve_Canonical_And_Leaf_Labels(string? pointer, string expected)
     {
-        IdentifierPropertyDiscovery.DeriveTypeFromPointer(pointer).Should().Be(expected);
+        // Arrange — inputs provided by theory data
+
+        // Act
+        var derived = IdentifierPropertyDiscovery.DeriveTypeFromPointer(pointer);
+
+        // Assert
+        derived.Should().Be(expected);
     }
 
     [Theory]
@@ -31,12 +37,19 @@ public sealed class IdentifierPropertyDiscoveryTests
     [InlineData("/")]
     public void DeriveTypeFromPointerOrNull_Should_Return_Null_When_Empty_Or_RootOnly(string? pointer)
     {
-        IdentifierPropertyDiscovery.DeriveTypeFromPointerOrNull(pointer).Should().BeNull();
+        // Arrange — inputs provided by theory data
+
+        // Act
+        var derived = IdentifierPropertyDiscovery.DeriveTypeFromPointerOrNull(pointer);
+
+        // Assert
+        derived.Should().BeNull();
     }
 
     [Fact]
     public void FromRawInputs_JsonSchema_Should_Return_Scalar_Leaf_Properties_And_Skip_Objects_Arrays_And_Booleans()
     {
+        // Arrange
         const string schemaJson = """
         {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -63,8 +76,10 @@ public sealed class IdentifierPropertyDiscoveryTests
         }
         """;
 
+        // Act
         var props = IdentifierPropertyDiscovery.FromRawInputs("json", schemaJson, null);
 
+        // Assert
         props.Should().HaveCount(2);
         props.Should().Contain(p =>
             p.Pointer == "/establishment/laestab" &&
@@ -79,12 +94,15 @@ public sealed class IdentifierPropertyDiscoveryTests
     [Fact]
     public void FromRawInputs_OdcsYaml_Should_Extract_Nested_Scalar_Properties()
     {
+        // Arrange
         var yaml = new OdcsContractYamlBuilder()
             .WithNestedSchoolUrn()
             .Build();
 
+        // Act
         var props = IdentifierPropertyDiscovery.FromRawInputs("odcs", null, yaml);
 
+        // Assert
         props.Should().ContainSingle(p =>
             p.Pointer == "/school/urn" &&
             p.Required &&
@@ -92,79 +110,121 @@ public sealed class IdentifierPropertyDiscoveryTests
     }
 
     [Fact]
-    public void WorkbenchFormParser_Should_Handle_Property_Selection_Custom_Path_And_None_Mode()
+    public void WorkbenchFormParser_Should_Parse_Selected_Discovered_Property()
     {
-        var propertyForm = new FormCollection(new Dictionary<string, StringValues>
+        // Arrange
+        var form = new FormCollection(new Dictionary<string, StringValues>
         {
             ["identifierMode"] = "enabled",
             ["identifierProperty"] = "/establishment/laestab",
             ["identifierPointer"] = "/establishment/laestab"
         });
-
         var errors = new List<ValidationError>();
-        var parsedProp = WorkbenchFormParser.ParseIdentifierConfig(propertyForm, errors);
-        errors.Should().BeEmpty();
-        parsedProp.Type.Should().Be("LAEstab");
-        parsedProp.JsonPointer.Should().Be("/establishment/laestab");
 
-        var customForm = new FormCollection(new Dictionary<string, StringValues>
+        // Act
+        var parsed = WorkbenchFormParser.ParseIdentifierConfig(form, errors);
+
+        // Assert
+        errors.Should().BeEmpty();
+        parsed.Type.Should().Be("LAEstab");
+        parsed.JsonPointer.Should().Be("/establishment/laestab");
+    }
+
+    [Fact]
+    public void WorkbenchFormParser_Should_Parse_Custom_Pointer_And_Label()
+    {
+        // Arrange
+        var form = new FormCollection(new Dictionary<string, StringValues>
         {
             ["identifierMode"] = "enabled",
             ["identifierProperty"] = IdentifierPropertyDiscovery.CustomOptionValue,
             ["identifierPointer"] = "/school/customCode",
             ["identifierLabel"] = "CustomCode"
         });
+        var errors = new List<ValidationError>();
 
-        var parsedCustom = WorkbenchFormParser.ParseIdentifierConfig(customForm, errors);
+        // Act
+        var parsed = WorkbenchFormParser.ParseIdentifierConfig(form, errors);
+
+        // Assert
         errors.Should().BeEmpty();
-        parsedCustom.Type.Should().Be("CustomCode");
-        parsedCustom.JsonPointer.Should().Be("/school/customCode");
+        parsed.Type.Should().Be("CustomCode");
+        parsed.JsonPointer.Should().Be("/school/customCode");
+    }
 
-        var noneForm = new FormCollection(new Dictionary<string, StringValues>
+    [Fact]
+    public void WorkbenchFormParser_Should_Return_None_Config_When_IdentifierMode_Is_None()
+    {
+        // Arrange
+        var form = new FormCollection(new Dictionary<string, StringValues>
         {
             ["identifierMode"] = "none",
             ["identifierProperty"] = "/establishment/laestab",
             ["identifierPointer"] = "/establishment/laestab"
         });
+        var errors = new List<ValidationError>();
 
-        var parsedNone = WorkbenchFormParser.ParseIdentifierConfig(noneForm, errors);
+        // Act
+        var parsed = WorkbenchFormParser.ParseIdentifierConfig(form, errors);
+
+        // Assert
         errors.Should().BeEmpty();
-        parsedNone.Type.Should().Be(SchemaIdentifierConfig.NoneType);
-        parsedNone.JsonPointer.Should().BeNull();
+        parsed.Type.Should().Be(SchemaIdentifierConfig.NoneType);
+        parsed.JsonPointer.Should().BeNull();
     }
 
     [Fact]
     public void WorkbenchFormParser_Should_Require_Explicit_Property_Or_Pointer_When_Enabled()
     {
+        // Arrange
         var emptyCustomForm = new FormCollection(new Dictionary<string, StringValues>
         {
             ["identifierMode"] = "enabled",
             ["identifierProperty"] = IdentifierPropertyDiscovery.CustomOptionValue,
             ["identifierPointer"] = "   "
         });
-
         var errors = new List<ValidationError>();
+
+        // Act
         var parsed = WorkbenchFormParser.ParseIdentifierConfig(emptyCustomForm, errors);
 
+        // Assert
         errors.Should().Contain(e => e.PropertyPath == "identifierPointer");
         parsed.JsonPointer.Should().BeNull();
     }
 
     [Fact]
-    public void ParsedWorkbenchInput_ResolveUiSelection_Should_Never_Predetermine_Property_When_Pointer_Is_Empty()
+    public void ParsedWorkbenchInput_ResolveUiSelection_When_Config_Is_Null_Should_Not_Predetermine_Property()
     {
+        // Arrange
         IReadOnlyList<SchemaIdentifierPropertyOption> available =
         [
             new("/school/urn", "urn", "integer", true, "URN"),
             new("/establishment/laestab", "laestab", "string", false, "LAEstab")
         ];
 
-        var fromNull = ParsedWorkbenchInput.ResolveUiSelection(null, available);
-        fromNull.Should().Be(("enabled", IdentifierPropertyDiscovery.CustomOptionValue, string.Empty, string.Empty));
+        // Act
+        var selection = ParsedWorkbenchInput.ResolveUiSelection(null, available);
 
-        var fromBlankPointer = ParsedWorkbenchInput.ResolveUiSelection(
-            new SchemaIdentifierConfig { Type = "URN", JsonPointer = null },
-            available);
-        fromBlankPointer.Should().Be(("enabled", IdentifierPropertyDiscovery.CustomOptionValue, string.Empty, string.Empty));
+        // Assert
+        selection.Should().Be(("enabled", IdentifierPropertyDiscovery.CustomOptionValue, string.Empty, string.Empty));
+    }
+
+    [Fact]
+    public void ParsedWorkbenchInput_ResolveUiSelection_When_Pointer_Is_Blank_Should_Not_Predetermine_Property()
+    {
+        // Arrange
+        IReadOnlyList<SchemaIdentifierPropertyOption> available =
+        [
+            new("/school/urn", "urn", "integer", true, "URN"),
+            new("/establishment/laestab", "laestab", "string", false, "LAEstab")
+        ];
+        var config = new SchemaIdentifierConfig { Type = "URN", JsonPointer = null };
+
+        // Act
+        var selection = ParsedWorkbenchInput.ResolveUiSelection(config, available);
+
+        // Assert
+        selection.Should().Be(("enabled", IdentifierPropertyDiscovery.CustomOptionValue, string.Empty, string.Empty));
     }
 }

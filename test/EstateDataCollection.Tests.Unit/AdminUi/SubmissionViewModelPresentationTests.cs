@@ -10,14 +10,13 @@ namespace EstateDataCollection.Tests.Unit.AdminUi;
 
 public sealed class SubmissionViewModelPresentationTests
 {
-    private static AdminPageMeta CreateMeta(string activeNav)
-    {
-        return new AdminPageMeta("Title", activeNav, "admin@education.gov.uk", "2026.11.20");
-    }
+    private static AdminPageMeta CreateMeta(string activeNav) =>
+        new("Title", activeNav, "admin@education.gov.uk", "2026.11.20");
 
     [Fact]
-    public void StatisticsViewModel_And_SubmissionsViewModel_Should_Project_Tags_And_Links()
+    public void StatisticsViewModel_Should_Project_Nav_State_Filter_Links_And_Recent_Submission_Tags()
     {
+        // Arrange
         var id = Guid.NewGuid();
         var now = new DateTimeOffset(2026, 11, 20, 10, 0, 0, TimeSpan.Zero);
         var summary = new SubmissionSummaryBuilder()
@@ -48,15 +47,36 @@ public sealed class SubmissionViewModelPresentationTests
             .WithAvailableSchemas("cdc_survey")
             .Build();
 
+        // Act
         var statsVm = new StatisticsViewModel(CreateMeta("statistics"), statsResult);
+
+        // Assert
         statsVm.Page.StatisticsNavLinkCssClass.Should().Contain("dfe-service-nav__link--active");
         statsVm.SchemaRows[0].DraftSubmissionsUrl.Should().Be("/manage/submissions?schemaName=cdc_survey&version=2&status=Draft");
         statsVm.RecentSubmissions[0].DetailUrl.Should().Be($"/manage/submissions/{id}");
         statsVm.RecentSubmissions[0].LifecycleTagCssClass.Should().Contain("govuk-tag--blue");
+    }
 
-        var listVm = new SubmissionsViewModel(
-            CreateMeta("submissions"),
-            new GetSubmissionsResult([summary], ["cdc_survey"], "cdc_survey", 2, "Draft", null));
+    [Fact]
+    public void SubmissionsViewModel_Should_Project_Active_Filters_Counts_And_Audit_Tags()
+    {
+        // Arrange
+        var now = new DateTimeOffset(2026, 11, 20, 10, 0, 0, TimeSpan.Zero);
+        var summary = new SubmissionSummaryBuilder()
+            .WithId(Guid.NewGuid())
+            .WithSchema("cdc_survey", 2)
+            .CreatedAt(now)
+            .LastActivityAt(now)
+            .WithIdentifier("URN", "104521")
+            .WithDrafts(count: 2, lastDraftAtUtc: now)
+            .WithLastAudit("CheckSubmission", "ReadyToFinalise", 200, now, totalEvents: 3)
+            .Build();
+        var result = new GetSubmissionsResult([summary], ["cdc_survey"], "cdc_survey", 2, "Draft", null);
+
+        // Act
+        var listVm = new SubmissionsViewModel(CreateMeta("submissions"), result);
+
+        // Assert
         listVm.HasActiveFilters.Should().BeTrue();
         listVm.DraftCount.Should().Be(1);
         listVm.Items[0].LastAuditTagCssClass.Should().Contain("govuk-tag--green");
@@ -65,6 +85,7 @@ public sealed class SubmissionViewModelPresentationTests
     [Fact]
     public void SubmissionDetailViewModel_Should_Format_Draft_Chunks_And_Audit_Processes()
     {
+        // Arrange
         var session = SubmissionSession.Create("edc_payload", 1);
         session.AssignIdentifier("URN", "123456");
         var now = DateTimeOffset.UtcNow;
@@ -94,8 +115,10 @@ public sealed class SubmissionViewModelPresentationTests
                         .WithError("$.school_capacity", "Capacity must be positive", "RULE-CAP")))
             .Build();
 
+        // Act
         var vm = new SubmissionDetailViewModel(CreateMeta("submissions"), detail);
 
+        // Assert
         vm.IdentifierDisplay.Should().Be("URN: 123456");
         vm.FormattedMergedDraftPayload.Should().Contain("\"urn\": 123456");
         vm.DraftChunks[0].ShortBlobName.Should().Be("01.json");

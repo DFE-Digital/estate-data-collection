@@ -29,13 +29,12 @@ public class InstrumentationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddApplication();
-
-        // Register fake logger instances for each instrumentation target
         services.AddTransient(typeof(ILogger<>), typeof(FakeLogger<>));
 
+        // Act
         var provider = services.BuildServiceProvider();
 
-        // Act & Assert - Application Instrumentations
+        // Assert
         provider.GetRequiredService<VerifySchemaUseCaseInstrumentation>().Should().NotBeNull();
         provider.GetRequiredService<SubmitSchemaUseCaseInstrumentation>().Should().NotBeNull();
         provider.GetRequiredService<ScheduleSchemaUseCaseInstrumentation>().Should().NotBeNull();
@@ -66,16 +65,14 @@ public class InstrumentationTests
             Arg.Any<EventId>(),
             Arg.Is<object>(o => o.ToString()!.Contains("Verifying candidate schema with 2 valid fixtures and 1 invalid fixtures")),
             null,
-            Arg.Any<Func<object, Exception?, string>>()
-        );
+            Arg.Any<Func<object, Exception?, string>>());
 
         mockLogger.Received(1).Log(
             LogLevel.Information,
             Arg.Any<EventId>(),
             Arg.Is<object>(o => o.ToString()!.Contains("Candidate schema syntax and test fixtures verified successfully")),
             null,
-            Arg.Any<Func<object, Exception?, string>>()
-        );
+            Arg.Any<Func<object, Exception?, string>>());
     }
 
     [Fact]
@@ -96,16 +93,14 @@ public class InstrumentationTests
             Arg.Any<EventId>(),
             Arg.Is<object>(o => o.ToString()!.Contains("Submitting schema contract school-workforce v1")),
             null,
-            Arg.Any<Func<object, Exception?, string>>()
-        );
+            Arg.Any<Func<object, Exception?, string>>());
 
         mockLogger.Received(1).Log(
             LogLevel.Information,
             Arg.Any<EventId>(),
             Arg.Is<object>(o => o.ToString()!.Contains("abc123hash")),
             null,
-            Arg.Any<Func<object, Exception?, string>>()
-        );
+            Arg.Any<Func<object, Exception?, string>>());
     }
 
     [Fact]
@@ -137,38 +132,27 @@ public class InstrumentationTests
             Arg.Any<EventId>(),
             Arg.Is<object>(o => o.ToString()!.Contains("school-workforce v1 loaded from Blob")),
             null,
-            Arg.Any<Func<object, Exception?, string>>()
-        );
+            Arg.Any<Func<object, Exception?, string>>());
 
         mockSubLogger.Received(1).Log(
             LogLevel.Information,
             Arg.Any<EventId>(),
             Arg.Is<object>(o => o.ToString()!.Contains(subId.ToString())),
             null,
-            Arg.Any<Func<object, Exception?, string>>()
-        );
+            Arg.Any<Func<object, Exception?, string>>());
 
         mockValLogger.Received(1).Log(
             LogLevel.Debug,
             Arg.Any<EventId>(),
             Arg.Is<object>(o => o.ToString()!.Contains("validation passed")),
             null,
-            Arg.Any<Func<object, Exception?, string>>()
-        );
+            Arg.Any<Func<object, Exception?, string>>());
     }
 
     private sealed class FakeLogger<T> : ILogger<T>
     {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
-        {
-            return null;
-        }
-
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return true;
-        }
-
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) { }
     }
 }

@@ -81,8 +81,11 @@ public class StringExtensionsTests
     [InlineData(null)]
     public void When_Template_Is_Null_Or_Empty_It_Should_Return_Empty_String(string? emptyTemplate)
     {
+        // Arrange
+        var values = new { Foo = "bar" };
+
         // Act
-        var result = emptyTemplate!.FormatWith(new { Foo = "bar" });
+        var result = emptyTemplate!.FormatWith(values);
 
         // Assert
         result.Should().BeEmpty();

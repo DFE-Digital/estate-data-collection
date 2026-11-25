@@ -16,37 +16,46 @@ public sealed class SubmissionGuardIntegrationTests(AzuriteFixture fixture)
     public void Dispose() => _harness.Dispose();
 
     [Fact]
-    public async Task Updating_Or_Finalising_Already_Finalised_Session_Should_Return_403_Forbidden()
+    public async Task Finalising_Already_Finalised_Session_Should_Return_403_Forbidden()
+    {
+        // Arrange
+        var subId = await CreateFinalisedSubmissionAsync();
+
+        // Act
+        var secondFinalise = await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
+            HttpRequestBuilder.Empty(), subId, CancellationToken.None);
+
+        // Assert
+        secondFinalise.ShouldHaveStatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    [Fact]
+    public async Task Updating_Already_Finalised_Session_Should_Return_403_Forbidden()
+    {
+        // Arrange
+        var subId = await CreateFinalisedSubmissionAsync();
+
+        // Act
+        var updateAfterFinalise = await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
+            HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.ValidPayloadJson), subId, CancellationToken.None);
+
+        // Assert
+        updateAfterFinalise.ShouldHaveStatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    private async Task<Guid> CreateFinalisedSubmissionAsync()
     {
         var schemaName = IntegrationEndpointHarness.UniqueName("finalised_guard");
         await _harness.SubmitAndActivateSchemaAsync(schemaName, 1, JsonSchemaFixtures.ValidV1Schema);
 
         var subId = await _harness.CreateDraftSubmissionAsync(schemaName);
-        var updateSubmission = _harness.Get<PutUpdateSubmissionEndpoint>();
-        var finaliseSubmission = _harness.Get<PostFinaliseSubmissionEndpoint>();
+        (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.ValidPayloadJson), subId, CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status200OK);
+        (await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(), subId, CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status200OK);
 
-        var updateRes = await updateSubmission.HandleAsync(
-            HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.ValidPayloadJson),
-            subId,
-            CancellationToken.None);
-        updateRes.ShouldHaveStatusCode(StatusCodes.Status200OK);
-
-        var firstFinalise = await finaliseSubmission.HandleAsync(
-            HttpRequestBuilder.Empty(),
-            subId,
-            CancellationToken.None);
-        firstFinalise.ShouldHaveStatusCode(StatusCodes.Status200OK);
-
-        var secondFinalise = await finaliseSubmission.HandleAsync(
-            HttpRequestBuilder.Empty(),
-            subId,
-            CancellationToken.None);
-        secondFinalise.ShouldHaveStatusCode(StatusCodes.Status403Forbidden);
-
-        var updateAfterFinalise = await updateSubmission.HandleAsync(
-            HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.ValidPayloadJson),
-            subId,
-            CancellationToken.None);
-        updateAfterFinalise.ShouldHaveStatusCode(StatusCodes.Status403Forbidden);
+        return subId;
     }
 }

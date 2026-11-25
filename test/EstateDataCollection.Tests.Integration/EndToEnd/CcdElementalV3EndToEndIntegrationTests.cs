@@ -16,8 +16,9 @@ using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Persistence;
+using EstateDataCollection.Tests.Common.Builders.Contracts;
+using EstateDataCollection.Tests.Common.Builders.Payloads;
 using EstateDataCollection.Tests.Common.Extensions;
-using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
 using EstateDataCollection.Tests.Integration.Extensions;
 using EstateDataCollection.Tests.Integration.Fixtures;
@@ -38,9 +39,10 @@ public sealed class CcdElementalV3EndToEndIntegrationTests(AzuriteFixture fixtur
         var refContainer = fixture.Client.GetBlobContainerClient(_referenceDataContainerName);
         await refContainer.CreateIfNotExistsAsync();
 
-        await UploadReferenceFixtureAsync(refContainer, "reference-data/ccd-elemental-v3/product-types.json", "product-types.json");
-        await UploadReferenceFixtureAsync(refContainer, "reference-data/ccd-elemental-v3/repair-items-by-product-type.json", "repair-items-by-product-type.json");
-        await UploadReferenceFixtureAsync(refContainer, "reference-data/ccd-elemental-v3/nrm3-codes.json", "nrm3-codes.json");
+        var referenceBuilder = new CcdElementalV3ReferenceDataBuilder();
+        await UploadJsonBlobAsync(refContainer, "product-types.json", referenceBuilder.BuildProductTypesJson());
+        await UploadJsonBlobAsync(refContainer, "repair-items-by-product-type.json", referenceBuilder.BuildRepairItemsByProductTypeJson());
+        await UploadJsonBlobAsync(refContainer, "nrm3-codes.json", referenceBuilder.BuildNrm3CodesJson());
 
         _harness = new IntegrationEndpointHarness(
             fixture,
@@ -57,11 +59,94 @@ public sealed class CcdElementalV3EndToEndIntegrationTests(AzuriteFixture fixtur
     }
 
     [Fact]
-    public async Task CcdElementalV3_OdcsContract_Should_Validate_Against_Azurite_ReferenceData_And_CrossSubmission_Into_ProcessedBundle()
+    public async Task CcdElementalV3_Draft_Update_Should_Enrich_ReferenceData_And_Surface_Info_Issues()
+    {
+        // Arrange
+        await SeedBaselineSiteAndBlockSubmissionAsync();
+        var ccdSchemaName = await SubmitAndActivateCcdContractAsync();
+        var ccdSubId = await _harness.CreateDraftSubmissionAsync(ccdSchemaName, 3);
+
+        // Act
+        var draftRes = (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.FromRaw(CcdElementalV3PayloadBuilder.DefaultValidPayloadJson),
+                ccdSubId,
+                CancellationToken.None))
+            .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
+
+        // Assert
+        draftRes.IsSuccessful.Should().BeTrue();
+        draftRes.PendingErrors.Should().BeEmpty();
+        draftRes.Issues.Should().NotBeNull();
+        draftRes.Issues![RuleSeverity.Info].Should().Contain(e => e.RuleId == "CCD-ELEM-V3-038");
+    }
+
+    [Fact]
+    public async Task CcdElementalV3_Finalise_Should_Promote_Bundle_With_Payload_Session_And_FiveStep_Audit()
+    {
+        // Arrange
+        await SeedBaselineSiteAndBlockSubmissionAsync();
+        var ccdSchemaName = await SubmitAndActivateCcdContractAsync();
+        var ccdSubId = await _harness.CreateDraftSubmissionAsync(ccdSchemaName, 3);
+
+        (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.FromRaw(CcdElementalV3PayloadBuilder.DefaultValidPayloadJson),
+                ccdSubId,
+                CancellationToken.None))
+            .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
+
+        // Act
+        var finaliseRes = (await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(),
+                ccdSubId,
+                CancellationToken.None))
+            .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
+
+        var bundlePrefix = $"urn=104521/schema={ccdSchemaName}/v=3/{ccdSubId}/";
+        var processedContainer = _harness.BlobClient.GetBlobContainerClient(_harness.ProcessedContainerName);
+        var bundleBlobs = new List<string>();
+        await foreach (var blob in processedContainer.GetBlobsAsync(
+                           BlobTraits.None,
+                           BlobStates.None,
+                           prefix: bundlePrefix,
+                           cancellationToken: CancellationToken.None))
+        {
+            bundleBlobs.Add(blob.Name);
+        }
+
+        var payloadBlobText = (await processedContainer.GetBlobClient($"{bundlePrefix}payload.json").DownloadContentAsync())
+            .Value.Content.ToString();
+        var detail = (await _harness.Get<IUseCase<GetSubmissionDetailResult, GetSubmissionDetailRequest>>().ExecuteAsync(
+                new GetSubmissionDetailRequest(ccdSubId),
+                CancellationToken.None))
+            .ShouldSucceed();
+
+        // Assert
+        finaliseRes.Identifier.Should().Be("104521");
+        finaliseRes.IdentifierType.Should().Be("URN");
+        finaliseRes.Issues.Should().NotBeNull();
+        finaliseRes.Issues![RuleSeverity.Info].Should().Contain(e => e.RuleId == "CCD-ELEM-V3-038");
+
+        bundleBlobs.Should().Contain($"{bundlePrefix}payload.json");
+        bundleBlobs.Should().Contain($"{bundlePrefix}session.json");
+        bundleBlobs.Should().Contain(b => b.StartsWith($"{bundlePrefix}audit/", StringComparison.Ordinal) && b.EndsWith(".json", StringComparison.Ordinal));
+
+        using var doc = JsonDocument.Parse(payloadBlobText);
+        doc.RootElement.GetProperty("school").GetProperty("urn").GetString().Should().Be("104521");
+        doc.RootElement.GetProperty("elements").GetArrayLength().Should().Be(3);
+
+        detail.ProcessedArtifact.Should().NotBeNull();
+        detail.AuditEntries.Should().NotBeEmpty();
+        detail.AuditEntries.Last().ProcessesConsumed.Select(p => p.ProcessName).Should().ContainInOrder(
+            SubmissionProcessCatalog.JsonSchemaValidator.ProcessName,
+            SubmissionProcessCatalog.IdentifierExtractor.ProcessName,
+            SubmissionProcessCatalog.CrossSubmissionEnrichment.ProcessName,
+            SubmissionProcessCatalog.ReferenceDataEnrichment.ProcessName,
+            SubmissionProcessCatalog.QualityRulesValidator.ProcessName);
+    }
+
+    private async Task SeedBaselineSiteAndBlockSubmissionAsync()
     {
         var siteSchemaName = IntegrationEndpointHarness.UniqueName("edc_survey_sites");
-        var ccdSchemaName = IntegrationEndpointHarness.UniqueName("ccd_elemental_v3");
-
         const string siteSchemaJson = """
         {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -91,7 +176,6 @@ public sealed class CcdElementalV3EndToEndIntegrationTests(AzuriteFixture fixtur
         }
         """;
 
-        // 1. Register & activate sibling baseline site/block schema, then submit & finalise baseline for URN 104521
         await _harness.SubmitAndActivateSchemaAsync(
             siteSchemaName,
             1,
@@ -99,10 +183,8 @@ public sealed class CcdElementalV3EndToEndIntegrationTests(AzuriteFixture fixtur
             new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/urn", Required = true });
 
         var baselineSubId = await _harness.CreateDraftSubmissionAsync(siteSchemaName, 1);
-        var updateEndpoint = _harness.Get<PutUpdateSubmissionEndpoint>();
-        var finaliseEndpoint = _harness.Get<PostFinaliseSubmissionEndpoint>();
 
-        (await updateEndpoint.HandleAsync(
+        (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromRaw("""
                 {
                   "urn": "104521",
@@ -118,14 +200,19 @@ public sealed class CcdElementalV3EndToEndIntegrationTests(AzuriteFixture fixtur
                 CancellationToken.None))
             .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
 
-        (await finaliseEndpoint.HandleAsync(HttpRequestBuilder.Empty(), baselineSubId, CancellationToken.None))
+        (await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(),
+                baselineSubId,
+                CancellationToken.None))
             .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
+    }
 
-        // 2. Submit & activate CCD Elemental v3 ODCS v3.2.0 contract
-        var odcsYaml = CdeContractFixtureLoader.LoadFile("contracts/ccd-elemental-v3.odcs.yaml");
+    private async Task<string> SubmitAndActivateCcdContractAsync()
+    {
+        var ccdSchemaName = IntegrationEndpointHarness.UniqueName("ccd_elemental_v3");
         var submitCcd = (await _harness.Get<PostSubmitSchemaEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(
-                    OdcsYaml: odcsYaml,
+                    OdcsYaml: CcdElementalV3ContractBuilder.DefaultOdcsYaml,
                     FileName: "ccd-elemental-v3.odcs.yaml",
                     IdentifierConfig: new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/school/urn", Required = true })),
                 ccdSchemaName,
@@ -144,77 +231,12 @@ public sealed class CcdElementalV3EndToEndIntegrationTests(AzuriteFixture fixtur
                 CancellationToken.None))
             .ShouldBeApiSuccess<ScheduleSchemaResult>(StatusCodes.Status200OK);
 
-        // 3. Draft & finalise valid CCD Elemental v3 fixture
-        var ccdSubId = await _harness.CreateDraftSubmissionAsync(ccdSchemaName, 3);
-        var validPayload = CdeContractFixtureLoader.LoadFile("fixtures/ccd-elemental-v3.valid.json");
-
-        var draftRes = (await updateEndpoint.HandleAsync(
-                HttpRequestBuilder.FromRaw(validPayload),
-                ccdSubId,
-                CancellationToken.None))
-            .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
-
-        draftRes.IsSuccessful.Should().BeTrue();
-        draftRes.PendingErrors.Should().BeEmpty();
-        draftRes.Issues.Should().NotBeNull();
-        draftRes.Issues![RuleSeverity.Info].Should().Contain(e => e.RuleId == "CCD-ELEM-V3-038");
-
-        var finaliseRes = (await finaliseEndpoint.HandleAsync(
-                HttpRequestBuilder.Empty(),
-                ccdSubId,
-                CancellationToken.None))
-            .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
-
-        finaliseRes.Identifier.Should().Be("104521");
-        finaliseRes.IdentifierType.Should().Be("URN");
-        finaliseRes.Issues.Should().NotBeNull();
-        finaliseRes.Issues![RuleSeverity.Info].Should().Contain(e => e.RuleId == "CCD-ELEM-V3-038");
-
-        // 4. Verify processed bundle layout: urn=104521/schema={ccdSchemaName}/v=3/{ccdSubId}/
-        var bundlePrefix = $"urn=104521/schema={ccdSchemaName}/v=3/{ccdSubId}/";
-        var processedContainer = _harness.BlobClient.GetBlobContainerClient(_harness.ProcessedContainerName);
-        var bundleBlobs = new List<string>();
-        await foreach (var blob in processedContainer.GetBlobsAsync(BlobTraits.None, BlobStates.None, prefix: bundlePrefix, cancellationToken: CancellationToken.None))
-        {
-            bundleBlobs.Add(blob.Name);
-        }
-
-        bundleBlobs.Should().Contain($"{bundlePrefix}payload.json");
-        bundleBlobs.Should().Contain($"{bundlePrefix}session.json");
-        bundleBlobs.Should().Contain(b => b.StartsWith($"{bundlePrefix}audit/", StringComparison.Ordinal) && b.EndsWith(".json", StringComparison.Ordinal));
-
-        var payloadBlobText = (await processedContainer.GetBlobClient($"{bundlePrefix}payload.json").DownloadContentAsync())
-            .Value.Content.ToString();
-        using (var doc = JsonDocument.Parse(payloadBlobText))
-        {
-            doc.RootElement.GetProperty("school").GetProperty("urn").GetString().Should().Be("104521");
-            doc.RootElement.GetProperty("elements").GetArrayLength().Should().Be(3);
-        }
-
-        // 5. Verify submission audit trail captures the full 5-step workflow pipeline
-        var detail = (await _harness.Get<IUseCase<GetSubmissionDetailResult, GetSubmissionDetailRequest>>().ExecuteAsync(
-                new GetSubmissionDetailRequest(ccdSubId),
-                CancellationToken.None))
-            .ShouldSucceed();
-
-        detail.ProcessedArtifact.Should().NotBeNull();
-        detail.AuditEntries.Should().NotBeEmpty();
-        var finalAudit = detail.AuditEntries.Last();
-        finalAudit.ProcessesConsumed.Select(p => p.ProcessName).Should().ContainInOrder(
-            SubmissionProcessCatalog.JsonSchemaValidator.ProcessName,
-            SubmissionProcessCatalog.IdentifierExtractor.ProcessName,
-            SubmissionProcessCatalog.CrossSubmissionEnrichment.ProcessName,
-            SubmissionProcessCatalog.ReferenceDataEnrichment.ProcessName,
-            SubmissionProcessCatalog.QualityRulesValidator.ProcessName);
+        return ccdSchemaName;
     }
 
-    private static async Task UploadReferenceFixtureAsync(
-        BlobContainerClient container,
-        string fixtureRelativePath,
-        string targetBlobName)
+    private static async Task UploadJsonBlobAsync(BlobContainerClient container, string targetBlobName, string json)
     {
-        var content = CdeContractFixtureLoader.LoadFile(fixtureRelativePath);
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
         await container.GetBlobClient(targetBlobName).UploadAsync(stream, overwrite: true);
     }
 }

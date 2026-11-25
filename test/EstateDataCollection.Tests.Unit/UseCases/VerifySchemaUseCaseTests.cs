@@ -1,10 +1,11 @@
+using System.Text.Json.Nodes;
+using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Fixtures;
-using AwesomeAssertions;
 using NSubstitute;
 using Xunit;
 
@@ -36,19 +37,20 @@ public class VerifySchemaUseCaseTests
         ];
 
         _verifier.VerifyCandidateSchemaAsync(
-            JsonSchemaFixtures.ValidV1Schema,
-            null,
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<SchemaIdentifierConfig?>(),
-            Arg.Any<CancellationToken>())
+                JsonSchemaFixtures.ValidV1Schema,
+                null,
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [], EngineTraces: traces)));
 
         var request = new VerifySchemaRequest(
             JsonSchemaFixtures.ValidV1Schema,
             [SurveyPayloadFixtures.ValidPayloadJson],
-            [SurveyPayloadFixtures.MissingUrnJson]
-        );
+            [SurveyPayloadFixtures.MissingUrnJson]);
 
         // Act
         var result = await _sut.ExecuteAsync(request);
@@ -64,22 +66,22 @@ public class VerifySchemaUseCaseTests
     {
         // Arrange
         _verifier.VerifyCandidateSchemaAsync(
-            Arg.Any<string>(),
-            Arg.Any<string>(),
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<SchemaIdentifierConfig?>(),
-            Arg.Any<CancellationToken>())
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult(
                 ["Meta-schema violation: type must be string"],
-                ["SampleValidFixtures[0] rejected by schema"]
-            )));
+                ["SampleValidFixtures[0] rejected by schema"])));
 
         var request = new VerifySchemaRequest(
             "{}",
             [],
-            []
-        );
+            []);
 
         // Act
         var result = await _sut.ExecuteAsync(request);

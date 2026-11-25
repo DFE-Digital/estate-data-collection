@@ -94,7 +94,7 @@ public sealed class PostVerifySchemaEndpoint(
 
         if (body is null ||
             (string.IsNullOrWhiteSpace(body.SchemaJson) &&
-             string.IsNullOrWhiteSpace(body.EffectiveRulesJson) &&
+             string.IsNullOrWhiteSpace(body.RulesJson) &&
              string.IsNullOrWhiteSpace(body.OdcsYaml)))
         {
             return Error.Failure(ErrorCodes.PayloadEmpty);
@@ -104,7 +104,7 @@ public sealed class PostVerifySchemaEndpoint(
             SchemaJson: body.SchemaJson,
             SampleValidFixtures: body.SampleValidFixtures ?? [],
             SampleInvalidFixtures: body.SampleInvalidFixtures ?? [],
-            RulesJson: body.EffectiveRulesJson,
+            RulesJson: body.RulesJson,
             OdcsYaml: body.OdcsYaml,
             FileName: body.FileName ?? AdminRequestHelpers.GetFileNameHint(http),
             IdentifierConfig: body.IdentifierConfig ?? AdminRequestHelpers.GetIdentifierConfigHint(http),

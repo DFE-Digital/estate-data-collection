@@ -20,89 +20,127 @@ public sealed class GetSubmissionStatusIntegrationTests(AzuriteFixture fixture)
     [Fact]
     public async Task Status_Check_Should_Return_404_For_Unknown_Submission()
     {
+        // Arrange
+        var unknownSubmissionId = Guid.NewGuid();
+
+        // Act
         var result = await _harness.Get<GetSubmissionStatusEndpoint>().HandleAsync(
             HttpRequestBuilder.Empty(),
-            Guid.NewGuid(),
+            unknownSubmissionId,
             CancellationToken.None);
 
+        // Assert
         result.ShouldBeApiFailure<GetSubmissionStatusResult>(StatusCodes.Status404NotFound, "Submission.NotFound");
     }
 
     [Fact]
-    public async Task Status_Check_Should_Reflect_Lifecycle_From_Empty_Draft_To_Invalid_Draft_To_Ready_To_Finalised()
+    public async Task Status_Check_On_Empty_Draft_Should_Report_Draft_NotReady_With_PendingErrors()
+    {
+        // Arrange
+        var subId = await CreateActiveSubmissionSessionAsync();
+
+        // Act
+        var status = (await _harness.Get<GetSubmissionStatusEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(),
+                subId,
+                CancellationToken.None))
+            .ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
+
+        // Assert
+        status.Status.Should().Be("Draft");
+        status.HasDraftPayload.Should().BeFalse();
+        status.IsReadyToFinalise.Should().BeFalse();
+        status.PendingErrors.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task Status_Check_On_Invalid_Draft_Should_Report_PendingErrors()
+    {
+        // Arrange
+        var subId = await CreateActiveSubmissionSessionAsync();
+        (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.MissingUrnJson),
+                subId,
+                CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status200OK);
+
+        // Act
+        var status = (await _harness.Get<GetSubmissionStatusEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(),
+                subId,
+                CancellationToken.None))
+            .ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
+
+        // Assert
+        status.Status.Should().Be("Draft");
+        status.HasDraftPayload.Should().BeTrue();
+        status.IsReadyToFinalise.Should().BeFalse();
+        status.PendingErrors.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task Status_Check_On_Valid_Draft_Should_Report_ReadyToFinalise_With_Identifier()
+    {
+        // Arrange
+        var subId = await CreateActiveSubmissionSessionAsync();
+        (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.ValidPayloadJson),
+                subId,
+                CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status200OK);
+
+        // Act
+        var status = (await _harness.Get<GetSubmissionStatusEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(),
+                subId,
+                CancellationToken.None))
+            .ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
+
+        // Assert
+        status.Status.Should().Be("Draft");
+        status.HasDraftPayload.Should().BeTrue();
+        status.IsReadyToFinalise.Should().BeTrue();
+        status.PendingErrors.Should().BeEmpty();
+        status.Identifier.Should().Be("104521");
+        status.IdentifierType.Should().Be("URN");
+    }
+
+    [Fact]
+    public async Task Status_Check_After_Finalisation_Should_Report_Finalised_State()
+    {
+        // Arrange
+        var subId = await CreateActiveSubmissionSessionAsync();
+        (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.ValidPayloadJson),
+                subId,
+                CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status200OK);
+        (await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(),
+                subId,
+                CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status200OK);
+
+        // Act
+        var status = (await _harness.Get<GetSubmissionStatusEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(),
+                subId,
+                CancellationToken.None))
+            .ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
+
+        // Assert
+        status.Status.Should().Be("Finalised");
+        status.FinalisedAtUtc.Should().NotBeNull();
+        status.IsReadyToFinalise.Should().BeFalse();
+        status.PendingErrors.Should().BeEmpty();
+        status.Identifier.Should().Be("104521");
+        status.IdentifierType.Should().Be("URN");
+    }
+
+    private async Task<Guid> CreateActiveSubmissionSessionAsync()
     {
         var schemaName = IntegrationEndpointHarness.UniqueName("status_check");
         await _harness.SubmitAndActivateSchemaAsync(schemaName, 1, JsonSchemaFixtures.ValidV1Schema);
-
-        var subId = await _harness.CreateDraftSubmissionAsync(schemaName);
-        var getStatus = _harness.Get<GetSubmissionStatusEndpoint>();
-        var updateSubmission = _harness.Get<PutUpdateSubmissionEndpoint>();
-        var finaliseSubmission = _harness.Get<PostFinaliseSubmissionEndpoint>();
-
-        // 1. Newly created session without draft payload yet
-        var emptyCheck = await getStatus.HandleAsync(
-            HttpRequestBuilder.Empty(),
-            subId,
-            CancellationToken.None);
-        var emptyStatus = emptyCheck.ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
-        emptyStatus.Status.Should().Be("Draft");
-        emptyStatus.HasDraftPayload.Should().BeFalse();
-        emptyStatus.IsReadyToFinalise.Should().BeFalse();
-        emptyStatus.PendingErrors.Should().NotBeEmpty();
-
-        // 2. Partial/invalid draft uploaded -> check catches pending errors before finalise
-        var badUpdate = await updateSubmission.HandleAsync(
-            HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.MissingUrnJson),
-            subId,
-            CancellationToken.None);
-        badUpdate.ShouldHaveStatusCode(StatusCodes.Status200OK);
-
-        var invalidCheck = await getStatus.HandleAsync(
-            HttpRequestBuilder.Empty(),
-            subId,
-            CancellationToken.None);
-        var invalidStatus = invalidCheck.ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
-        invalidStatus.Status.Should().Be("Draft");
-        invalidStatus.HasDraftPayload.Should().BeTrue();
-        invalidStatus.IsReadyToFinalise.Should().BeFalse();
-        invalidStatus.PendingErrors.Should().NotBeEmpty();
-
-        // 3. Valid draft uploaded -> check confirms ready to finalise with extracted identifier
-        var goodUpdate = await updateSubmission.HandleAsync(
-            HttpRequestBuilder.FromRaw(SurveyPayloadFixtures.ValidPayloadJson),
-            subId,
-            CancellationToken.None);
-        goodUpdate.ShouldHaveStatusCode(StatusCodes.Status200OK);
-
-        var readyCheck = await getStatus.HandleAsync(
-            HttpRequestBuilder.Empty(),
-            subId,
-            CancellationToken.None);
-        var readyStatus = readyCheck.ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
-        readyStatus.Status.Should().Be("Draft");
-        readyStatus.HasDraftPayload.Should().BeTrue();
-        readyStatus.IsReadyToFinalise.Should().BeTrue();
-        readyStatus.PendingErrors.Should().BeEmpty();
-        readyStatus.Identifier.Should().Be("104521");
-        readyStatus.IdentifierType.Should().Be("URN");
-
-        // 4. After finalisation -> status transitions to Finalised
-        var finaliseRes = await finaliseSubmission.HandleAsync(
-            HttpRequestBuilder.Empty(),
-            subId,
-            CancellationToken.None);
-        finaliseRes.ShouldHaveStatusCode(StatusCodes.Status200OK);
-
-        var finalisedCheck = await getStatus.HandleAsync(
-            HttpRequestBuilder.Empty(),
-            subId,
-            CancellationToken.None);
-        var finalisedStatus = finalisedCheck.ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
-        finalisedStatus.Status.Should().Be("Finalised");
-        finalisedStatus.FinalisedAtUtc.Should().NotBeNull();
-        finalisedStatus.IsReadyToFinalise.Should().BeFalse();
-        finalisedStatus.PendingErrors.Should().BeEmpty();
-        finalisedStatus.Identifier.Should().Be("104521");
-        finalisedStatus.IdentifierType.Should().Be("URN");
+        return await _harness.CreateDraftSubmissionAsync(schemaName);
     }
 }

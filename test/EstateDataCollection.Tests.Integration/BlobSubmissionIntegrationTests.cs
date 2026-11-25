@@ -19,17 +19,18 @@ public class BlobSubmissionIntegrationTests(AzuriteFixture fixture)
     [Fact]
     public async Task When_Executing_Complete_Ingestion_Lifecycle_Against_Azurite_It_Should_Persist_Draft_And_Promote_To_Processed()
     {
+        // Arrange
         var submissions = _harness.Get<ISubmissionInfrastructure>();
         var session = new SubmissionSessionBuilder()
             .WithSchema("edc_payload", 1)
             .Build();
 
         (await submissions.CreateSessionAsync(session)).ShouldSucceed();
-
         (await submissions.SaveDraftPayloadAsync(
             session.SubmissionId,
             SurveyPayloadFixtures.ValidPayloadJson)).ShouldSucceed();
 
+        // Act
         (await submissions.PromoteToProcessedAsync(
             session.SubmissionId,
             "URN",
@@ -38,6 +39,8 @@ public class BlobSubmissionIntegrationTests(AzuriteFixture fixture)
             1)).ShouldSucceed();
 
         var draftExists = await submissions.GetDraftPayloadAsync(session.SubmissionId);
+
+        // Assert
         draftExists.IsFailure.Should().BeTrue();
     }
 }

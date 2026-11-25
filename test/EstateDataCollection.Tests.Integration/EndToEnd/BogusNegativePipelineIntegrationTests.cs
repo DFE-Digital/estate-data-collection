@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatus;
 using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
@@ -36,7 +37,6 @@ public sealed class BogusNegativePipelineIntegrationTests(AzuriteFixture fixture
 
     public static IEnumerable<object[]> PublicHttpNegativeCases()
     {
-        // Exercise representative negative mutation categories against every schema contract end-to-end in Azurite
         yield return [FuzzSchemaProfile.ValidV1, NegativeMutationKind.MissingRequiredRootProperty, 11];
         yield return [FuzzSchemaProfile.ValidV1, NegativeMutationKind.WrongTypeStringForNumericOrBool, 12];
         yield return [FuzzSchemaProfile.ValidV1, NegativeMutationKind.AdditionalPropertyDisallowed, 13];
@@ -81,6 +81,7 @@ public sealed class BogusNegativePipelineIntegrationTests(AzuriteFixture fixture
     [MemberData(nameof(AllSchemaProfiles))]
     public async Task Bogus_Valid_Baselines_Across_All_Schemas_Should_Pass_Full_Http_Pipeline(FuzzSchemaProfile profile)
     {
+        // Arrange
         var contract = BogusNegativePayloadSuite.GetContract(profile);
         var schemaName = IntegrationEndpointHarness.UniqueName(contract.SchemaNamePrefix);
         var validPayload = BogusNegativePayloadSuite.GenerateValidJson(profile, 701);
@@ -95,28 +96,24 @@ public sealed class BogusNegativePipelineIntegrationTests(AzuriteFixture fixture
             .ShouldHaveStatusCode(StatusCodes.Status200OK);
 
         await _harness.SubmitAndActivateSchemaAsync(
-            schemaName,
-            1,
-            contract.SchemaJson,
-            contract.IdentifierConfig,
-            contract.RulesJson);
-
+            schemaName, 1, contract.SchemaJson, contract.IdentifierConfig, contract.RulesJson);
         var subId = await _harness.CreateDraftSubmissionAsync(schemaName, 1);
 
+        // Act
         var update = (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromRaw(validPayload), subId, CancellationToken.None))
             .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
-        update.IsSuccessful.Should().BeTrue($"valid Bogus baseline for {profile} must succeed");
-        update.PendingErrors.Should().BeEmpty();
-
         var status = (await _harness.Get<GetSubmissionStatusEndpoint>().HandleAsync(
                 HttpRequestBuilder.Empty(), subId, CancellationToken.None))
             .ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
-        status.IsReadyToFinalise.Should().BeTrue();
-
         var finalise = (await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
                 HttpRequestBuilder.Empty(), subId, CancellationToken.None))
             .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
+
+        // Assert
+        update.IsSuccessful.Should().BeTrue($"valid Bogus baseline for {profile} must succeed");
+        update.PendingErrors.Should().BeEmpty();
+        status.IsReadyToFinalise.Should().BeTrue();
         finalise.Status.Should().Be("Finalised");
         finalise.IdentifierType.Should().Be(contract.IdentifierConfig.Type);
         finalise.Identifier.Should().NotBeNullOrWhiteSpace();
@@ -129,39 +126,33 @@ public sealed class BogusNegativePipelineIntegrationTests(AzuriteFixture fixture
         NegativeMutationKind mutationKind,
         int seed)
     {
+        // Arrange
         var contract = BogusNegativePayloadSuite.GetContract(profile);
         var schemaName = IntegrationEndpointHarness.UniqueName($"{contract.SchemaNamePrefix}_neg");
-
         await _harness.SubmitAndActivateSchemaAsync(
-            schemaName,
-            1,
-            contract.SchemaJson,
-            contract.IdentifierConfig,
-            contract.RulesJson);
+            schemaName, 1, contract.SchemaJson, contract.IdentifierConfig, contract.RulesJson);
 
         var negativeCase = BogusNegativePayloadSuite.GenerateNegativeCase(profile, mutationKind, seed);
         var subId = await _harness.CreateDraftSubmissionAsync(schemaName, 1);
 
-        // 1. PUT negative Bogus payload -> 200 OK with IsSuccessful = false and PendingErrors
+        // Act
         var update = (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromRaw(negativeCase.PayloadJson), subId, CancellationToken.None))
             .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
-        update.IsSuccessful.Should().BeFalse($"negative case {negativeCase.Description} must return pending errors");
-        update.PendingErrors.Should().NotBeEmpty();
-
-        // 2. GET /status -> IsReadyToFinalise = false
         var status = (await _harness.Get<GetSubmissionStatusEndpoint>().HandleAsync(
                 HttpRequestBuilder.Empty(), subId, CancellationToken.None))
             .ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
+        var finaliseRes = await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
+            HttpRequestBuilder.Empty(), subId, CancellationToken.None);
+        var auditEntries = (await _harness.Get<ISubmissionAuditStore>().ListAsync(subId)).ShouldSucceed();
+
+        // Assert
+        update.IsSuccessful.Should().BeFalse($"negative case {negativeCase.Description} must return pending errors");
+        update.PendingErrors.Should().NotBeEmpty();
         status.IsReadyToFinalise.Should().BeFalse();
         status.PendingErrors.Should().NotBeEmpty();
+        finaliseRes.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
 
-        // 3. POST /finalise -> 422 UnprocessableEntity
-        (await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
-                HttpRequestBuilder.Empty(), subId, CancellationToken.None))
-            .ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
-
-        // 4. Verify nothing promoted into processed container for this submission
         var processedContainer = _harness.BlobClient.GetBlobContainerClient(_harness.ProcessedContainerName);
         if (await processedContainer.ExistsAsync())
         {
@@ -171,14 +162,9 @@ public sealed class BogusNegativePipelineIntegrationTests(AzuriteFixture fixture
             }
         }
 
-        // 5. Verify audit trail recorded every step cleanly without crashing on adversarial strings
-        var auditEntries = (await _harness.Get<ISubmissionAuditStore>().ListAsync(subId)).ShouldSucceed();
         auditEntries.Should().HaveCount(4);
         auditEntries.Select(e => e.Action).Should().Equal(
-            "CreateSubmission",
-            "UpdateSubmission",
-            "CheckSubmissionStatus",
-            "FinaliseSubmission");
+            "CreateSubmission", "UpdateSubmission", "CheckSubmissionStatus", "FinaliseSubmission");
         auditEntries[1].Outcome.Status.Should().Be("SavedWithPendingErrors");
         auditEntries[3].Outcome.Status.Should().Be("Rejected");
         auditEntries[3].Outcome.HttpStatus.Should().Be(422);
@@ -191,120 +177,125 @@ public sealed class BogusNegativePipelineIntegrationTests(AzuriteFixture fixture
         string rawBody,
         int expectedPutStatus)
     {
+        // Arrange
         var contract = BogusNegativePayloadSuite.GetContract(profile);
         var schemaName = IntegrationEndpointHarness.UniqueName($"{contract.SchemaNamePrefix}_mal");
-
         await _harness.SubmitAndActivateSchemaAsync(
-            schemaName,
-            1,
-            contract.SchemaJson,
-            contract.IdentifierConfig,
-            contract.RulesJson);
-
+            schemaName, 1, contract.SchemaJson, contract.IdentifierConfig, contract.RulesJson);
         var subId = await _harness.CreateDraftSubmissionAsync(schemaName, 1);
 
+        // Act
         var putResult = await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
-            HttpRequestBuilder.FromRaw(rawBody),
-            subId,
-            CancellationToken.None);
-        putResult.ShouldHaveStatusCode(expectedPutStatus);
-
-        // No draft chunk saved -> status reports awaiting payload & finalise rejects cleanly (400 BadRequest)
+            HttpRequestBuilder.FromRaw(rawBody), subId, CancellationToken.None);
         var status = (await _harness.Get<GetSubmissionStatusEndpoint>().HandleAsync(
                 HttpRequestBuilder.Empty(), subId, CancellationToken.None))
             .ShouldBeApiSuccess<GetSubmissionStatusResult>(StatusCodes.Status200OK);
-        status.IsReadyToFinalise.Should().BeFalse();
+        var finaliseRes = await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
+            HttpRequestBuilder.Empty(), subId, CancellationToken.None);
 
-        (await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
-                HttpRequestBuilder.Empty(), subId, CancellationToken.None))
-            .ShouldHaveStatusCode(StatusCodes.Status400BadRequest);
+        // Assert
+        putResult.ShouldHaveStatusCode(expectedPutStatus);
+        status.IsReadyToFinalise.Should().BeFalse();
+        finaliseRes.ShouldHaveStatusCode(StatusCodes.Status400BadRequest);
     }
 
     [Fact]
     public async Task Bogus_Negative_Merge_Patch_On_Second_Put_Should_Poison_Draft_And_Block_Finalisation_In_Azurite()
     {
+        // Arrange
         var contract = BogusNegativePayloadSuite.GetContract(FuzzSchemaProfile.CustomLaEstabCel);
         var schemaName = IntegrationEndpointHarness.UniqueName("bogus_patch_poison");
-
         await _harness.SubmitAndActivateSchemaAsync(
-            schemaName,
-            1,
-            contract.SchemaJson,
-            contract.IdentifierConfig,
-            contract.RulesJson);
+            schemaName, 1, contract.SchemaJson, contract.IdentifierConfig, contract.RulesJson);
 
         var subId = await _harness.CreateDraftSubmissionAsync(schemaName, 1);
         var validBaseline = BogusNegativePayloadSuite.GenerateValidJson(FuzzSchemaProfile.CustomLaEstabCel, 555);
+        var updateEndpoint = _harness.Get<PutUpdateSubmissionEndpoint>();
 
-        // Chunk 1: valid draft
-        var chunk1 = (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
+        var chunk1 = (await updateEndpoint.HandleAsync(
                 HttpRequestBuilder.FromRaw(validBaseline), subId, CancellationToken.None))
             .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
         chunk1.IsSuccessful.Should().BeTrue();
 
-        // Chunk 2: Bogus patch introducing CEL rule violation (open_issues > total_checks)
-        var celViolationPatch = """{"summary":{"total_checks":4,"open_issues":99}}""";
-        var chunk2 = (await _harness.Get<PutUpdateSubmissionEndpoint>().HandleAsync(
+        const string celViolationPatch = """{"summary":{"total_checks":4,"open_issues":99}}""";
+
+        // Act
+        var chunk2 = (await updateEndpoint.HandleAsync(
                 HttpRequestBuilder.FromRaw(celViolationPatch), subId, CancellationToken.None))
             .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
+        var finaliseRes = await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
+            HttpRequestBuilder.Empty(), subId, CancellationToken.None);
+
+        // Assert
         chunk2.IsSuccessful.Should().BeFalse();
         chunk2.DraftCount.Should().Be(2);
         chunk2.PendingErrors.Should().Contain(e => e.RuleId == "CEL-SUITE-ISSUES-1");
-
-        // Finalise blocked with 422
-        (await _harness.Get<PostFinaliseSubmissionEndpoint>().HandleAsync(
-                HttpRequestBuilder.Empty(), subId, CancellationToken.None))
-            .ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+        finaliseRes.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
     }
 
     [Theory]
     [MemberData(nameof(AllSchemaProfiles))]
-    public async Task Bogus_Negative_Fixtures_Should_Reject_Admin_Verify_And_Draft_Blob_Ingestion(
-        FuzzSchemaProfile profile)
+    public async Task Bogus_Negative_Fixtures_Should_Reject_Admin_Verify_Diagnostic_Report(FuzzSchemaProfile profile)
     {
+        // Arrange
         var contract = BogusNegativePayloadSuite.GetContract(profile);
-        var validFixture = BogusNegativePayloadSuite.GenerateValidJson(profile, 901);
         var negativeFixture = BogusNegativePayloadSuite.GenerateNegativeCase(
-            profile,
-            NegativeMutationKind.WrongTypeStringForNumericOrBool,
-            902).PayloadJson;
+            profile, NegativeMutationKind.WrongTypeStringForNumericOrBool, 902).PayloadJson;
 
-        // 1. Admin /api/schemas/verify returns 200 OK diagnostic report with IsSuccessful = false for negative fixture
         var verifyDto = new VerifySchemaBodyDto(
             SchemaJson: contract.SchemaJson,
             RulesJson: contract.RulesJson,
             SampleValidFixtures: [negativeFixture],
             IdentifierConfig: contract.IdentifierConfig);
+
+        // Act
         var verifyReport = (await _harness.Get<PostVerifySchemaEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromJson(verifyDto), CancellationToken.None))
-            .ShouldBeApiSuccess<EstateDataCollection.Application.UseCases.Schema.VerifySchema.VerifySchemaResult>(StatusCodes.Status200OK);
+            .ShouldBeApiSuccess<VerifySchemaResult>(StatusCodes.Status200OK);
+
+        // Assert
         verifyReport.IsSuccessful.Should().BeFalse();
         verifyReport.FixtureErrors.Should().NotBeEmpty();
+    }
 
-        // 2. Draft blob ingestion consumes failing draft into schemas container as Invalid with v1.error.json
+    [Theory]
+    [MemberData(nameof(AllSchemaProfiles))]
+    public async Task Bogus_Negative_Fixtures_Should_Persist_Draft_Blob_Ingestion_As_Invalid(FuzzSchemaProfile profile)
+    {
+        // Arrange
+        var contract = BogusNegativePayloadSuite.GetContract(profile);
+        var validFixture = BogusNegativePayloadSuite.GenerateValidJson(profile, 901);
+        var negativeFixture = BogusNegativePayloadSuite.GenerateNegativeCase(
+            profile, NegativeMutationKind.WrongTypeStringForNumericOrBool, 902).PayloadJson;
+
         var draftSchemaName = IntegrationEndpointHarness.UniqueName($"{contract.SchemaNamePrefix}_ingest_neg");
         var draftContainer = _harness.BlobClient.GetBlobContainerClient(_harness.DraftSchemasContainerName);
         var schemasContainer = _harness.BlobClient.GetBlobContainerClient(_harness.SchemasContainerName);
         await draftContainer.CreateIfNotExistsAsync();
 
         var schemaPath = $"{draftSchemaName}/v1.schema.json";
-        var validFixturePath = $"{draftSchemaName}/v1.valid.json";
-        var metaPath = $"{draftSchemaName}/v1.meta.json";
-
         await draftContainer.GetBlobClient(schemaPath).UploadAsync(BinaryData.FromString(contract.SchemaJson), overwrite: true);
         if (!string.IsNullOrWhiteSpace(contract.RulesJson))
         {
             await draftContainer.GetBlobClient($"{draftSchemaName}/v1.rules.json")
                 .UploadAsync(BinaryData.FromString(contract.RulesJson), overwrite: true);
         }
-        await draftContainer.GetBlobClient(validFixturePath)
-            .UploadAsync(BinaryData.FromString(JsonSerializer.Serialize(new[] { JsonDocument.Parse(validFixture).RootElement, JsonDocument.Parse(negativeFixture).RootElement })), overwrite: true);
-        await draftContainer.GetBlobClient(metaPath)
+
+        await draftContainer.GetBlobClient($"{draftSchemaName}/v1.valid.json")
+            .UploadAsync(BinaryData.FromString(JsonSerializer.Serialize(new[]
+            {
+                JsonDocument.Parse(validFixture).RootElement,
+                JsonDocument.Parse(negativeFixture).RootElement
+            })), overwrite: true);
+        await draftContainer.GetBlobClient($"{draftSchemaName}/v1.meta.json")
             .UploadAsync(BinaryData.FromString(JsonSerializer.Serialize(new { identifierConfig = contract.IdentifierConfig })), overwrite: true);
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(contract.SchemaJson));
+
+        // Act
         var ingestResult = (await _harness.Get<IngestDraftSchemaEvent>().HandleAsync(stream, schemaPath, CancellationToken.None)).ShouldSucceed();
 
+        // Assert
         ingestResult.Promoted.Should().BeFalse();
         ingestResult.Status.Should().Be("Invalid");
         ingestResult.HasErrorReport.Should().BeTrue();

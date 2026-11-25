@@ -71,11 +71,21 @@ public sealed class IdentifierSchemaValidatorTests
     [Fact]
     public void ValidateAndAlign_Should_Validate_Required_Nested_Custom_Identifier_And_Derive_Required_True()
     {
+        // Arrange
+        var requestedConfig = new SchemaIdentifierConfig
+        {
+            Type = "LAEstab",
+            JsonPointer = "establishment.laestab",
+            Required = false
+        };
+
+        // Act
         var result = IdentifierSchemaValidator.ValidateAndAlign(
             NestedRequiredSchema,
-            new SchemaIdentifierConfig { Type = "LAEstab", JsonPointer = "establishment.laestab", Required = false },
+            requestedConfig,
             ["school.urn", "urn"]);
 
+        // Assert
         result.IsValid.Should().BeTrue();
         result.IsEnabled.Should().BeTrue();
         result.IsRequiredInSchema.Should().BeTrue();
@@ -89,11 +99,21 @@ public sealed class IdentifierSchemaValidatorTests
     [Fact]
     public void ValidateAndAlign_Should_Derive_Required_False_When_Leaf_Is_Not_In_Required_Array()
     {
+        // Arrange
+        var requestedConfig = new SchemaIdentifierConfig
+        {
+            Type = "UKPRN",
+            JsonPointer = "/establishment/ukprn",
+            Required = true
+        };
+
+        // Act
         var result = IdentifierSchemaValidator.ValidateAndAlign(
             NestedRequiredSchema,
-            new SchemaIdentifierConfig { Type = "UKPRN", JsonPointer = "/establishment/ukprn", Required = true },
+            requestedConfig,
             ["school.urn", "urn"]);
 
+        // Assert
         result.IsValid.Should().BeTrue();
         result.IsRequiredInSchema.Should().BeFalse();
         result.EffectiveConfig!.Required.Should().BeFalse();
@@ -102,11 +122,20 @@ public sealed class IdentifierSchemaValidatorTests
     [Fact]
     public void ValidateAndAlign_Should_Derive_Required_False_When_Schema_Allows_Null_Via_AnyOf()
     {
+        // Arrange
+        var requestedConfig = new SchemaIdentifierConfig
+        {
+            Type = "SchoolCode",
+            JsonPointer = "/schoolCode"
+        };
+
+        // Act
         var result = IdentifierSchemaValidator.ValidateAndAlign(
             NullableIdentifierSchema,
-            new SchemaIdentifierConfig { Type = "SchoolCode", JsonPointer = "/schoolCode" },
+            requestedConfig,
             ["school.urn", "urn"]);
 
+        // Assert
         result.IsValid.Should().BeTrue();
         result.IsRequiredInSchema.Should().BeFalse();
         result.EffectiveConfig!.Required.Should().BeFalse();
@@ -115,11 +144,20 @@ public sealed class IdentifierSchemaValidatorTests
     [Fact]
     public void ValidateAndAlign_Should_Follow_Local_Refs_And_AllOf()
     {
+        // Arrange
+        var requestedConfig = new SchemaIdentifierConfig
+        {
+            Type = "UKPRN",
+            JsonPointer = "/identity/ukprn"
+        };
+
+        // Act
         var result = IdentifierSchemaValidator.ValidateAndAlign(
             RefAndAllOfSchema,
-            new SchemaIdentifierConfig { Type = "UKPRN", JsonPointer = "/identity/ukprn" },
+            requestedConfig,
             ["school.urn", "urn"]);
 
+        // Assert
         result.IsValid.Should().BeTrue();
         result.IsRequiredInSchema.Should().BeTrue();
         result.EffectiveConfig!.Required.Should().BeTrue();
@@ -132,11 +170,16 @@ public sealed class IdentifierSchemaValidatorTests
     [InlineData("/establishment/isOpen", "incompatible type")]
     public void ValidateAndAlign_Should_Reject_Missing_Or_NonScalar_Pointers(string pointer, string expectedFragment)
     {
+        // Arrange
+        var requestedConfig = new SchemaIdentifierConfig { Type = "URN", JsonPointer = pointer };
+
+        // Act
         var result = IdentifierSchemaValidator.ValidateAndAlign(
             NestedRequiredSchema,
-            new SchemaIdentifierConfig { Type = "URN", JsonPointer = pointer },
+            requestedConfig,
             ["school.urn", "urn"]);
 
+        // Assert
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.Message.Contains(expectedFragment, StringComparison.OrdinalIgnoreCase));
     }
@@ -144,12 +187,16 @@ public sealed class IdentifierSchemaValidatorTests
     [Fact]
     public void ValidateAndAlign_When_NullConfig_And_No_Default_Path_Matches_Should_Fail_When_Default_Required()
     {
+        // Arrange — NestedRequiredSchema has no school.urn or urn path
+
+        // Act
         var result = IdentifierSchemaValidator.ValidateAndAlign(
             NestedRequiredSchema,
             requestedConfig: null,
             ["school.urn", "urn"],
             requireDefaultIdentifier: true);
 
+        // Assert
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.Identifier == "identifierConfig.jsonPointer");
     }
@@ -157,11 +204,20 @@ public sealed class IdentifierSchemaValidatorTests
     [Fact]
     public void ValidateAndAlign_When_Type_Is_None_And_Pointer_Set_Should_Fail_Definition_Check()
     {
+        // Arrange
+        var requestedConfig = new SchemaIdentifierConfig
+        {
+            Type = "None",
+            JsonPointer = "/establishment/laestab"
+        };
+
+        // Act
         var result = IdentifierSchemaValidator.ValidateAndAlign(
             NestedRequiredSchema,
-            new SchemaIdentifierConfig { Type = "None", JsonPointer = "/establishment/laestab" },
+            requestedConfig,
             ["school.urn", "urn"]);
 
+        // Assert
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.Identifier == "identifierConfig.jsonPointer");
     }
@@ -169,11 +225,16 @@ public sealed class IdentifierSchemaValidatorTests
     [Fact]
     public void ValidateAndAlign_When_Type_Is_None_Without_Pointer_Should_Disable_Without_Scanning_Schema()
     {
+        // Arrange
+        var requestedConfig = new SchemaIdentifierConfig { Type = "None", JsonPointer = null };
+
+        // Act
         var result = IdentifierSchemaValidator.ValidateAndAlign(
             NestedRequiredSchema,
-            new SchemaIdentifierConfig { Type = "None", JsonPointer = null },
+            requestedConfig,
             ["school.urn", "urn"]);
 
+        // Assert
         result.IsValid.Should().BeTrue();
         result.IsEnabled.Should().BeFalse();
         result.EffectiveConfig!.IsDisabled.Should().BeTrue();

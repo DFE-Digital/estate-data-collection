@@ -96,22 +96,14 @@ public sealed class RunSchemaTestsUseCase(
                 rulesJson = JsonSerializer.Serialize(resolved.Rules);
             }
 
-            var verification = meta.ValidationPolicy is not null
-                ? await schemaVerifier.VerifyCandidateSchemaAsync(
-                    meta.RawJsonSchema,
-                    rulesJson,
-                    validFixtures,
-                    invalidFixtures,
-                    meta.IdentifierConfig,
-                    cancellationToken,
-                    meta.ValidationPolicy)
-                : await schemaVerifier.VerifyCandidateSchemaAsync(
-                    meta.RawJsonSchema,
-                    rulesJson,
-                    validFixtures,
-                    invalidFixtures,
-                    meta.IdentifierConfig,
-                    cancellationToken);
+            var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
+                meta.RawJsonSchema,
+                rulesJson,
+                validFixtures,
+                invalidFixtures,
+                meta.IdentifierConfig,
+                cancellationToken,
+                meta.ValidationPolicy);
 
             bool passed;
             IReadOnlyList<string> errors;

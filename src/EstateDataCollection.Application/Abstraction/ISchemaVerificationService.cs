@@ -15,25 +15,6 @@ public interface ISchemaVerificationService : IApplication
         IReadOnlyList<string> sampleInvalidPayloads,
         SchemaIdentifierConfig? identifierConfig = null,
         CancellationToken cancellationToken = default,
-        SchemaValidationPolicy? validationPolicy = null);
-
-    Task<Result<SchemaVerificationResult>> VerifyCandidateSchemaAsync(
-        string? rawSchemaJson,
-        string? rawRulesJson,
-        IReadOnlyList<string> sampleValidPayloads,
-        IReadOnlyList<string> sampleInvalidPayloads,
-        SchemaIdentifierConfig? identifierConfig,
-        CancellationToken cancellationToken,
-        SchemaValidationPolicy? validationPolicy,
-        IReadOnlyDictionary<string, JsonNode?>? ambientFixtures)
-    {
-        return VerifyCandidateSchemaAsync(
-            rawSchemaJson,
-            rawRulesJson,
-            sampleValidPayloads,
-            sampleInvalidPayloads,
-            identifierConfig,
-            cancellationToken,
-            validationPolicy);
-    }
+        SchemaValidationPolicy? validationPolicy = null,
+        IReadOnlyDictionary<string, JsonNode?>? ambientFixtures = null);
 }

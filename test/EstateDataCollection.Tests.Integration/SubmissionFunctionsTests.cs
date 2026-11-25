@@ -36,6 +36,7 @@ public class SubmissionFunctionsTests
     [Fact]
     public async Task When_Creating_A_Submission_Session_With_Explicit_Version_It_Should_Return_201_Created_With_Session_Details()
     {
+        // Arrange
         var expectedId = Guid.NewGuid();
         var expectedResult = new CreateSubmissionResult(expectedId, "edc_payload", 2, DateTimeOffset.UtcNow);
 
@@ -46,8 +47,10 @@ public class SubmissionFunctionsTests
 
         var request = new HttpRequestBuilder().WithQuery("version", "2").Build();
 
+        // Act
         var actionResult = await _createEndpoint.HandleAsync(request, "edc_payload", CancellationToken.None);
 
+        // Assert
         var data = actionResult.ShouldBeApiSuccess<CreateSubmissionResult>(StatusCodes.Status201Created);
         data.SubmissionId.Should().Be(expectedId);
         data.Version.Should().Be(2);
@@ -56,22 +59,29 @@ public class SubmissionFunctionsTests
     [Fact]
     public async Task When_Creating_A_Submission_Session_Fails_It_Should_Return_Problem_Details()
     {
+        // Arrange
         _createUseCase.ExecuteAsync(Arg.Any<CreateSubmissionRequest>(), Arg.Any<CancellationToken>())
             .Returns(Result<CreateSubmissionResult>.Failure(Error.NotFound("Schema.NotFound", "Schema not found.")));
+        var request = HttpRequestBuilder.Empty();
 
-        var actionResult = await _createEndpoint.HandleAsync(HttpRequestBuilder.Empty(), "unknown_schema", CancellationToken.None);
+        // Act
+        var actionResult = await _createEndpoint.HandleAsync(request, "unknown_schema", CancellationToken.None);
 
+        // Assert
         actionResult.ShouldBeApiFailure<CreateSubmissionResult>(StatusCodes.Status404NotFound, "Schema.NotFound");
     }
 
     [Fact]
     public async Task When_Updating_With_Empty_Payload_Body_It_Should_Return_400_BadRequest_Payload_Empty()
     {
-        var actionResult = await _updateEndpoint.HandleAsync(
-            HttpRequestBuilder.FromRaw("   "),
-            Guid.NewGuid(),
-            CancellationToken.None);
+        // Arrange
+        var request = HttpRequestBuilder.FromRaw("   ");
+        var submissionId = Guid.NewGuid();
 
+        // Act
+        var actionResult = await _updateEndpoint.HandleAsync(request, submissionId, CancellationToken.None);
+
+        // Assert
         actionResult.ShouldBeApiFailure<UpdateSubmissionResult>(StatusCodes.Status400BadRequest, "Payload.Empty");
         await _updateUseCase.DidNotReceive().ExecuteAsync(
             Arg.Any<UpdateSubmissionRequest>(), Arg.Any<CancellationToken>());
@@ -80,6 +90,7 @@ public class SubmissionFunctionsTests
     [Fact]
     public async Task When_Updating_With_Partial_Draft_It_Should_Return_200_OK_With_Pending_Validation_Errors()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         var updateResult = new UpdateSubmissionResult(
             SubmissionId: submissionId,
@@ -92,11 +103,12 @@ public class SubmissionFunctionsTests
             Arg.Any<CancellationToken>())
             .Returns(Result<UpdateSubmissionResult>.Success(updateResult));
 
-        var actionResult = await _updateEndpoint.HandleAsync(
-            HttpRequestBuilder.FromRaw("{\"urn\":104521}"),
-            submissionId,
-            CancellationToken.None);
+        var request = HttpRequestBuilder.FromRaw("{\"urn\":104521}");
 
+        // Act
+        var actionResult = await _updateEndpoint.HandleAsync(request, submissionId, CancellationToken.None);
+
+        // Assert
         var data = actionResult.ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
         data.IsSuccessful.Should().BeFalse();
         data.PendingErrors.Should().HaveCount(1);
@@ -105,6 +117,7 @@ public class SubmissionFunctionsTests
     [Fact]
     public async Task When_Finalising_A_Complete_Survey_It_Should_Return_200_OK_With_Processed_Blob_Uri()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         var finaliseResult = new FinaliseSubmissionResult(
             SubmissionId: submissionId,
@@ -121,8 +134,12 @@ public class SubmissionFunctionsTests
             Arg.Any<CancellationToken>())
             .Returns(Result<FinaliseSubmissionResult>.Success(finaliseResult));
 
-        var actionResult = await _finaliseEndpoint.HandleAsync(HttpRequestBuilder.Empty(), submissionId, CancellationToken.None);
+        var request = HttpRequestBuilder.Empty();
 
+        // Act
+        var actionResult = await _finaliseEndpoint.HandleAsync(request, submissionId, CancellationToken.None);
+
+        // Assert
         var data = actionResult.ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
         data.Identifier.Should().Be("104521");
         data.IdentifierType.Should().Be("URN");
@@ -132,6 +149,7 @@ public class SubmissionFunctionsTests
     [Fact]
     public async Task When_Finalising_An_Incomplete_Survey_It_Should_Return_422_Unprocessable_Entity()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         var validationErrors = new List<ValidationError>
         {
@@ -144,8 +162,12 @@ public class SubmissionFunctionsTests
             .Returns(Result<FinaliseSubmissionResult>.Failure(
                 Error.Validation("Schema.ContractViolation", "Contract violated", validationErrors)));
 
-        var actionResult = await _finaliseEndpoint.HandleAsync(HttpRequestBuilder.Empty(), submissionId, CancellationToken.None);
+        var request = HttpRequestBuilder.Empty();
 
+        // Act
+        var actionResult = await _finaliseEndpoint.HandleAsync(request, submissionId, CancellationToken.None);
+
+        // Assert
         actionResult.ShouldBeApiFailure<FinaliseSubmissionResult>(StatusCodes.Status422UnprocessableEntity, "Schema.ContractViolation");
     }
 }

@@ -1,10 +1,11 @@
+using System.Text.Json.Nodes;
+using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Fixtures;
-using AwesomeAssertions;
 using NSubstitute;
 using Xunit;
 
@@ -31,8 +32,7 @@ public class SubmitSchemaUseCaseTests
         var request = new SubmitSchemaRequest(
             "edc_payload",
             1,
-            JsonSchemaFixtures.ValidV1Schema
-        );
+            JsonSchemaFixtures.ValidV1Schema);
 
         // Act
         var result = await _sut.ExecuteAsync(request);
@@ -53,7 +53,14 @@ public class SubmitSchemaUseCaseTests
             .Returns(Result<bool>.Success(false));
 
         _verifier.VerifyCandidateSchemaAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<SchemaIdentifierConfig?>(), Arg.Any<CancellationToken>())
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult(
                 ["Syntax error in schema"], [])));
 
@@ -65,8 +72,7 @@ public class SubmitSchemaUseCaseTests
         var request = new SubmitSchemaRequest(
             "edc_payload",
             2,
-            "broken_schema"
-        );
+            "broken_schema");
 
         // Act
         var result = await _sut.ExecuteAsync(request);
@@ -93,7 +99,14 @@ public class SubmitSchemaUseCaseTests
             .Returns(Result<bool>.Success(false));
 
         _verifier.VerifyCandidateSchemaAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<SchemaIdentifierConfig?>(), Arg.Any<CancellationToken>())
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [])));
 
         _registry.SaveSchemaAsync(Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>())
@@ -102,8 +115,7 @@ public class SubmitSchemaUseCaseTests
         var request = new SubmitSchemaRequest(
             "edc_payload",
             3,
-            JsonSchemaFixtures.ValidV2SchemaWithoutCapacity
-        );
+            JsonSchemaFixtures.ValidV2SchemaWithoutCapacity);
 
         // Act
         var result = await _sut.ExecuteAsync(request);

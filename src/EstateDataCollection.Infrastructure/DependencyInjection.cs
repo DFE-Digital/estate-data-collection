@@ -32,8 +32,7 @@ public static class DependencyInjection
                     typeof(IQualityRuleEngine),
                     typeof(IRuleContextEnricher),
                     typeof(IOdcsContractParser),
-                    typeof(IBusinessLogicValidator))
-                    .Where(t => t != typeof(Validation.JsonLogicValidator)))
+                    typeof(IBusinessLogicValidator)))
                 .AsImplementedInterfaces()
                 .WithSingletonLifetime()
                 .AddClasses(classes => classes.AssignableTo<IWorkflowStep>())

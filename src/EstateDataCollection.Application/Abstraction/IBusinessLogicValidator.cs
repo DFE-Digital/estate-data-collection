@@ -10,7 +10,7 @@ public interface IBusinessLogicValidator : IInfrastructure
     IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngines() => [];
 
     Result<IReadOnlyList<ValidationMessage>> ValidateRulesSyntax(
-        string rawLogicJson,
+        string rawRulesJson,
         out IReadOnlyList<BusinessRule>? parsedRules);
 
     Task<Result<BusinessRuleValidationResult>> ValidateAsync(

@@ -7,16 +7,9 @@ public record VerifySchemaBodyDto(
     string? SchemaJson = null,
     IReadOnlyList<string>? SampleValidFixtures = null,
     IReadOnlyList<string>? SampleInvalidFixtures = null,
-    string? LogicJson = null,
     string? RulesJson = null,
     string? OdcsYaml = null,
     string? FileName = null,
     SchemaIdentifierConfig? IdentifierConfig = null,
     SchemaValidationPolicy? ValidationPolicy = null,
-    IReadOnlyDictionary<string, JsonNode?>? AmbientFixtures = null)
-{
-    public string? EffectiveRulesJson
-    {
-        get { return !string.IsNullOrWhiteSpace(RulesJson) ? RulesJson : LogicJson; }
-    }
-}
+    IReadOnlyDictionary<string, JsonNode?>? AmbientFixtures = null);

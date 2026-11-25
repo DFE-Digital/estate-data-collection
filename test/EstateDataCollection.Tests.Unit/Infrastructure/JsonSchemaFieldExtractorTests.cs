@@ -9,6 +9,7 @@ public class JsonSchemaFieldExtractorTests
     [Fact]
     public void ExtractFields_Should_Extract_Required_Constraints_And_Nested_Fields()
     {
+        // Arrange
         const string schemaWithConstraintsAndNesting = """
         {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -35,8 +36,10 @@ public class JsonSchemaFieldExtractorTests
         }
         """;
 
+        // Act
         var fields = JsonSchemaFieldExtractor.ExtractFields(schemaWithConstraintsAndNesting);
 
+        // Assert
         fields.Should().HaveCount(2);
         var urnField = fields.FirstOrDefault(f => f.Name == "urn");
         urnField.Should().NotBeNull();

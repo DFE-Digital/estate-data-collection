@@ -65,22 +65,14 @@ public sealed class UpdateSchemaTestsUseCase(
             rulesJson = JsonSerializer.Serialize(existing.Rules);
         }
 
-        var verification = meta.ValidationPolicy is not null
-            ? await schemaVerifier.VerifyCandidateSchemaAsync(
-                meta.RawJsonSchema,
-                rulesJson,
-                validFixtures,
-                invalidFixtures,
-                meta.IdentifierConfig,
-                cancellationToken,
-                meta.ValidationPolicy)
-            : await schemaVerifier.VerifyCandidateSchemaAsync(
-                meta.RawJsonSchema,
-                rulesJson,
-                validFixtures,
-                invalidFixtures,
-                meta.IdentifierConfig,
-                cancellationToken);
+        var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
+            meta.RawJsonSchema,
+            rulesJson,
+            validFixtures,
+            invalidFixtures,
+            meta.IdentifierConfig,
+            cancellationToken,
+            meta.ValidationPolicy);
 
         if (verification.IsFailure)
         {

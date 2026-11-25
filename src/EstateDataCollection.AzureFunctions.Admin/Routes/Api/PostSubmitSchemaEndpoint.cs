@@ -82,7 +82,7 @@ public sealed class PostSubmitSchemaEndpoint(
             SchemaJson: body.SchemaJson ?? string.Empty,
             SampleValidFixtures: body.SampleValidFixtures,
             SampleInvalidFixtures: body.SampleInvalidFixtures,
-            RulesJson: body.EffectiveRulesJson,
+            RulesJson: body.RulesJson,
             OdcsYaml: body.OdcsYaml,
             FileName: body.FileName ?? AdminRequestHelpers.GetFileNameHint(http),
             IdentifierConfig: body.IdentifierConfig ?? AdminRequestHelpers.GetIdentifierConfigHint(http),

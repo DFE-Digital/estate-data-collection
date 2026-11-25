@@ -9,13 +9,17 @@ public class SubmissionSessionTests
     [Fact]
     public void When_Creating_A_Submission_Session_It_Should_Generate_A_UuidV7_And_Set_Draft_State()
     {
+        // Arrange
+        const string schemaName = "edc_payload";
+        const int schemaVersion = 2;
+
         // Act
-        var session = SubmissionSession.Create("edc_payload", 2);
+        var session = SubmissionSession.Create(schemaName, schemaVersion);
 
         // Assert
         session.SubmissionId.Should().NotBeEmpty();
-        session.SchemaName.Should().Be("edc_payload");
-        session.SchemaVersion.Should().Be(2);
+        session.SchemaName.Should().Be(schemaName);
+        session.SchemaVersion.Should().Be(schemaVersion);
         session.IsFinalised.Should().BeFalse();
         session.IdentifierType.Should().BeNull();
         session.IdentifierValue.Should().BeNull();
@@ -28,8 +32,11 @@ public class SubmissionSessionTests
     [InlineData(null)]
     public void When_Schema_Name_Is_Null_Or_Whitespace_It_Should_Throw_Argument_Exception(string? invalidName)
     {
+        // Arrange
+        const int schemaVersion = 1;
+
         // Act
-        Action act = () => SubmissionSession.Create(invalidName!, 1);
+        Action act = () => SubmissionSession.Create(invalidName!, schemaVersion);
 
         // Assert
         act.Should().Throw<ArgumentException>();
@@ -41,8 +48,11 @@ public class SubmissionSessionTests
     [InlineData(-99)]
     public void When_Schema_Version_Is_Zero_Or_Negative_It_Should_Throw_Out_Of_Range_Exception(int invalidVersion)
     {
+        // Arrange
+        const string schemaName = "edc_payload";
+
         // Act
-        Action act = () => SubmissionSession.Create("edc_payload", invalidVersion);
+        Action act = () => SubmissionSession.Create(schemaName, invalidVersion);
 
         // Assert
         act.Should().Throw<ArgumentOutOfRangeException>();

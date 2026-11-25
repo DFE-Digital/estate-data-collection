@@ -21,7 +21,7 @@
         </option>
         <option name="executable">
           <ExecutableSnapshot>
-            <option name="id" value="runConfig:Azure Functions Project.EstateDataCollection.AzureFunctions.Public" />
+            <option name="id" value="runConfig:Azure Functions Project.EstateDataCollection.AzureFunctions.Public: EstateDataCollection.AzureFunctions" />
           </ExecutableSnapshot>
         </option>
       </ExecutableRowSnapshot>

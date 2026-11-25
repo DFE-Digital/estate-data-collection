@@ -24,48 +24,83 @@ public sealed class SchemaToSubmissionLifecycleIntegrationTests(AzuriteFixture f
     public void Dispose() => _harness.Dispose();
 
     [Fact]
-    public async Task Complete_Http_Pipeline_From_Schema_Verify_To_Submission_Finalisation_Should_Succeed()
+    public async Task Unscheduled_Submitted_Schema_Should_Verify_Be_Hidden_From_Public_And_Block_Submissions()
     {
-        var schemaName = IntegrationEndpointHarness.UniqueName("e2e_route");
+        // Arrange
+        var schemaName = IntegrationEndpointHarness.UniqueName("e2e_unsched");
         var missingUrnPayload = new SurveyPayloadBuilder().WithoutUrn().BuildJson();
         var validPayload = new SurveyPayloadBuilder().WithUrn(104521).BuildJson();
 
-        // Step 1: Admin POST /schemas/verify
         var verifyDto = new VerifySchemaBodyDto(
             SchemaJson: JsonSchemaFixtures.ValidV1Schema,
             SampleValidFixtures: [validPayload],
             SampleInvalidFixtures: [missingUrnPayload]);
-        (await _harness.Get<PostVerifySchemaEndpoint>().HandleAsync(HttpRequestBuilder.FromJson(verifyDto), CancellationToken.None))
-            .ShouldHaveStatusCode(StatusCodes.Status200OK);
 
-        // Step 2: Admin POST /schemas/{schemaName}/versions/{version} (Unscheduled initially)
+        // Act
+        var verifyRes = await _harness.Get<PostVerifySchemaEndpoint>().HandleAsync(
+            HttpRequestBuilder.FromJson(verifyDto), CancellationToken.None);
+        var submitRes = await _harness.Get<PostSubmitSchemaEndpoint>().HandleAsync(
+            HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(SchemaJson: JsonSchemaFixtures.ValidV1Schema)),
+            schemaName, 1, CancellationToken.None);
+        var publicSchemaRes = await _harness.Get<GetSchemaByNameEndpoint>().HandleAsync(
+            HttpRequestBuilder.Empty(), schemaName, CancellationToken.None);
+        var createSubmissionRes = await _harness.Get<PostCreateSubmissionEndpoint>().HandleAsync(
+            new HttpRequestBuilder().WithQuery("version", "1").Build(), schemaName, CancellationToken.None);
+
+        // Assert
+        verifyRes.ShouldHaveStatusCode(StatusCodes.Status200OK);
+        submitRes.ShouldHaveStatusCode(StatusCodes.Status201Created);
+        publicSchemaRes.ShouldHaveStatusCode(StatusCodes.Status404NotFound);
+        createSubmissionRes.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task Scheduled_Schema_Should_Expose_Active_Detail_And_Complete_Draft_To_Finalisation_Pipeline()
+    {
+        // Arrange
+        var schemaName = IntegrationEndpointHarness.UniqueName("e2e_route");
+        var missingUrnPayload = new SurveyPayloadBuilder().WithoutUrn().BuildJson();
+        var validPayload = new SurveyPayloadBuilder().WithUrn(104521).BuildJson();
+
         (await _harness.Get<PostSubmitSchemaEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromJson(new SubmitSchemaBodyDto(SchemaJson: JsonSchemaFixtures.ValidV1Schema)),
                 schemaName, 1, CancellationToken.None))
             .ShouldHaveStatusCode(StatusCodes.Status201Created);
 
-        // While unscheduled: Public GET returns 404, Public POST submissions fails 422
-        (await _harness.Get<GetSchemaByNameEndpoint>().HandleAsync(HttpRequestBuilder.Empty(), schemaName, CancellationToken.None))
-            .ShouldHaveStatusCode(StatusCodes.Status404NotFound);
-
-        var prematureSubHttp = new HttpRequestBuilder().WithQuery("version", "1").Build();
-        (await _harness.Get<PostCreateSubmissionEndpoint>().HandleAsync(prematureSubHttp, schemaName, CancellationToken.None))
-            .ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
-
-        // Step 3: Admin PATCH /schemas/{schemaName}/versions/{version}/schedule
         var effectiveFrom = DateTimeOffset.UtcNow.AddMinutes(-5);
         var effectiveTo = DateTimeOffset.UtcNow.AddDays(90);
         var scheduleDto = new ScheduleSchemaBodyDto(
             EffectiveFromUtc: effectiveFrom,
             EffectiveToUtc: effectiveTo,
             IdentifierConfig: new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/urn", Required = true });
-        (await _harness.Get<PatchScheduleSchemaEndpoint>().HandleAsync(HttpRequestBuilder.FromJson(scheduleDto), schemaName, 1, CancellationToken.None))
+
+        (await _harness.Get<PatchScheduleSchemaEndpoint>().HandleAsync(
+                HttpRequestBuilder.FromJson(scheduleDto), schemaName, 1, CancellationToken.None))
             .ShouldHaveStatusCode(StatusCodes.Status200OK);
 
-        // Step 4: Public GET /schemas/{schemaName}/versions/1
+        // Act
         var detail = (await _harness.Get<GetSchemaVersionDetailEndpoint>().HandleAsync(
                 HttpRequestBuilder.Empty(), schemaName, 1, CancellationToken.None))
             .ShouldBeApiSuccess<SchemaVersionDetail>(StatusCodes.Status200OK);
+
+        var submissionId = await _harness.CreateDraftSubmissionAsync(schemaName, version: 1);
+        var updateSubmission = _harness.Get<PutUpdateSubmissionEndpoint>();
+        var finaliseSubmission = _harness.Get<PostFinaliseSubmissionEndpoint>();
+
+        var badDraft = (await updateSubmission.HandleAsync(
+                HttpRequestBuilder.FromRaw(missingUrnPayload), submissionId, CancellationToken.None))
+            .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
+        var prematureFinalise = await finaliseSubmission.HandleAsync(
+            HttpRequestBuilder.Empty(), submissionId, CancellationToken.None);
+
+        var validDraft = (await updateSubmission.HandleAsync(
+                HttpRequestBuilder.FromRaw(validPayload), submissionId, CancellationToken.None))
+            .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
+        var finaliseData = (await finaliseSubmission.HandleAsync(
+                HttpRequestBuilder.Empty(), submissionId, CancellationToken.None))
+            .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
+
+        // Assert
         detail.State.Name.Should().Be("Active");
         detail.IsActiveNow.Should().BeTrue();
         detail.EffectiveFromUtc.Should().BeCloseTo(effectiveFrom, TimeSpan.FromSeconds(1));
@@ -73,31 +108,12 @@ public sealed class SchemaToSubmissionLifecycleIntegrationTests(AzuriteFixture f
         detail.IdentifierConfig!.JsonPointer.Should().Be("/urn");
         detail.Fields.Should().Contain(f => f.Name == "urn" && f.Required);
 
-        // Step 5: Public POST /submissions/{schemaName}?version=1
-        var submissionId = await _harness.CreateDraftSubmissionAsync(schemaName, version: 1);
-        var updateSubmission = _harness.Get<PutUpdateSubmissionEndpoint>();
-        var finaliseSubmission = _harness.Get<PostFinaliseSubmissionEndpoint>();
+        badDraft.IsSuccessful.Should().BeFalse();
+        badDraft.PendingErrors.Should().NotBeEmpty();
+        prematureFinalise.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
 
-        // Step 6: Public PUT partial draft (missing URN) -> 200 OK with PendingErrors, Finalise -> 422
-        var draftData = (await updateSubmission.HandleAsync(
-                HttpRequestBuilder.FromRaw(missingUrnPayload), submissionId, CancellationToken.None))
-            .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
-        draftData.IsSuccessful.Should().BeFalse();
-        draftData.PendingErrors.Should().NotBeEmpty();
-
-        (await finaliseSubmission.HandleAsync(HttpRequestBuilder.Empty(), submissionId, CancellationToken.None))
-            .ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
-
-        // Step 7: Public PUT valid draft & POST finalise -> 200 OK promoted with URN
-        var validDraftData = (await updateSubmission.HandleAsync(
-                HttpRequestBuilder.FromRaw(validPayload), submissionId, CancellationToken.None))
-            .ShouldBeApiSuccess<UpdateSubmissionResult>(StatusCodes.Status200OK);
-        validDraftData.IsSuccessful.Should().BeTrue();
-        validDraftData.PendingErrors.Should().BeEmpty();
-
-        var finaliseData = (await finaliseSubmission.HandleAsync(
-                HttpRequestBuilder.Empty(), submissionId, CancellationToken.None))
-            .ShouldBeApiSuccess<FinaliseSubmissionResult>(StatusCodes.Status200OK);
+        validDraft.IsSuccessful.Should().BeTrue();
+        validDraft.PendingErrors.Should().BeEmpty();
         finaliseData.Identifier.Should().Be("104521");
         finaliseData.IdentifierType.Should().Be("URN");
         finaliseData.ProcessedBlobUri.Should().Contain("urn%3D104521");

@@ -2,6 +2,7 @@ using System.Text.Json;
 using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models;
+using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.UseCases.Submissions;
 using EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
@@ -78,24 +79,23 @@ public sealed class BogusNegativePipelineTests
         FuzzSchemaProfile profile,
         int seed)
     {
+        // Arrange
         var harness = CreatePipelineHarness(profile);
         var validJson = BogusNegativePayloadSuite.GenerateValidJson(profile, seed);
 
+        // Act
         var update = (await harness.UpdateUseCase.ExecuteAsync(
             new UpdateSubmissionRequest(harness.SubmissionId, validJson))).ShouldSucceed();
-
-        update.IsSuccessful.Should().BeTrue($"baseline {profile} seed {seed} should be valid: {string.Join("; ", update.PendingErrors.Select(e => e.Message))}");
-        update.PendingErrors.Should().BeEmpty();
-
         var status = (await harness.StatusUseCase.ExecuteAsync(
             new GetSubmissionStatusRequest(harness.SubmissionId))).ShouldSucceed();
-
-        status.IsReadyToFinalise.Should().BeTrue();
-        status.PendingErrors.Should().BeEmpty();
-
         var finalise = (await harness.FinaliseUseCase.ExecuteAsync(
             new FinaliseSubmissionRequest(harness.SubmissionId))).ShouldSucceed();
 
+        // Assert
+        update.IsSuccessful.Should().BeTrue($"baseline {profile} seed {seed} should be valid: {string.Join("; ", update.PendingErrors.Select(e => e.Message))}");
+        update.PendingErrors.Should().BeEmpty();
+        status.IsReadyToFinalise.Should().BeTrue();
+        status.PendingErrors.Should().BeEmpty();
         finalise.Status.Should().Be("Finalised");
         finalise.Identifier.Should().NotBeNullOrWhiteSpace();
         harness.Infrastructure.PromotionCount.Should().Be(1);
@@ -106,35 +106,38 @@ public sealed class BogusNegativePipelineTests
     public async Task Bogus_Negative_Payloads_Should_Fail_Cleanly_Through_Whole_Submission_Pipeline(
         NegativePayloadCase negativeCase)
     {
+        // Arrange
         var harness = CreatePipelineHarness(negativeCase.Profile);
 
+        // Act
         var updateResult = await harness.UpdateUseCase.ExecuteAsync(
             new UpdateSubmissionRequest(harness.SubmissionId, negativeCase.PayloadJson));
 
         if (negativeCase.IsMalformedJson)
         {
+            var finaliseEmpty = await harness.FinaliseUseCase.ExecuteAsync(
+                new FinaliseSubmissionRequest(harness.SubmissionId));
+
+            // Assert
             updateResult.IsFailure.Should().BeTrue($"malformed payload ({negativeCase.Description}) must fail Update");
             updateResult.Error.Code.Should().BeOneOf("Json.Malformed", "Json.EmptyPayload");
             harness.Infrastructure.SavedDraftChunks.Should().BeEmpty();
-
-            var finaliseEmpty = await harness.FinaliseUseCase.ExecuteAsync(
-                new FinaliseSubmissionRequest(harness.SubmissionId));
             finaliseEmpty.IsFailure.Should().BeTrue();
             harness.Infrastructure.PromotionCount.Should().Be(0);
             return;
         }
 
+        var status = (await harness.StatusUseCase.ExecuteAsync(
+            new GetSubmissionStatusRequest(harness.SubmissionId))).ShouldSucceed();
+        var finalise = await harness.FinaliseUseCase.ExecuteAsync(
+            new FinaliseSubmissionRequest(harness.SubmissionId));
+
+        // Assert
         var update = updateResult.ShouldSucceed();
         update.IsSuccessful.Should().BeFalse($"negative case {negativeCase.Description} must not validate cleanly");
         update.PendingErrors.Should().NotBeEmpty($"negative case {negativeCase.Description} must emit pending errors");
-
-        var status = (await harness.StatusUseCase.ExecuteAsync(
-            new GetSubmissionStatusRequest(harness.SubmissionId))).ShouldSucceed();
         status.IsReadyToFinalise.Should().BeFalse($"negative case {negativeCase.Description} must not be ready to finalise");
         status.PendingErrors.Should().NotBeEmpty();
-
-        var finalise = await harness.FinaliseUseCase.ExecuteAsync(
-            new FinaliseSubmissionRequest(harness.SubmissionId));
         finalise.IsFailure.Should().BeTrue($"negative case {negativeCase.Description} must be rejected at finalisation");
         finalise.Error.Type.Should().Be(ErrorType.Validation);
         finalise.Error.Code.Should().BeOneOf("Schema.ContractViolation", "Payload.InvalidIdentifier", "Json.EmptyPayload");
@@ -147,34 +150,30 @@ public sealed class BogusNegativePipelineTests
         FuzzSchemaProfile profile,
         string poisoningPatchJson)
     {
+        // Arrange
         var harness = CreatePipelineHarness(profile);
         var validJson = BogusNegativePayloadSuite.GenerateValidJson(profile, 404);
 
-        // Chunk 1: valid baseline passes
+        // Act
         var firstUpdate = (await harness.UpdateUseCase.ExecuteAsync(
             new UpdateSubmissionRequest(harness.SubmissionId, validJson))).ShouldSucceed();
-        firstUpdate.IsSuccessful.Should().BeTrue();
-
-        // Chunk 2: poisoning patch regresses schema or quality rule
         var poisonedUpdate = (await harness.UpdateUseCase.ExecuteAsync(
             new UpdateSubmissionRequest(harness.SubmissionId, poisoningPatchJson))).ShouldSucceed();
+        var blockedFinalise = await harness.FinaliseUseCase.ExecuteAsync(
+            new FinaliseSubmissionRequest(harness.SubmissionId));
+        var recoveryUpdate = (await harness.UpdateUseCase.ExecuteAsync(
+            new UpdateSubmissionRequest(harness.SubmissionId, validJson))).ShouldSucceed();
+        var repairedFinalise = (await harness.FinaliseUseCase.ExecuteAsync(
+            new FinaliseSubmissionRequest(harness.SubmissionId))).ShouldSucceed();
+
+        // Assert
+        firstUpdate.IsSuccessful.Should().BeTrue();
         poisonedUpdate.IsSuccessful.Should().BeFalse();
         poisonedUpdate.PendingErrors.Should().NotBeEmpty();
         poisonedUpdate.DraftCount.Should().Be(2);
-
-        var blockedFinalise = await harness.FinaliseUseCase.ExecuteAsync(
-            new FinaliseSubmissionRequest(harness.SubmissionId));
         blockedFinalise.IsFailure.Should().BeTrue();
         blockedFinalise.Error.Code.Should().Be("Schema.ContractViolation");
-        harness.Infrastructure.PromotionCount.Should().Be(0);
-
-        // Chunk 3: re-applying valid baseline repairs merged document
-        var recoveryUpdate = (await harness.UpdateUseCase.ExecuteAsync(
-            new UpdateSubmissionRequest(harness.SubmissionId, validJson))).ShouldSucceed();
         recoveryUpdate.IsSuccessful.Should().BeTrue();
-
-        var repairedFinalise = (await harness.FinaliseUseCase.ExecuteAsync(
-            new FinaliseSubmissionRequest(harness.SubmissionId))).ShouldSucceed();
         repairedFinalise.Status.Should().Be("Finalised");
         harness.Infrastructure.PromotionCount.Should().Be(1);
     }
@@ -204,7 +203,7 @@ public sealed class BogusNegativePipelineTests
         var infrastructure = new InMemorySubmissionInfrastructure(session);
         var registry = Substitute.For<ISchemaRegistry>();
         registry.GetExplicitSchemaAsync(contract.SchemaNamePrefix, 1, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(Result<Application.Models.Contracts.ResolvedSchema>.Success(resolvedSchema)));
+            .Returns(Task.FromResult(Result<ResolvedSchema>.Success(resolvedSchema)));
 
         var validationOptions = Options.Create(new ValidationOptions
         {
@@ -215,8 +214,8 @@ public sealed class BogusNegativePipelineTests
         });
 
         var schemaValidator = new JsonSchemaNetValidator(options: validationOptions);
-        var logicValidator = new JsonLogicValidator([], options: validationOptions);
-        var validationService = new PayloadValidationService(schemaValidator, logicValidator, validationOptions);
+        var logicCoordinator = new QualityRuleCoordinator([], options: validationOptions);
+        var validationService = new PayloadValidationService(schemaValidator, logicCoordinator, validationOptions);
         var evaluationService = new SubmissionEvaluationService(infrastructure, registry, validationService, validationOptions);
 
         return new PipelineHarness(

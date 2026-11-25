@@ -54,35 +54,16 @@ public class VerifySchemaUseCase(
         var effectiveRulesInput = string.IsNullOrWhiteSpace(rulesInput) && !string.IsNullOrWhiteSpace(schemaInput)
             ? null
             : rulesInput;
-        var validFixtures = request.SampleValidFixtures ?? [];
-        var invalidFixtures = request.SampleInvalidFixtures ?? [];
 
-        var verification = request.AmbientFixtures is { Count: > 0 }
-            ? await schemaVerifier.VerifyCandidateSchemaAsync(
-                schemaInput,
-                effectiveRulesInput,
-                validFixtures,
-                invalidFixtures,
-                request.IdentifierConfig,
-                cancellationToken,
-                effectivePolicy,
-                request.AmbientFixtures)
-            : effectivePolicy is not null
-                ? await schemaVerifier.VerifyCandidateSchemaAsync(
-                    schemaInput,
-                    effectiveRulesInput,
-                    validFixtures,
-                    invalidFixtures,
-                    request.IdentifierConfig,
-                    cancellationToken,
-                    effectivePolicy)
-                : await schemaVerifier.VerifyCandidateSchemaAsync(
-                    schemaInput,
-                    effectiveRulesInput,
-                    validFixtures,
-                    invalidFixtures,
-                    request.IdentifierConfig,
-                    cancellationToken);
+        var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
+            schemaInput,
+            effectiveRulesInput,
+            request.SampleValidFixtures ?? [],
+            request.SampleInvalidFixtures ?? [],
+            request.IdentifierConfig,
+            cancellationToken,
+            effectivePolicy,
+            request.AmbientFixtures);
 
         if (verification.IsFailure)
         {
@@ -129,19 +110,14 @@ public class VerifySchemaUseCase(
 
     private static VerifySchemaResult BuildErrorReportResult(Error error, string defaultPath)
     {
-        var errs = error.ValidationErrors is { Count: > 0 }
-            ? error.ValidationErrors.Select(e => e with { Severity = RuleSeverity.Error }).ToArray()
-            : [new ValidationError(defaultPath, error.Description ?? error.Code, Severity: RuleSeverity.Error)];
-
-        var issues = ValidationIssuesHelper.GroupBySeverity(errs);
-        var messages = errs.Select(e => e.Message).ToArray();
+        var normalised = SchemaCandidatePersistence.NormaliseError(error, defaultPath);
 
         return new VerifySchemaResult(
-            Message: $"Schema verification found {errs.Length} error(s)",
+            Message: $"Schema verification found {normalised.Messages.Count} error(s)",
             Warnings: [],
             IsSuccessful: false,
-            Issues: issues,
-            SyntaxErrors: messages,
+            Issues: normalised.Issues,
+            SyntaxErrors: normalised.Messages,
             FixtureErrors: []);
     }
 }

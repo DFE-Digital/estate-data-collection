@@ -17,6 +17,7 @@ public sealed class BlobSubmissionAuditStoreTests
     [Fact]
     public async Task AppendAsync_When_Session_Has_ProcessedBundlePrefix_Should_Mirror_Audit_Entry_To_Processed_Bundle()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
         var timestamp = new DateTimeOffset(2026, 11, 25, 12, 0, 0, TimeSpan.Zero);
@@ -68,8 +69,10 @@ public sealed class BlobSubmissionAuditStoreTests
             Outcome = new SubmissionAuditOutcome { Status = "Succeeded", HttpStatus = 200, Message = "Promoted" }
         };
 
+        // Act
         var result = (await store.AppendAsync(entry, CancellationToken.None)).ShouldSucceed();
 
+        // Assert
         result.Should().Be(expectedWorkingPath);
         await workingAuditBlob.Received(1).UploadAsync(Arg.Any<Stream>(), Arg.Any<BlobUploadOptions>(), Arg.Any<CancellationToken>());
         await processedAuditBlob.Received(1).UploadAsync(Arg.Any<Stream>(), Arg.Any<BlobUploadOptions>(), Arg.Any<CancellationToken>());
@@ -78,6 +81,7 @@ public sealed class BlobSubmissionAuditStoreTests
     [Fact]
     public async Task AppendAsync_When_Session_Is_Draft_Should_Not_Write_To_Processed_Container()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
         var timestamp = new DateTimeOffset(2026, 11, 25, 12, 0, 0, TimeSpan.Zero);
@@ -123,8 +127,11 @@ public sealed class BlobSubmissionAuditStoreTests
             Outcome = new SubmissionAuditOutcome { Status = "Succeeded", HttpStatus = 200 }
         };
 
-        (await store.AppendAsync(entry, CancellationToken.None)).ShouldSucceed();
+        // Act
+        var result = await store.AppendAsync(entry, CancellationToken.None);
 
+        // Assert
+        result.ShouldSucceed();
         await workingAuditBlob.Received(1).UploadAsync(Arg.Any<Stream>(), Arg.Any<BlobUploadOptions>(), Arg.Any<CancellationToken>());
         processedContainer.DidNotReceive().GetBlobClient(Arg.Any<string>());
     }

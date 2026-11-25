@@ -2946,7 +2946,7 @@
     },
     {
       "name": "7. CCD Elemental Dataset v3 Workflow (ccd-elemental-v3)",
-      "description": "End-to-end CCD Elemental Dataset v3 workflow covering sibling cross-submission baseline seeding, ODCS v3.2.0 ingestion, multi-engine submission validation (CEL, JsonLogic, unique, float epsilon, reference data), and bundle-folder finalisation.\n\nPrerequisites for live Functions execution against Azurite: seed the reference-data container with test/EstateDataCollection.Tests.Common/Fixtures/CdeContracts/reference-data/ccd-elemental-v3/*.json (product-types.json, nrm3-codes.json, repair-items-by-product-type.json).",
+      "description": "End-to-end CCD Elemental Dataset v3 workflow covering sibling cross-submission baseline seeding, ODCS v3.2.0 ingestion, multi-engine submission validation (CEL, JsonLogic, unique, float epsilon, reference data), and bundle-folder finalisation.\n\nPrerequisites for live Functions execution against Azurite: seed the reference-data container with the ccd-elemental-v3 reference-data JSONs defined in CcdElementalV3ReferenceDataBuilder (product-types.json, nrm3-codes.json, repair-items-by-product-type.json).",
       "item": [
         {
           "name": "7.1 Submit Baseline Sites Schema v1 (Cross-Submission Prerequisite)",
