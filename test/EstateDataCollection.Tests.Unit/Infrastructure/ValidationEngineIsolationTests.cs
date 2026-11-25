@@ -28,9 +28,9 @@ public sealed class ValidationEngineIsolationTests
 
         var descriptors = service.GetRegisteredEngines();
 
-        descriptors.Should().HaveCount(4);
+        descriptors.Should().HaveCount(5);
         descriptors.Select(d => d.EngineId).Should().BeEquivalentTo(
-            ["json-schema", "jsonlogic", "cel", "identifier-extractor"]);
+            ["json-schema", "jsonlogic", "cel", "identifier-extractor", "contract-consistency-analyzer"]);
 
         var jsonSchemaDescriptor = descriptors.Single(d => d.EngineId == "json-schema");
         jsonSchemaDescriptor.Kind.Should().Be(ValidationEngineKinds.StructuralSchema);

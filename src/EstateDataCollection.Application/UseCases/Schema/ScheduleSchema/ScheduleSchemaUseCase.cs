@@ -3,6 +3,7 @@ using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Domain.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -33,6 +34,24 @@ public sealed class ScheduleSchemaUseCase(
         }
 
         var metadata = existing.Value.Metadata;
+        if (metadata.IsDeleted)
+        {
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, "Schema version has been deleted.");
+            return Error.Validation(ErrorCodes.SchemaDeleted, new { request.SchemaName, request.Version });
+        }
+
+        if (metadata.State == SchemaLifecycleState.Invalid)
+        {
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, "Schema is Invalid and cannot be scheduled.");
+            return Error.Validation(ErrorCodes.SchemaInvalid, new { request.SchemaName, request.Version, metadata.ErrorSummary });
+        }
+
+        if (metadata.State == SchemaLifecycleState.Unvalidated)
+        {
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, "Schema is Unvalidated and must be signed off before scheduling.");
+            return Error.Validation(ErrorCodes.SchemaUnvalidated, new { request.SchemaName, request.Version, metadata.ErrorSummary });
+        }
+
         if (metadata.IsRetired)
         {
             _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, "Schema is already retired.");

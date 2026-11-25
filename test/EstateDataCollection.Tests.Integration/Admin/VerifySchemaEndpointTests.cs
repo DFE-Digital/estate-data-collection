@@ -3,6 +3,7 @@ using EstateDataCollection.Application.UseCases.Schema.GetValidationEngines;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
+using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Fixtures;
@@ -37,7 +38,8 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
             "unique",
             "identifier-extractor",
             "cross-submission-enrichment",
-            "reference-data-enrichment"
+            "reference-data-enrichment",
+            "contract-consistency-analyzer"
         ]);
     }
 
@@ -71,7 +73,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
     }
 
     [Fact]
-    public async Task When_Unsupported_Engine_Posted_Should_Return_422_UnprocessableEntity()
+    public async Task When_Unsupported_Engine_Posted_Should_Return_200_Diagnostic_Report_With_IsSuccessful_False()
     {
         var unsupportedRules = new QualityRulesBuilder()
             .AddCustomRule("RULE-SQL-1", "dbt-sql", "school", "Unsupported SQL rule", "SELECT 1")
@@ -81,7 +83,10 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
             HttpRequestBuilder.FromRaw(unsupportedRules),
             CancellationToken.None);
 
-        result.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+        var data = result.ShouldBeApiSuccess<VerifySchemaResult>(StatusCodes.Status200OK);
+        data.IsSuccessful.Should().BeFalse();
+        data.SyntaxErrors.Should().NotBeEmpty();
+        data.Issues![RuleSeverity.Error].Should().NotBeEmpty();
     }
 
     [Fact]
@@ -99,13 +104,14 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
         var result = await _harness.Endpoint.HandleAsync(http, CancellationToken.None);
 
         var data = result.ShouldBeApiSuccess<VerifySchemaResult>(StatusCodes.Status200OK);
+        data.IsSuccessful.Should().BeTrue();
         data.EngineTraces.Should().NotBeNull();
         data.EngineTraces!.Select(t => t.Descriptor.EngineId).Should().BeEquivalentTo(
-            ["json-schema", "jsonlogic", "cel", "unique", "identifier-extractor"]);
+            ["json-schema", "jsonlogic", "cel", "unique", "identifier-extractor", "contract-consistency-analyzer"]);
     }
 
     [Fact]
-    public async Task When_Valid_Fixture_Violates_Schema_Should_Return_422_UnprocessableEntity()
+    public async Task When_Valid_Fixture_Violates_Schema_Should_Return_200_Diagnostic_Report_With_IsSuccessful_False()
     {
         var dto = new VerifySchemaBodyDto(
             SchemaJson: JsonSchemaFixtures.ValidV1Schema,
@@ -116,7 +122,10 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
             HttpRequestBuilder.FromJson(dto),
             CancellationToken.None);
 
-        result.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+        var data = result.ShouldBeApiSuccess<VerifySchemaResult>(StatusCodes.Status200OK);
+        data.IsSuccessful.Should().BeFalse();
+        data.FixtureErrors.Should().NotBeEmpty();
+        data.Issues![RuleSeverity.Error].Should().NotBeEmpty();
     }
 
     [Fact]
@@ -163,7 +172,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
     }
 
     [Fact]
-    public async Task When_IdentifierPointer_Does_Not_Exist_In_Schema_Should_Return_422_UnprocessableEntity()
+    public async Task When_IdentifierPointer_Does_Not_Exist_In_Schema_Should_Return_200_Diagnostic_Report_With_IsSuccessful_False()
     {
         var dto = new VerifySchemaBodyDto(
             SchemaJson: JsonSchemaFixtures.ValidV1Schema,
@@ -177,13 +186,16 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
             HttpRequestBuilder.FromJson(dto),
             CancellationToken.None);
 
-        result.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+        var data = result.ShouldBeApiSuccess<VerifySchemaResult>(StatusCodes.Status200OK);
+        data.IsSuccessful.Should().BeFalse();
+        data.SyntaxErrors.Should().NotBeEmpty();
+        data.Issues![RuleSeverity.Error].Should().NotBeEmpty();
     }
 
     [Theory]
     [InlineData("/meta")]
     [InlineData("/is_active")]
-    public async Task When_IdentifierPointer_Targets_NonScalar_Property_Should_Return_422_UnprocessableEntity(string pointer)
+    public async Task When_IdentifierPointer_Targets_NonScalar_Property_Should_Return_200_Diagnostic_Report_With_IsSuccessful_False(string pointer)
     {
         const string schemaJson = """
         {
@@ -212,6 +224,9 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
             HttpRequestBuilder.FromJson(dto),
             CancellationToken.None);
 
-        result.ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+        var data = result.ShouldBeApiSuccess<VerifySchemaResult>(StatusCodes.Status200OK);
+        data.IsSuccessful.Should().BeFalse();
+        data.SyntaxErrors.Should().NotBeEmpty();
+        data.Issues![RuleSeverity.Error].Should().NotBeEmpty();
     }
 }

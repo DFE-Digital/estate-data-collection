@@ -32,6 +32,8 @@ public static class AppRoutes
             public const string SchemaTests = $"{Prefix}/schemas/{{schemaName}}/{{version:int}}/tests";
             public const string SchemaTestsRun = $"{Prefix}/schemas/{{schemaName}}/{{version:int}}/tests/run";
             public const string SchemaSchedule = $"{Prefix}/schemas/{{schemaName}}/{{version:int}}/schedule";
+            public const string SchemaSignOff = $"{Prefix}/schemas/{{schemaName}}/{{version:int}}/signoff";
+            public const string SchemaDelete = $"{Prefix}/schemas/{{schemaName}}/{{version:int}}/delete";
         }
 
         public const string Dashboard = $"/{Templates.Dashboard}";
@@ -128,6 +130,24 @@ public static class AppRoutes
                 version
             });
         }
+
+        public static string SchemaSignOff(string schemaName, int version)
+        {
+            return $"/{Templates.SchemaSignOff}".FormatWith(new
+            {
+                schemaName = Uri.EscapeDataString(schemaName),
+                version
+            });
+        }
+
+        public static string SchemaDelete(string schemaName, int version)
+        {
+            return $"/{Templates.SchemaDelete}".FormatWith(new
+            {
+                schemaName = Uri.EscapeDataString(schemaName),
+                version
+            });
+        }
     }
 
     public static class Assets
@@ -173,7 +193,9 @@ public static class AppRoutes
             public const string RunSchemaTests = $"{Prefix}/schemas/tests/run";
             public const string SchemaVersionDetail = $"{Prefix}/schemas/{{schemaName}}/versions/{{version:int}}";
             public const string SubmitSchema = $"{Prefix}/schemas/{{schemaName}}/versions/{{version:int}}";
+            public const string DeleteSchemaVersion = $"{Prefix}/schemas/{{schemaName}}/versions/{{version:int}}";
             public const string ScheduleSchema = $"{Prefix}/schemas/{{schemaName}}/versions/{{version:int}}/schedule";
+            public const string SignOffSchema = $"{Prefix}/schemas/{{schemaName}}/versions/{{version:int}}/signoff";
             public const string UpdateSchemaTests = $"{Prefix}/schemas/{{schemaName}}/versions/{{version:int}}/tests";
         }
 
@@ -194,6 +216,24 @@ public static class AppRoutes
         public static string ScheduleSchema(string schemaName, int version)
         {
             return $"/{Templates.ScheduleSchema}".FormatWith(new
+            {
+                schemaName = Uri.EscapeDataString(schemaName),
+                version
+            });
+        }
+
+        public static string SignOffSchema(string schemaName, int version)
+        {
+            return $"/{Templates.SignOffSchema}".FormatWith(new
+            {
+                schemaName = Uri.EscapeDataString(schemaName),
+                version
+            });
+        }
+
+        public static string DeleteSchemaVersion(string schemaName, int version)
+        {
+            return $"/{Templates.DeleteSchemaVersion}".FormatWith(new
             {
                 schemaName = Uri.EscapeDataString(schemaName),
                 version

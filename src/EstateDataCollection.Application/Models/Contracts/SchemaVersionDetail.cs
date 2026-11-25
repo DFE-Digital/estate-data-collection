@@ -31,5 +31,11 @@ public sealed record SchemaVersionDetail(
     IReadOnlyList<string>? LastTestRunWarnings = null,
     IReadOnlyList<ValidationEngineTrace>? LastTestRunEngineTraces = null,
     IReadOnlyList<ValidationEngineDescriptor>? RegisteredEngines = null,
-    SchemaValidationPolicy? ValidationPolicy = null
+    SchemaValidationPolicy? ValidationPolicy = null,
+    bool HasErrorReport = false,
+    string? ErrorSummary = null,
+    SchemaErrorReport? ErrorReport = null,
+    string? SignedOffBy = null,
+    DateTimeOffset? SignedOffAtUtc = null,
+    DateTimeOffset? DeletedAtUtc = null
 );

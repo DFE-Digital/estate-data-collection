@@ -14,12 +14,15 @@ public sealed class PayloadValidationService(
     IBusinessLogicValidator logicValidator,
     IOptions<ValidationOptions>? options = null,
     ProcessExecutionInstrumentation? processInstrumentation = null,
-    IValidationWorkflowRunner? workflowRunner = null
+    IValidationWorkflowRunner? workflowRunner = null,
+    IContractConsistencyAnalyzer? consistencyAnalyzer = null
 ) : IPayloadValidationService
 {
     private readonly ValidationOptions _options = options?.Value ?? new ValidationOptions();
     private readonly IValidationWorkflowRunner _workflowRunner =
         workflowRunner ?? ValidationWorkflowRunner.CreateDefault(schemaValidator, logicValidator, processInstrumentation);
+    private readonly ValidationEngineDescriptor _consistencyDescriptor =
+        consistencyAnalyzer?.Descriptor ?? ContractConsistencyAnalyzer.EngineDescriptor;
 
     public IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngines()
     {
@@ -44,6 +47,11 @@ public sealed class PayloadValidationService(
                     engines.Add(ruleEngine);
                 }
             }
+        }
+
+        if (seen.Add(_consistencyDescriptor.EngineId))
+        {
+            engines.Add(_consistencyDescriptor);
         }
 
         return engines;

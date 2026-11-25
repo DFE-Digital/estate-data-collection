@@ -53,7 +53,7 @@ public interface ISchemaRegistry : IInfrastructure
     }
 
     /// <summary>
-    /// Checks whether a schema version already exists in storage.
+    /// Checks whether a schema version key has already been consumed in storage (including Deleted tombstones).
     /// </summary>
     Task<Result<bool>> ExistsAsync(string schemaName, int version, CancellationToken cancellationToken = default);
 
@@ -74,6 +74,51 @@ public interface ISchemaRegistry : IInfrastructure
         CancellationToken cancellationToken = default)
     {
         return SaveSchemaAsync(metadata, rawRulesJson, rawOdcsYaml, cancellationToken);
+    }
+
+    /// <summary>
+    /// Persists a <c>{schemaName}/v{version}.error.json</c> diagnostic report in the schemas container.
+    /// </summary>
+    Task<Result> SaveErrorReportAsync(
+        SchemaErrorReport report,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(Result.Success());
+    }
+
+    /// <summary>
+    /// Loads a <c>{schemaName}/v{version}.error.json</c> diagnostic report if present.
+    /// </summary>
+    Task<Result<SchemaErrorReport?>> GetErrorReportAsync(
+        string schemaName,
+        int version,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<Result<SchemaErrorReport?>>((SchemaErrorReport?)null);
+    }
+
+    /// <summary>
+    /// Deletes a <c>{schemaName}/v{version}.error.json</c> diagnostic report if present.
+    /// </summary>
+    Task<Result> DeleteErrorReportAsync(
+        string schemaName,
+        int version,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(Result.Success());
+    }
+
+    /// <summary>
+    /// Deletes contract/rule/fixture blobs for a schema version while marking <c>.meta.json</c> as
+    /// <see cref="SchemaLifecycleState.Deleted"/> and preserving <c>.meta.json</c> + <c>.error.json</c>.
+    /// </summary>
+    Task<Result<SchemaMetadata>> DeleteSchemaVersionAsync(
+        string schemaName,
+        int version,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<Result<SchemaMetadata>>(
+            Error.NotFound(ErrorCodes.SchemaNotFound, new { schemaName, version }));
     }
 
     /// <summary>

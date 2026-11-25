@@ -59,6 +59,8 @@ public sealed class GetSchemaDetailPage(
         {
             "submitted" => $"Schema '{detail.SchemaName}' v{detail.Version} passed verification and was saved as Validated (unscheduled).",
             "scheduled" => $"Lifecycle & schedule updated for '{detail.SchemaName}' v{detail.Version} (current state: {detail.State.Name}).",
+            "signedoff" => $"Schema '{detail.SchemaName}' v{detail.Version} was signed off by '{detail.SignedOffBy}' and transitioned to Validated.",
+            "deleted" => $"Schema '{detail.SchemaName}' v{detail.Version} was deleted. Metadata and error report tombstones remain reserved; any fix must be published as v{detail.Version + 1}.",
             _ => null
         };
 

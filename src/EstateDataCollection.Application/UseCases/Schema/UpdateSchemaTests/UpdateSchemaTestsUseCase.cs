@@ -54,19 +54,33 @@ public sealed class UpdateSchemaTestsUseCase(
         var existing = existingResult.Value;
         var meta = existing.Metadata;
 
+        if (meta.IsDeleted)
+        {
+            return Error.Validation(ErrorCodes.SchemaDeleted, new { meta.Name, meta.Version });
+        }
+
         var rulesJson = existing.RawRulesJson;
         if (string.IsNullOrWhiteSpace(rulesJson) && existing.Rules is { Count: > 0 })
         {
             rulesJson = JsonSerializer.Serialize(existing.Rules);
         }
 
-        var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
-            meta.RawJsonSchema,
-            rulesJson,
-            validFixtures,
-            invalidFixtures,
-            meta.IdentifierConfig,
-            cancellationToken);
+        var verification = meta.ValidationPolicy is not null
+            ? await schemaVerifier.VerifyCandidateSchemaAsync(
+                meta.RawJsonSchema,
+                rulesJson,
+                validFixtures,
+                invalidFixtures,
+                meta.IdentifierConfig,
+                cancellationToken,
+                meta.ValidationPolicy)
+            : await schemaVerifier.VerifyCandidateSchemaAsync(
+                meta.RawJsonSchema,
+                rulesJson,
+                validFixtures,
+                invalidFixtures,
+                meta.IdentifierConfig,
+                cancellationToken);
 
         if (verification.IsFailure)
         {

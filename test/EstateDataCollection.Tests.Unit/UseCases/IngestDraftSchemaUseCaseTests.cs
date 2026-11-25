@@ -35,6 +35,8 @@ public class IngestDraftSchemaUseCaseTests
         var verifier = Substitute.For<ISchemaVerificationService>();
         registry.GetDraftArtefactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
+        registry.ExistsAsync("edc-survey-sites", 1, Arg.Any<CancellationToken>())
+            .Returns(Result<bool>.Success(false));
         verifier.VerifyCandidateSchemaAsync(
                 Arg.Any<string?>(),
                 Arg.Any<string?>(),
@@ -123,6 +125,8 @@ public class IngestDraftSchemaUseCaseTests
         var verifier = Substitute.For<ISchemaVerificationService>();
         registry.GetDraftArtefactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
+        registry.ExistsAsync("edc-survey-sites", 1, Arg.Any<CancellationToken>())
+            .Returns(Result<bool>.Success(false));
         verifier.VerifyCandidateSchemaAsync(
                 overrideSchemaJson,
                 overrideRulesJson,
@@ -196,6 +200,8 @@ public class IngestDraftSchemaUseCaseTests
         var verifier = Substitute.For<ISchemaVerificationService>();
         registry.GetDraftArtefactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
+        registry.ExistsAsync("edc-laestab", 1, Arg.Any<CancellationToken>())
+            .Returns(Result<bool>.Success(false));
         verifier.VerifyCandidateSchemaAsync(
                 schemaJson,
                 null,
@@ -225,7 +231,7 @@ public class IngestDraftSchemaUseCaseTests
     }
 
     [Fact]
-    public async Task When_Draft_Fails_Verification_Should_Record_ErrorJson_And_Keep_Draft()
+    public async Task When_Draft_Fails_Verification_Should_Persist_Invalid_With_ErrorReport_And_Clean_Up_Draft()
     {
         var schemaJson = CdeContractFixtureLoader.LoadFile("schemas/edc-school-site.schema.json");
         var rulesJson = CdeContractFixtureLoader.LoadFile("schemas/edc-school-site.rules.json");
@@ -246,6 +252,8 @@ public class IngestDraftSchemaUseCaseTests
         var verifier = Substitute.For<ISchemaVerificationService>();
         registry.GetDraftArtefactAsync(blobPath, Arg.Any<CancellationToken>())
             .Returns(Result<DraftSchemaArtifact>.Success(artifact));
+        registry.ExistsAsync("edc-school-site", 2, Arg.Any<CancellationToken>())
+            .Returns(Result<bool>.Success(false));
         verifier.VerifyCandidateSchemaAsync(
                 schemaJson,
                 rulesJson,
@@ -255,27 +263,39 @@ public class IngestDraftSchemaUseCaseTests
                 Arg.Any<CancellationToken>())
             .Returns(Result<SchemaVerificationResult>.Success(
                 new SchemaVerificationResult([], ["SampleValidFixtures:0 violated quality rules: /survey"])));
-        registry.RecordDraftIngestionFailureAsync(
-                blobPath,
-                "edc-school-site",
-                2,
-                Arg.Any<IReadOnlyList<string>>(),
+        registry.SaveSchemaAsync(
+                Arg.Any<SchemaMetadata>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<IReadOnlyList<string>?>(),
+                Arg.Any<IReadOnlyList<string>?>(),
                 Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+        registry.SaveErrorReportAsync(Arg.Any<SchemaErrorReport>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+        registry.CompleteDraftIngestionAsync(artifact, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
         var sut = new IngestDraftSchemaUseCase(registry, verifier, new OdcsContractParser());
 
-        var result = await sut.ExecuteAsync(new IngestDraftSchemaRequest(blobPath));
+        var result = (await sut.ExecuteAsync(new IngestDraftSchemaRequest(blobPath))).ShouldSucceed();
 
-        result.IsFailure.Should().BeTrue();
-        await registry.Received(1).RecordDraftIngestionFailureAsync(
-            blobPath,
-            "edc-school-site",
-            2,
-            Arg.Is<IReadOnlyList<string>>(errs => errs.Count == 1 && errs[0].Contains("/survey")),
+        result.Promoted.Should().BeFalse();
+        result.Status.Should().Be("Invalid");
+        result.State!.Name.Should().Be("Invalid");
+        result.HasErrorReport.Should().BeTrue();
+        result.Issues.Should().ContainKey(RuleSeverity.Error);
+
+        await registry.Received(1).SaveSchemaAsync(
+            Arg.Is<SchemaMetadata>(m => m.Name == "edc-school-site" && m.Version == 2 && m.State == SchemaLifecycleState.Invalid && m.HasErrorReport),
+            rulesJson,
+            null,
+            Arg.Is<IReadOnlyList<string>?>(v => v != null && v.Count == 1),
+            Arg.Is<IReadOnlyList<string>?>(inv => inv != null && inv.Count == 0),
             Arg.Any<CancellationToken>());
-        await registry.DidNotReceiveWithAnyArgs().SaveSchemaAsync(default!, default, default, default);
-        await registry.DidNotReceiveWithAnyArgs().SaveSchemaAsync(default!, default, default, default, default, default);
-        await registry.DidNotReceiveWithAnyArgs().CompleteDraftIngestionAsync(default!, default);
+        await registry.Received(1).SaveErrorReportAsync(
+            Arg.Is<SchemaErrorReport>(r => r.SchemaName == "edc-school-site" && r.Version == 2 && r.FixtureErrors != null && r.FixtureErrors.Any(e => e.Contains("/survey"))),
+            Arg.Any<CancellationToken>());
+        await registry.Received(1).CompleteDraftIngestionAsync(artifact, Arg.Any<CancellationToken>());
     }
 }

@@ -20,5 +20,10 @@ public sealed record SchemaVersionSummary(
     DateTimeOffset? LastTestRunAtUtc = null,
     string? LastTestRunAppVersion = null,
     bool? LastTestRunPassed = null,
-    IReadOnlyList<string>? LastTestRunWarnings = null
+    IReadOnlyList<string>? LastTestRunWarnings = null,
+    bool HasErrorReport = false,
+    string? ErrorSummary = null,
+    string? SignedOffBy = null,
+    DateTimeOffset? SignedOffAtUtc = null,
+    DateTimeOffset? DeletedAtUtc = null
 );

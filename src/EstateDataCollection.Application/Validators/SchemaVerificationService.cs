@@ -20,7 +20,8 @@ public sealed class SchemaVerificationService(
     IOdcsContractParser? odcsParser = null,
     IOptions<ValidationOptions>? validationOptions = null,
     SchemaVerificationServiceInstrumentation? instrumentation = null,
-    ISchemaValidator? schemaValidator = null
+    ISchemaValidator? schemaValidator = null,
+    IContractConsistencyAnalyzer? consistencyAnalyzer = null
 ) : ISchemaVerificationService
 {
     private static readonly JsonSerializerOptions RuleJsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -36,7 +37,10 @@ public sealed class SchemaVerificationService(
             Kind: ValidationEngineKinds.StructuralSchema,
             Description: "Structural JSON Schema validator.");
 
-    public async Task<Result<SchemaVerificationResult>> VerifyCandidateSchemaAsync(
+    private readonly IContractConsistencyAnalyzer _consistencyAnalyzer =
+        consistencyAnalyzer ?? new ContractConsistencyAnalyzer();
+
+    public Task<Result<SchemaVerificationResult>> VerifyCandidateSchemaAsync(
         string? rawSchemaJson,
         string? rawRulesJson,
         IReadOnlyList<string> sampleValidPayloads,
@@ -45,9 +49,33 @@ public sealed class SchemaVerificationService(
         CancellationToken cancellationToken = default,
         SchemaValidationPolicy? validationPolicy = null)
     {
+        return VerifyCandidateSchemaAsync(
+            rawSchemaJson,
+            rawRulesJson,
+            sampleValidPayloads,
+            sampleInvalidPayloads,
+            identifierConfig,
+            cancellationToken,
+            validationPolicy,
+            ambientFixtures: null);
+    }
+
+    public async Task<Result<SchemaVerificationResult>> VerifyCandidateSchemaAsync(
+        string? rawSchemaJson,
+        string? rawRulesJson,
+        IReadOnlyList<string> sampleValidPayloads,
+        IReadOnlyList<string> sampleInvalidPayloads,
+        SchemaIdentifierConfig? identifierConfig,
+        CancellationToken cancellationToken,
+        SchemaValidationPolicy? validationPolicy,
+        IReadOnlyDictionary<string, JsonNode?>? ambientFixtures)
+    {
         var syntaxErrors = new List<ValidationMessage>();
         var fixtureErrors = new List<ValidationMessage>();
         var warnings = new List<ValidationMessage>();
+        var analyzerFindings = new List<ValidationError>();
+        var additionalIssues = new List<ValidationError>();
+        var consistencyTrace = new EngineRunState(_consistencyAnalyzer.Descriptor);
 
         var registeredRuleEngines = logicValidator.GetRegisteredEngines() ?? [];
         var schemaTrace = new EngineRunState(_schemaEngineDescriptor);
@@ -88,6 +116,7 @@ public sealed class SchemaVerificationService(
                     schemaTrace,
                     ruleTraces.Values,
                     identifierTrace,
+                    consistencyTrace,
                     hasSchema: false,
                     hasRules: false,
                     identifierEnabled: false,
@@ -111,6 +140,7 @@ public sealed class SchemaVerificationService(
                         schemaTrace,
                         ruleTraces.Values,
                         identifierTrace,
+                        consistencyTrace,
                         hasSchema: false,
                         hasRules: false,
                         identifierEnabled: false,
@@ -223,6 +253,7 @@ public sealed class SchemaVerificationService(
                         schemaTrace,
                         ruleTraces.Values,
                         identifierTrace,
+                        consistencyTrace,
                         hasSchema: true,
                         hasRules: hasRulesInput,
                         identifierEnabled: false,
@@ -290,6 +321,35 @@ public sealed class SchemaVerificationService(
             syntaxErrors.AddRange(identifierAlignment.Errors);
         }
 
+        if (candidateRules is { Count: > 0 })
+        {
+            var consistencyStart = Stopwatch.GetTimestamp();
+            var consistencyReport = _consistencyAnalyzer.Analyze(
+                candidateSchema is not null ? rawSchemaJson : null,
+                candidateRules);
+            consistencyTrace.ElapsedTicks += Stopwatch.GetTimestamp() - consistencyStart;
+            consistencyTrace.ItemsEvaluated += candidateRules.Count;
+
+            if (consistencyReport.Findings.Count > 0)
+            {
+                analyzerFindings.AddRange(consistencyReport.Findings);
+            }
+
+            if (consistencyReport.Errors.Count > 0)
+            {
+                consistencyTrace.ViolationCount += consistencyReport.Errors.Count;
+                consistencyTrace.FirstIssue ??= consistencyReport.Errors[0].Message;
+                syntaxErrors.AddRange(consistencyReport.Errors);
+            }
+
+            if (consistencyReport.Warnings.Count > 0)
+            {
+                consistencyTrace.WarningCount += consistencyReport.Warnings.Count;
+                consistencyTrace.FirstIssue ??= consistencyReport.Warnings[0].Message;
+                warnings.AddRange(consistencyReport.Warnings);
+            }
+        }
+
         var effectiveIdentifierType = identifierAlignment.EffectiveConfig?.Type ?? _validationOptions.DefaultIdentifierType;
         var effectiveIdentifierLabel = FormatIdentifierLabel(identifierAlignment, effectiveIdentifierType);
 
@@ -300,16 +360,19 @@ public sealed class SchemaVerificationService(
                 syntaxErrors,
                 [],
                 ResolvedIdentifierConfig: identifierAlignment.EffectiveConfig,
+                Warnings: warnings,
                 EngineTraces: BuildEngineTraces(
                     schemaTrace,
                     ruleTraces.Values,
                     identifierTrace,
+                    consistencyTrace,
                     hasSchema: candidateSchema is not null || hasSchemaInput,
                     hasRules: hasRulesInput,
                     identifierEnabled: identifierAlignment.IsEnabled && candidateSchema is not null,
                     validFixtureCount: 0,
                     invalidFixtureCount: 0,
-                    identifierLabel: effectiveIdentifierLabel));
+                    identifierLabel: effectiveIdentifierLabel),
+                AnalyzerFindings: analyzerFindings);
         }
 
         // Phase Two: In-Flight Golden Fixture Dry-Runs (against Schema, Quality Rules, and Identifier Extraction)
@@ -384,8 +447,11 @@ public sealed class SchemaVerificationService(
 
             if (candidateRules is { Count: > 0 })
             {
+                var effectivePolicyPre = (validationPolicy ?? odcsValidationPolicy ?? SchemaValidationPolicy.Default).Normalise();
                 var rulesStart = Stopwatch.GetTimestamp();
-                var logicResult = await logicValidator.ValidateAsync(payload, candidateRules, cancellationToken);
+                var logicResult = ambientFixtures is { Count: > 0 } || effectivePolicyPre.NumericToleranceOverride is not null
+                    ? await logicValidator.ValidateAsync(payload, candidateRules, ambientFixtures, (double?)effectivePolicyPre.NumericToleranceOverride, cancellationToken)
+                    : await logicValidator.ValidateAsync(payload, candidateRules, cancellationToken);
                 var rulesTicks = Stopwatch.GetTimestamp() - rulesStart;
 
                 if (logicResult.IsFailure)
@@ -418,28 +484,34 @@ public sealed class SchemaVerificationService(
                     var blockingRuleIssues = ValidationIssuesHelper.GetBlockingIssues(allRuleIssues, effectivePolicy.FailOnMinimumSeverity);
                     if (blockingRuleIssues.Count > 0)
                     {
+                        additionalIssues.AddRange(blockingRuleIssues);
                         var ruleErrors = string.Join("; ", blockingRuleIssues.Select(e => $"{e.PropertyPath}: {e.Message}"));
                         var ruleIds = blockingRuleIssues.Select(e => e.RuleId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).ToArray();
+                        var metaDict = new Dictionary<string, object?> { ["capturedInIssues"] = true };
+                        if (ruleIds.Length > 0) metaDict["ruleIds"] = ruleIds;
                         fixtureErrors.Add(ValidationMessage.For(
                             ValidationSources.Rule,
                             $"{fixtureId} violated quality rules: {ruleErrors}",
                             identifier: fixtureId,
                             ruleId: ruleIds.Length == 1 ? ruleIds[0] : null,
                             engineType: logicValidator.GetType(),
-                            metadata: ruleIds.Length > 0
-                                ? new Dictionary<string, object?> { ["ruleIds"] = ruleIds }
-                                : null));
+                            metadata: metaDict));
                     }
 
-                    foreach (var nonBlocking in allRuleIssues.Where(e => !e.Severity.IsAtOrAbove(effectivePolicy.FailOnMinimumSeverity) && e.Severity == RuleSeverity.Warning))
+                    foreach (var nonBlocking in allRuleIssues.Where(e => !e.Severity.IsAtOrAbove(effectivePolicy.FailOnMinimumSeverity)))
                     {
-                        warnings.Add(ValidationMessage.For(
-                            ValidationSources.Rule,
-                            $"{fixtureId} warning [{nonBlocking.RuleId ?? "rule"}]: {nonBlocking.Message}",
-                            identifier: fixtureId,
-                            path: nonBlocking.PropertyPath,
-                            ruleId: nonBlocking.RuleId,
-                            engineType: logicValidator.GetType()));
+                        additionalIssues.Add(nonBlocking);
+                        if (nonBlocking.Severity == RuleSeverity.Warning)
+                        {
+                            warnings.Add(ValidationMessage.For(
+                                ValidationSources.Rule,
+                                $"{fixtureId} warning [{nonBlocking.RuleId ?? "rule"}]: {nonBlocking.Message}",
+                                identifier: fixtureId,
+                                path: nonBlocking.PropertyPath,
+                                ruleId: nonBlocking.RuleId,
+                                engineType: logicValidator.GetType(),
+                                metadata: new Dictionary<string, object?> { ["capturedInIssues"] = true }));
+                        }
                     }
                 }
             }
@@ -548,8 +620,11 @@ public sealed class SchemaVerificationService(
 
             if (candidateRules is { Count: > 0 })
             {
+                var effectivePolicyInv = (validationPolicy ?? odcsValidationPolicy ?? SchemaValidationPolicy.Default).Normalise();
                 var rulesStart = Stopwatch.GetTimestamp();
-                var logicResult = await logicValidator.ValidateAsync(payload, candidateRules, cancellationToken);
+                var logicResult = ambientFixtures is { Count: > 0 } || effectivePolicyInv.NumericToleranceOverride is not null
+                    ? await logicValidator.ValidateAsync(payload, candidateRules, ambientFixtures, (double?)effectivePolicyInv.NumericToleranceOverride, cancellationToken)
+                    : await logicValidator.ValidateAsync(payload, candidateRules, cancellationToken);
                 var rulesTicks = Stopwatch.GetTimestamp() - rulesStart;
 
                 if (logicResult.IsFailure)
@@ -721,6 +796,7 @@ public sealed class SchemaVerificationService(
             schemaTrace,
             ruleTraces.Values,
             identifierTrace,
+            consistencyTrace,
             hasSchema: candidateSchema is not null,
             hasRules: hasRulesInput && candidateRules is { Count: > 0 },
             identifierEnabled: identifierAlignment.IsEnabled && candidateSchema is not null,
@@ -734,7 +810,9 @@ public sealed class SchemaVerificationService(
             ResolvedIdentifierConfig: identifierAlignment.EffectiveConfig,
             InvalidFixtureOutcomes: invalidFixtureOutcomes,
             Warnings: warnings,
-            EngineTraces: traces);
+            EngineTraces: traces,
+            AnalyzerFindings: analyzerFindings,
+            AdditionalIssues: additionalIssues);
     }
 
     private void RecordRuleSyntaxErrors(
@@ -909,6 +987,7 @@ public sealed class SchemaVerificationService(
         EngineRunState schemaState,
         IEnumerable<EngineRunState> ruleStates,
         EngineRunState identifierState,
+        EngineRunState consistencyState,
         bool hasSchema,
         bool hasRules,
         bool identifierEnabled,
@@ -1030,6 +1109,40 @@ public sealed class SchemaVerificationService(
                 Summary: idSummary));
         }
 
+        // 4. Contract Consistency Analyzer
+        if (consistencyState.ItemsEvaluated == 0 && consistencyState.ViolationCount == 0 && consistencyState.WarningCount == 0)
+        {
+            traces.Add(new ValidationEngineTrace(
+                consistencyState.Descriptor,
+                nameof(SubmissionProcessOutcome.Skipped),
+                ItemsEvaluated: 0,
+                ViolationCount: 0,
+                DurationMs: consistencyState.TotalDurationMs,
+                Summary: hasRules
+                    ? "Rules did not parse cleanly for consistency analysis"
+                    : "No quality rules configured"));
+        }
+        else
+        {
+            var consistencyOutcome = consistencyState.ViolationCount > 0
+                ? nameof(SubmissionProcessOutcome.ValidationErrorsFound)
+                : nameof(SubmissionProcessOutcome.Succeeded);
+
+            var consistencySummary = consistencyState.ViolationCount > 0
+                ? consistencyState.FirstIssue ?? $"{consistencyState.ViolationCount} contract consistency error(s)"
+                : consistencyState.WarningCount > 0
+                    ? $"Checked {consistencyState.ItemsEvaluated} rule(s); {consistencyState.WarningCount} warning(s)"
+                    : $"Checked {consistencyState.ItemsEvaluated} rule(s); consistent with JSON Schema and DAG";
+
+            traces.Add(new ValidationEngineTrace(
+                consistencyState.Descriptor,
+                consistencyOutcome,
+                ItemsEvaluated: consistencyState.ItemsEvaluated,
+                ViolationCount: consistencyState.ViolationCount,
+                DurationMs: consistencyState.TotalDurationMs,
+                Summary: consistencySummary));
+        }
+
         return traces;
     }
 
@@ -1051,6 +1164,7 @@ public sealed class SchemaVerificationService(
         public int RuleCount { get; set; }
         public int ItemsEvaluated { get; set; }
         public int ViolationCount { get; set; }
+        public int WarningCount { get; set; }
         public int InvalidTriggers { get; set; }
         public long ElapsedTicks { get; set; }
         public long ExplicitDurationMs { get; set; }

@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
@@ -10,7 +11,9 @@ public record VerifySchemaBodyDto(
     string? RulesJson = null,
     string? OdcsYaml = null,
     string? FileName = null,
-    SchemaIdentifierConfig? IdentifierConfig = null)
+    SchemaIdentifierConfig? IdentifierConfig = null,
+    SchemaValidationPolicy? ValidationPolicy = null,
+    IReadOnlyDictionary<string, JsonNode?>? AmbientFixtures = null)
 {
     public string? EffectiveRulesJson
     {

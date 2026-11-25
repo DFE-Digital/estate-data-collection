@@ -5,6 +5,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -55,17 +56,62 @@ public sealed class PostWorkbenchVerifyEndpoint(
                 IdentifierConfig: input.IdentifierConfig),
             cancellationToken);
 
-        var verifyViewModel = verifyResult.IsSuccess
-            ? new WorkbenchVerifyViewModel(HasRun: true, Result: verifyResult.Value)
-            : new WorkbenchVerifyViewModel(HasRun: true, Error: verifyResult.Error);
+        WorkbenchVerifyViewModel verifyViewModel;
+        int statusCode;
 
-        var statusCode = verifyResult.IsSuccess
-            ? StatusCodes.Status200OK
-            : MapErrorToStatusCode(verifyResult.Error);
+        if (verifyResult.IsFailure)
+        {
+            verifyViewModel = new WorkbenchVerifyViewModel(HasRun: true, Error: verifyResult.Error);
+            statusCode = MapErrorToStatusCode(verifyResult.Error);
+        }
+        else if (!verifyResult.Value.IsSuccessful)
+        {
+            var validationErrors = BuildValidationErrorsFromVerifyReport(verifyResult.Value);
+            var reportError = Error.Validation(
+                ErrorCodes.SchemaVerificationFailed,
+                verifyResult.Value.Message,
+                validationErrors);
+            verifyViewModel = new WorkbenchVerifyViewModel(HasRun: true, Result: verifyResult.Value, Error: reportError);
+            statusCode = StatusCodes.Status422UnprocessableEntity;
+        }
+        else
+        {
+            verifyViewModel = new WorkbenchVerifyViewModel(HasRun: true, Result: verifyResult.Value);
+            statusCode = StatusCodes.Status200OK;
+        }
 
         return await RenderPageAsync<WorkbenchPage, WorkbenchViewModel>(
             EndpointName,
             input.ToViewModel(meta, verification: verifyViewModel),
             statusCode);
+    }
+
+    private static List<ValidationError> BuildValidationErrorsFromVerifyReport(VerifySchemaResult report)
+    {
+        var blocking = new List<ValidationError>();
+        if (report.Issues is { Count: > 0 })
+        {
+            blocking.AddRange(ValidationIssuesHelper.GetBlockingIssues(
+                report.Issues.SelectMany(kv => kv.Value),
+                RuleSeverity.Error));
+        }
+
+        if (blocking.Count > 0)
+        {
+            return blocking;
+        }
+
+        var fallback = new List<ValidationError>();
+        foreach (var err in report.SyntaxErrors ?? [])
+        {
+            fallback.Add(new ValidationError("schema", err, Severity: RuleSeverity.Error));
+        }
+
+        foreach (var err in report.FixtureErrors ?? [])
+        {
+            fallback.Add(new ValidationError("fixtures", err, Severity: RuleSeverity.Error));
+        }
+
+        return fallback;
     }
 }

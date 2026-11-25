@@ -10,5 +10,6 @@ public sealed record ResolvedSchema(
     IReadOnlyList<BusinessRule>? Rules = null,
     string? RawRulesJson = null,
     IReadOnlyList<string>? ValidFixtures = null,
-    IReadOnlyList<string>? InvalidFixtures = null
+    IReadOnlyList<string>? InvalidFixtures = null,
+    SchemaErrorReport? ErrorReport = null
 );

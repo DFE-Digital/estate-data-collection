@@ -6,6 +6,7 @@ using EstateDataCollection.AzureFunctions.Admin.Events;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 using EstateDataCollection.AzureFunctions.Public.Routes;
+using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;
 using EstateDataCollection.Tests.Integration.Builders;
@@ -191,10 +192,11 @@ public sealed class DraftBlobIngestionLifecycleIntegrationTests(AzuriteFixture f
     }
 
     [Fact]
-    public async Task Draft_Blob_Without_MetaJson_Or_Default_Urn_Path_Should_Fail_Promotion_And_Write_Error_Blob()
+    public async Task Draft_Blob_Without_MetaJson_Or_Default_Urn_Path_Should_Persist_Invalid_State_And_Write_Error_Report()
     {
         var draftSchemaName = IntegrationEndpointHarness.UniqueName("draft_no_id");
         var draftContainer = _harness.BlobClient.GetBlobContainerClient(_harness.DraftSchemasContainerName);
+        var schemasContainer = _harness.BlobClient.GetBlobContainerClient(_harness.SchemasContainerName);
         await draftContainer.CreateIfNotExistsAsync();
 
         const string customPathOnlySchema = """
@@ -213,14 +215,28 @@ public sealed class DraftBlobIngestionLifecycleIntegrationTests(AzuriteFixture f
             .UploadAsync(BinaryData.FromString(customPathOnlySchema), overwrite: true);
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(customPathOnlySchema));
-        var result = await _harness.Get<IngestDraftSchemaEvent>().HandleAsync(stream, schemaPath, CancellationToken.None);
+        var result = (await _harness.Get<IngestDraftSchemaEvent>().HandleAsync(stream, schemaPath, CancellationToken.None)).ShouldSucceed();
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Schema.VerificationFailed");
+        result.Promoted.Should().BeFalse();
+        result.Status.Should().Be("Invalid");
+        result.State!.Name.Should().Be("Invalid");
+        result.HasErrorReport.Should().BeTrue();
 
-        // Error diagnostic blob written in draft-schemas and schema NOT promoted
-        var errorBlob = draftContainer.GetBlobClient($"{schemaPath}.error.json");
-        (await errorBlob.ExistsAsync()).Value.Should().BeTrue();
-        (await _harness.Get<ISchemaRegistry>().ExistsAsync(draftSchemaName, 1)).ShouldSucceed().Should().BeFalse();
+        // Draft cleaned up, Invalid schema + .error.json persisted in schemas container
+        (await draftContainer.GetBlobClient(schemaPath).ExistsAsync()).Value.Should().BeFalse();
+        (await schemasContainer.GetBlobClient($"{draftSchemaName}/v1.error.json").ExistsAsync()).Value.Should().BeTrue();
+        (await _harness.Get<ISchemaRegistry>().ExistsAsync(draftSchemaName, 1)).ShouldSucceed().Should().BeTrue();
+
+        // Admin GET exposes Invalid state + error report; Public GET hides it
+        var adminDetail = (await _harness.Get<GetAdminSchemaVersionDetailEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(), draftSchemaName, 1, CancellationToken.None))
+            .ShouldBeApiSuccess<SchemaVersionDetail>(StatusCodes.Status200OK);
+        adminDetail.State.Name.Should().Be("Invalid");
+        adminDetail.HasErrorReport.Should().BeTrue();
+        adminDetail.ErrorReport.Should().NotBeNull();
+
+        (await _harness.Get<GetSchemaByNameEndpoint>().HandleAsync(
+                HttpRequestBuilder.Empty(), draftSchemaName, CancellationToken.None))
+            .ShouldHaveStatusCode(StatusCodes.Status404NotFound);
     }
 }

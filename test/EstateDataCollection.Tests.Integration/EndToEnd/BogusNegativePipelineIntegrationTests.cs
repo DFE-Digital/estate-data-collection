@@ -269,19 +269,22 @@ public sealed class BogusNegativePipelineIntegrationTests(AzuriteFixture fixture
             NegativeMutationKind.WrongTypeStringForNumericOrBool,
             902).PayloadJson;
 
-        // 1. Admin /api/schemas/verify rejects bogus negative payload passed as a valid fixture
+        // 1. Admin /api/schemas/verify returns 200 OK diagnostic report with IsSuccessful = false for negative fixture
         var verifyDto = new VerifySchemaBodyDto(
             SchemaJson: contract.SchemaJson,
             RulesJson: contract.RulesJson,
             SampleValidFixtures: [negativeFixture],
             IdentifierConfig: contract.IdentifierConfig);
-        (await _harness.Get<PostVerifySchemaEndpoint>().HandleAsync(
+        var verifyReport = (await _harness.Get<PostVerifySchemaEndpoint>().HandleAsync(
                 HttpRequestBuilder.FromJson(verifyDto), CancellationToken.None))
-            .ShouldHaveStatusCode(StatusCodes.Status422UnprocessableEntity);
+            .ShouldBeApiSuccess<EstateDataCollection.Application.UseCases.Schema.VerifySchema.VerifySchemaResult>(StatusCodes.Status200OK);
+        verifyReport.IsSuccessful.Should().BeFalse();
+        verifyReport.FixtureErrors.Should().NotBeEmpty();
 
-        // 2. Draft blob ingestion rejects when v1.valid.json contains a bogus negative fixture
+        // 2. Draft blob ingestion consumes failing draft into schemas container as Invalid with v1.error.json
         var draftSchemaName = IntegrationEndpointHarness.UniqueName($"{contract.SchemaNamePrefix}_ingest_neg");
         var draftContainer = _harness.BlobClient.GetBlobContainerClient(_harness.DraftSchemasContainerName);
+        var schemasContainer = _harness.BlobClient.GetBlobContainerClient(_harness.SchemasContainerName);
         await draftContainer.CreateIfNotExistsAsync();
 
         var schemaPath = $"{draftSchemaName}/v1.schema.json";
@@ -300,11 +303,12 @@ public sealed class BogusNegativePipelineIntegrationTests(AzuriteFixture fixture
             .UploadAsync(BinaryData.FromString(JsonSerializer.Serialize(new { identifierConfig = contract.IdentifierConfig })), overwrite: true);
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(contract.SchemaJson));
-        var ingestResult = await _harness.Get<IngestDraftSchemaEvent>().HandleAsync(stream, schemaPath, CancellationToken.None);
+        var ingestResult = (await _harness.Get<IngestDraftSchemaEvent>().HandleAsync(stream, schemaPath, CancellationToken.None)).ShouldSucceed();
 
-        ingestResult.IsFailure.Should().BeTrue();
-        ingestResult.Error.Code.Should().Be("Schema.VerificationFailed");
-        (await draftContainer.GetBlobClient($"{schemaPath}.error.json").ExistsAsync()).Value.Should().BeTrue();
-        (await _harness.Get<ISchemaRegistry>().ExistsAsync(draftSchemaName, 1)).ShouldSucceed().Should().BeFalse();
+        ingestResult.Promoted.Should().BeFalse();
+        ingestResult.Status.Should().Be("Invalid");
+        ingestResult.HasErrorReport.Should().BeTrue();
+        (await schemasContainer.GetBlobClient($"{draftSchemaName}/v1.error.json").ExistsAsync()).Value.Should().BeTrue();
+        (await _harness.Get<ISchemaRegistry>().ExistsAsync(draftSchemaName, 1)).ShouldSucceed().Should().BeTrue();
     }
 }

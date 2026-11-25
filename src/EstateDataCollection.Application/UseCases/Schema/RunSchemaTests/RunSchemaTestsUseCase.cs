@@ -38,6 +38,11 @@ public sealed class RunSchemaTestsUseCase(
                 return singleResult.Error;
             }
 
+            if (singleResult.Value.Metadata.IsDeleted)
+            {
+                return Error.Validation(ErrorCodes.SchemaDeleted, new { SchemaName = schemaFilter, Version = request.Version.Value });
+            }
+
             targets.Add(singleResult.Value);
         }
         else
@@ -49,6 +54,7 @@ public sealed class RunSchemaTestsUseCase(
             }
 
             var matchingMetadata = listResult.Value
+                .Where(m => !m.IsDeleted)
                 .Where(m => request.IncludeRetired || m.State != SchemaLifecycleState.Retired)
                 .Where(m => request.Version is null || m.Version == request.Version.Value)
                 .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
@@ -90,13 +96,22 @@ public sealed class RunSchemaTestsUseCase(
                 rulesJson = JsonSerializer.Serialize(resolved.Rules);
             }
 
-            var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
-                meta.RawJsonSchema,
-                rulesJson,
-                validFixtures,
-                invalidFixtures,
-                meta.IdentifierConfig,
-                cancellationToken);
+            var verification = meta.ValidationPolicy is not null
+                ? await schemaVerifier.VerifyCandidateSchemaAsync(
+                    meta.RawJsonSchema,
+                    rulesJson,
+                    validFixtures,
+                    invalidFixtures,
+                    meta.IdentifierConfig,
+                    cancellationToken,
+                    meta.ValidationPolicy)
+                : await schemaVerifier.VerifyCandidateSchemaAsync(
+                    meta.RawJsonSchema,
+                    rulesJson,
+                    validFixtures,
+                    invalidFixtures,
+                    meta.IdentifierConfig,
+                    cancellationToken);
 
             bool passed;
             IReadOnlyList<string> errors;
@@ -134,6 +149,17 @@ public sealed class RunSchemaTestsUseCase(
                 invalidOutcomes,
                 warnings,
                 ValidationEngineTraceMapper.ToDomainRecords(engineTraces));
+
+            if (verification.IsSuccess && (!passed || verification.Value.HasWarnings))
+            {
+                var errorReport = verification.Value.ToErrorReport(meta.Name, meta.Version);
+                meta.UpdateErrorReportStatus(true, errorReport.Summary);
+                _ = await schemaRegistry.SaveErrorReportAsync(errorReport, cancellationToken);
+            }
+            else if (passed && meta.State != SchemaLifecycleState.Unvalidated && meta.State != SchemaLifecycleState.Invalid)
+            {
+                meta.UpdateErrorReportStatus(false, null);
+            }
 
             var updateResult = await schemaRegistry.UpdateSchemaMetadataAsync(meta, cancellationToken);
             if (updateResult.IsFailure)

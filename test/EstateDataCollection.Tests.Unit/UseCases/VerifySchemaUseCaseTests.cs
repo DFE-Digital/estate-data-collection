@@ -55,11 +55,12 @@ public class VerifySchemaUseCaseTests
 
         // Assert
         result.IsSuccess.Should().BeTrue();
+        result.Value.IsSuccessful.Should().BeTrue();
         result.Value.EngineTraces.Should().NotBeNull().And.ContainSingle(t => t.Descriptor.EngineId == "json-schema");
     }
 
     [Fact]
-    public async Task When_Schema_Contains_Syntax_Or_Fixture_Violations_It_Should_Return_Validation_Failed()
+    public async Task When_Schema_Contains_Syntax_Or_Fixture_Violations_It_Should_Return_Diagnostic_Report_With_IsSuccessful_False()
     {
         // Arrange
         _verifier.VerifyCandidateSchemaAsync(
@@ -84,8 +85,10 @@ public class VerifySchemaUseCaseTests
         var result = await _sut.ExecuteAsync(request);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Schema.VerificationFailed");
-        result.Error.ValidationErrors.Should().HaveCount(2);
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsSuccessful.Should().BeFalse();
+        result.Value.SyntaxErrors.Should().HaveCount(1);
+        result.Value.FixtureErrors.Should().HaveCount(1);
+        result.Value.Issues![RuleSeverity.Error].Should().HaveCount(2);
     }
 }

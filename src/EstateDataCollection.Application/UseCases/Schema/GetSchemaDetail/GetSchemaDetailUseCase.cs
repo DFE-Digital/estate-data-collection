@@ -47,7 +47,9 @@ public sealed class GetSchemaDetailUseCase(
             return Error.NotFound(ErrorCodes.SchemaNotFound, new { request.SchemaName, request.Version });
         }
 
-        var fields = JsonSchemaFieldExtractor.ExtractFields(metadata.RawJsonSchema);
+        var fields = string.IsNullOrWhiteSpace(metadata.RawJsonSchema)
+            ? []
+            : JsonSchemaFieldExtractor.ExtractFields(metadata.RawJsonSchema);
         var rules = (resolvedResult.Value.Rules ?? [])
             .Select(r => new SchemaQualityRuleSummary(
                 Id: r.Id,
@@ -86,6 +88,12 @@ public sealed class GetSchemaDetailUseCase(
             LastTestRunWarnings: metadata.LastTestRunWarnings ?? [],
             LastTestRunEngineTraces: lastRunEngineTraces,
             RegisteredEngines: registeredEngines,
-            ValidationPolicy: metadata.ValidationPolicy);
+            ValidationPolicy: metadata.ValidationPolicy,
+            HasErrorReport: metadata.HasErrorReport,
+            ErrorSummary: metadata.ErrorSummary,
+            ErrorReport: resolvedResult.Value.ErrorReport,
+            SignedOffBy: metadata.SignedOffBy,
+            SignedOffAtUtc: metadata.SignedOffAtUtc,
+            DeletedAtUtc: metadata.DeletedAtUtc);
     }
 }

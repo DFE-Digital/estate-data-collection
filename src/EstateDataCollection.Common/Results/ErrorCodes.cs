@@ -20,7 +20,7 @@ public enum ErrorCodes
     [Display(Name = "Schema.NotFound", Description = "Schema '{SchemaName}' v{Version} does not exist.")]
     SchemaNotFound = 1003,
     
-    [Display(Name = "Schema.AlreadyExists", Description =  "Schema '{SchemaName}' version {Version} already exists and is immutable.")]
+    [Display(Name = "Schema.AlreadyExists", Description = "Schema '{SchemaName}' version {Version} already exists and is immutable.")]
     SchemaAlreadyExists = 1004,
     
     [Display(Name = "Schema.InvalidSchedule", Description = "{Message}")]
@@ -34,6 +34,18 @@ public enum ErrorCodes
 
     [Display(Name = "Schema.InvalidIdentifierConfig", Description = "{Message}")]
     SchemaInvalidIdentifierConfig = 1008,
+
+    [Display(Name = "Schema.Invalid", Description = "Schema '{SchemaName}' v{Version} is Invalid and cannot be scheduled or activated. Push a fixed contract to a new version.")]
+    SchemaInvalid = 1009,
+
+    [Display(Name = "Schema.Unvalidated", Description = "Schema '{SchemaName}' v{Version} is Unvalidated and requires explicit sign-off before scheduling or activating.")]
+    SchemaUnvalidated = 1010,
+
+    [Display(Name = "Schema.Deleted", Description = "Schema '{SchemaName}' v{Version} has been deleted and its version key is reserved. Push fixes to a new version.")]
+    SchemaDeleted = 1011,
+
+    [Display(Name = "Schema.SignOffInvalidState", Description = "Schema '{SchemaName}' v{Version} cannot be signed off from state '{State}'. Only Unvalidated schemas can be signed off.")]
+    SchemaSignOffInvalidState = 1012,
 
     #endregion
     

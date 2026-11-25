@@ -46,7 +46,7 @@ public class SubmitSchemaUseCaseTests
     }
 
     [Fact]
-    public async Task When_Pre_Flight_Verification_Fails_It_Should_Abort_Without_Saving_To_Blob_Storage()
+    public async Task When_Pre_Flight_Verification_Fails_It_Should_Persist_As_Invalid_With_ErrorReport()
     {
         // Arrange
         _registry.ExistsAsync("edc_payload", 2, Arg.Any<CancellationToken>())
@@ -56,6 +56,11 @@ public class SubmitSchemaUseCaseTests
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<SchemaIdentifierConfig?>(), Arg.Any<CancellationToken>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult(
                 ["Syntax error in schema"], [])));
+
+        _registry.SaveSchemaAsync(Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
+        _registry.SaveErrorReportAsync(Arg.Any<SchemaErrorReport>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success());
 
         var request = new SubmitSchemaRequest(
             "edc_payload",
@@ -67,11 +72,17 @@ public class SubmitSchemaUseCaseTests
         var result = await _sut.ExecuteAsync(request);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Schema.VerificationFailed");
+        result.IsSuccess.Should().BeTrue();
+        result.Value.State!.Name.Should().Be("Invalid");
+        result.Value.HasErrorReport.Should().BeTrue();
+        result.Value.Issues.Should().ContainKey(RuleSeverity.Error);
 
-        await _registry.DidNotReceive().SaveSchemaAsync(
-            Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>());
+        await _registry.Received(1).SaveSchemaAsync(
+            Arg.Is<SchemaMetadata>(m => m.State == SchemaLifecycleState.Invalid && m.HasErrorReport && m.Version == 2),
+            Arg.Any<CancellationToken>());
+        await _registry.Received(1).SaveErrorReportAsync(
+            Arg.Is<SchemaErrorReport>(r => r.SchemaName == "edc_payload" && r.Version == 2 && r.SyntaxErrors != null && r.SyntaxErrors.Contains("Syntax error in schema")),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

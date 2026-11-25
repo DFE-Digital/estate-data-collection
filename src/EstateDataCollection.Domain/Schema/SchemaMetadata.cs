@@ -53,6 +53,21 @@ public class SchemaMetadata
     [JsonInclude]
     public IReadOnlyList<SchemaEngineTraceRecord>? LastTestRunEngineTraces { get; private set; }
 
+    [JsonInclude]
+    public string? SignedOffBy { get; private set; }
+
+    [JsonInclude]
+    public DateTimeOffset? SignedOffAtUtc { get; private set; }
+
+    [JsonInclude]
+    public DateTimeOffset? DeletedAtUtc { get; private set; }
+
+    [JsonInclude]
+    public bool HasErrorReport { get; private set; }
+
+    [JsonInclude]
+    public string? ErrorSummary { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     
     #region Domain Factories
@@ -84,6 +99,56 @@ public class SchemaMetadata
             State = SchemaLifecycleState.Draft,
             IdentifierConfig = normalizedConfig,
             ValidationPolicy = normalizedPolicy
+        };
+    }
+
+    /// <summary>
+    /// Factory for consuming a schema contract that failed hard pre-flight checks into <see cref="SchemaLifecycleState.Invalid"/>.
+    /// Reserves the version key in the registry alongside <c>.meta.json</c> and <c>.error.json</c>.
+    /// </summary>
+    public static SchemaMetadata CreateInvalid(
+        string name,
+        int version,
+        string? rawJsonSchema,
+        SchemaIdentifierConfig? identifierConfig = null,
+        SchemaValidationPolicy? validationPolicy = null,
+        string? errorSummary = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(version);
+
+        var schemaText = rawJsonSchema ?? string.Empty;
+        SchemaIdentifierConfig? safeIdConfig = null;
+        try
+        {
+            safeIdConfig = ValidateAndNormaliseIdentifier(identifierConfig);
+        }
+        catch
+        {
+            safeIdConfig = identifierConfig;
+        }
+
+        SchemaValidationPolicy? safePolicy = null;
+        try
+        {
+            safePolicy = ValidateAndNormalisePolicy(validationPolicy);
+        }
+        catch
+        {
+            safePolicy = validationPolicy;
+        }
+
+        return new SchemaMetadata
+        {
+            Name = name,
+            Version = version,
+            RawJsonSchema = schemaText,
+            Sha256Hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(schemaText))),
+            State = SchemaLifecycleState.Invalid,
+            IdentifierConfig = safeIdConfig,
+            ValidationPolicy = safePolicy,
+            HasErrorReport = true,
+            ErrorSummary = string.IsNullOrWhiteSpace(errorSummary) ? null : errorSummary.Trim()
         };
     }
 
@@ -120,7 +185,7 @@ public class SchemaMetadata
     /// </summary>
     public bool AllowsDryRun
     {
-        get { return State is SchemaLifecycleState.Draft or SchemaLifecycleState.Validated; }
+        get { return State is SchemaLifecycleState.Draft or SchemaLifecycleState.Validated or SchemaLifecycleState.Unvalidated; }
     }
 
     /// <summary>
@@ -129,6 +194,11 @@ public class SchemaMetadata
     public bool IsRetired
     {
         get { return State is SchemaLifecycleState.Retired; }
+    }
+
+    public bool IsDeleted
+    {
+        get { return State is SchemaLifecycleState.Deleted; }
     }
 
     #endregion
@@ -196,7 +266,10 @@ public class SchemaMetadata
         return includeUnscheduled &&
                State is SchemaLifecycleState.Unassigned
                    or SchemaLifecycleState.Draft
-                   or SchemaLifecycleState.Validated;
+                   or SchemaLifecycleState.Validated
+                   or SchemaLifecycleState.Invalid
+                   or SchemaLifecycleState.Unvalidated
+                   or SchemaLifecycleState.Deleted;
     }
 
     /// <summary>
@@ -218,7 +291,71 @@ public class SchemaMetadata
     {
         EffectiveFromUtc = null;
         EffectiveToUtc = null;
+        HasErrorReport = false;
+        ErrorSummary = null;
         State = SchemaLifecycleState.Validated;
+    }
+
+    /// <summary>
+    /// Marks the schema as <see cref="SchemaLifecycleState.Unvalidated"/> when hard checks passed
+    /// but warnings were recorded and require explicit sign-off before scheduling.
+    /// </summary>
+    public void MarkUnvalidated(string? errorSummary = null)
+    {
+        EffectiveFromUtc = null;
+        EffectiveToUtc = null;
+        HasErrorReport = true;
+        ErrorSummary = string.IsNullOrWhiteSpace(errorSummary) ? null : errorSummary.Trim();
+        State = SchemaLifecycleState.Unvalidated;
+    }
+
+    /// <summary>
+    /// Marks the schema as <see cref="SchemaLifecycleState.Invalid"/> when hard checks failed.
+    /// </summary>
+    public void MarkInvalid(string? errorSummary = null)
+    {
+        EffectiveFromUtc = null;
+        EffectiveToUtc = null;
+        HasErrorReport = true;
+        ErrorSummary = string.IsNullOrWhiteSpace(errorSummary) ? null : errorSummary.Trim();
+        State = SchemaLifecycleState.Invalid;
+    }
+
+    /// <summary>
+    /// Explicitly signs off an <see cref="SchemaLifecycleState.Unvalidated"/> schema version,
+    /// transitioning it to <see cref="SchemaLifecycleState.Validated"/>.
+    /// </summary>
+    public void SignOff(string signedOffBy)
+    {
+        if (State != SchemaLifecycleState.Unvalidated)
+        {
+            throw new InvalidOperationException($"Only Unvalidated schemas can be signed off. Current state: '{State}'.");
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(signedOffBy);
+
+        SignedOffBy = signedOffBy.Trim();
+        SignedOffAtUtc = DateTimeOffset.UtcNow;
+        HasErrorReport = false;
+        ErrorSummary = null;
+        State = SchemaLifecycleState.Validated;
+    }
+
+    /// <summary>
+    /// Marks the schema version as a <see cref="SchemaLifecycleState.Deleted"/> tombstone
+    /// while preserving <c>.meta.json</c> and <c>.error.json</c> so the version key remains consumed.
+    /// </summary>
+    public void MarkDeleted()
+    {
+        if (State == SchemaLifecycleState.Deleted)
+        {
+            return;
+        }
+
+        EffectiveFromUtc = null;
+        EffectiveToUtc = null;
+        DeletedAtUtc = DateTimeOffset.UtcNow;
+        State = SchemaLifecycleState.Deleted;
     }
 
     /// <summary>
@@ -258,6 +395,12 @@ public class SchemaMetadata
             : [];
         LastTestRunWarnings = warnings is { Count: > 0 } ? warnings.ToArray() : [];
         LastTestRunEngineTraces = engineTraces is { Count: > 0 } ? engineTraces.ToArray() : [];
+    }
+
+    public void UpdateErrorReportStatus(bool hasErrorReport, string? errorSummary = null)
+    {
+        HasErrorReport = hasErrorReport;
+        ErrorSummary = string.IsNullOrWhiteSpace(errorSummary) ? null : errorSummary.Trim();
     }
 
     private static SchemaIdentifierConfig? ValidateAndNormaliseIdentifier(SchemaIdentifierConfig? identifierConfig)
@@ -300,6 +443,11 @@ public class SchemaMetadata
 
     public void ScheduleActivation(DateTimeOffset effectiveFromUtc, DateTimeOffset? effectiveToUtc = null)
     {
+        if (State is SchemaLifecycleState.Invalid or SchemaLifecycleState.Unvalidated or SchemaLifecycleState.Deleted)
+        {
+            throw new InvalidOperationException($"Schema in state '{State}' cannot be scheduled or activated.");
+        }
+
         if (effectiveToUtc.HasValue && effectiveToUtc.Value <= effectiveFromUtc)
         {
             throw new ArgumentException("EffectiveToUtc must be later than EffectiveFromUtc.", nameof(effectiveToUtc));
@@ -314,11 +462,21 @@ public class SchemaMetadata
 
     public void Deprecate()
     {
+        if (State is SchemaLifecycleState.Invalid or SchemaLifecycleState.Unvalidated or SchemaLifecycleState.Deleted)
+        {
+            throw new InvalidOperationException($"Schema in state '{State}' cannot be deprecated.");
+        }
+
         State = SchemaLifecycleState.Deprecated;
     }
 
     public void Retire()
     {
+        if (State is SchemaLifecycleState.Invalid or SchemaLifecycleState.Deleted)
+        {
+            throw new InvalidOperationException($"Schema in state '{State}' cannot be retired.");
+        }
+
         State = SchemaLifecycleState.Retired;
     }
 
