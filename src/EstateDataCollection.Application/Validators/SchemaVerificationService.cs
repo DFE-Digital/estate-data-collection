@@ -42,7 +42,8 @@ public sealed class SchemaVerificationService(
         IReadOnlyList<string> sampleValidPayloads,
         IReadOnlyList<string> sampleInvalidPayloads,
         SchemaIdentifierConfig? identifierConfig = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        SchemaValidationPolicy? validationPolicy = null)
     {
         var syntaxErrors = new List<ValidationMessage>();
         var fixtureErrors = new List<ValidationMessage>();
@@ -76,6 +77,7 @@ public sealed class SchemaVerificationService(
 
         JsonSchema? candidateSchema = null;
         IReadOnlyList<BusinessRule>? candidateRules = null;
+        SchemaValidationPolicy? odcsValidationPolicy = null;
 
         if (string.IsNullOrWhiteSpace(rawSchemaJson) && string.IsNullOrWhiteSpace(rawRulesJson))
         {
@@ -118,6 +120,7 @@ public sealed class SchemaVerificationService(
             }
 
             rawSchemaJson = odcsResult.Value.GeneratedSchemaJson;
+            odcsValidationPolicy = odcsResult.Value.ValidationPolicy;
             if (string.IsNullOrWhiteSpace(rawRulesJson) && !string.IsNullOrWhiteSpace(odcsResult.Value.GeneratedRulesJson))
             {
                 rawRulesJson = odcsResult.Value.GeneratedRulesJson;
@@ -410,11 +413,13 @@ public sealed class SchemaVerificationService(
                         rulesTicks,
                         GetOrCreateRuleTrace);
 
-                    if (!logicResult.Value.IsValid)
+                    var effectivePolicy = (validationPolicy ?? odcsValidationPolicy ?? SchemaValidationPolicy.Default).Normalise();
+                    var allRuleIssues = logicResult.Value.Errors ?? [];
+                    var blockingRuleIssues = ValidationIssuesHelper.GetBlockingIssues(allRuleIssues, effectivePolicy.FailOnMinimumSeverity);
+                    if (blockingRuleIssues.Count > 0)
                     {
-                        var errors = logicResult.Value.Errors ?? [];
-                        var ruleErrors = string.Join("; ", errors.Select(e => $"{e.PropertyPath}: {e.Message}"));
-                        var ruleIds = errors.Select(e => e.RuleId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).ToArray();
+                        var ruleErrors = string.Join("; ", blockingRuleIssues.Select(e => $"{e.PropertyPath}: {e.Message}"));
+                        var ruleIds = blockingRuleIssues.Select(e => e.RuleId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).ToArray();
                         fixtureErrors.Add(ValidationMessage.For(
                             ValidationSources.Rule,
                             $"{fixtureId} violated quality rules: {ruleErrors}",
@@ -424,6 +429,17 @@ public sealed class SchemaVerificationService(
                             metadata: ruleIds.Length > 0
                                 ? new Dictionary<string, object?> { ["ruleIds"] = ruleIds }
                                 : null));
+                    }
+
+                    foreach (var nonBlocking in allRuleIssues.Where(e => !e.Severity.IsAtOrAbove(effectivePolicy.FailOnMinimumSeverity) && e.Severity == RuleSeverity.Warning))
+                    {
+                        warnings.Add(ValidationMessage.For(
+                            ValidationSources.Rule,
+                            $"{fixtureId} warning [{nonBlocking.RuleId ?? "rule"}]: {nonBlocking.Message}",
+                            identifier: fixtureId,
+                            path: nonBlocking.PropertyPath,
+                            ruleId: nonBlocking.RuleId,
+                            engineType: logicValidator.GetType()));
                     }
                 }
             }
@@ -560,10 +576,19 @@ public sealed class SchemaVerificationService(
                         rulesTicks,
                         GetOrCreateRuleTrace);
 
-                    if (!logicResult.Value.IsValid)
+                    var actionableIssues = (logicResult.Value.Errors ?? [])
+                        .Where(e =>
+                        {
+                            if (e.Severity != RuleSeverity.Info) return true;
+                            var matchedRule = candidateRules.FirstOrDefault(r => string.Equals(r.Id, e.RuleId, StringComparison.OrdinalIgnoreCase));
+                            return matchedRule?.EffectiveAssertion is not null;
+                        })
+                        .ToList();
+
+                    if (actionableIssues.Count > 0)
                     {
                         rulesFailed = true;
-                        foreach (var err in logicResult.Value.Errors ?? [])
+                        foreach (var err in actionableIssues)
                         {
                             var path = string.IsNullOrWhiteSpace(err.PropertyPath) ? "/" : err.PropertyPath;
                             var ruleId = string.IsNullOrWhiteSpace(err.RuleId) ? null : err.RuleId;

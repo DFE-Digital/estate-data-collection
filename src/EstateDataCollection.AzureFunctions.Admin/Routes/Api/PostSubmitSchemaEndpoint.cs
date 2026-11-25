@@ -85,6 +85,7 @@ public sealed class PostSubmitSchemaEndpoint(
             RulesJson: body.EffectiveRulesJson,
             OdcsYaml: body.OdcsYaml,
             FileName: body.FileName ?? AdminRequestHelpers.GetFileNameHint(http),
-            IdentifierConfig: body.IdentifierConfig ?? AdminRequestHelpers.GetIdentifierConfigHint(http));
+            IdentifierConfig: body.IdentifierConfig ?? AdminRequestHelpers.GetIdentifierConfigHint(http),
+            ValidationPolicy: body.ValidationPolicy);
     }
 }

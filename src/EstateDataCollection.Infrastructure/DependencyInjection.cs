@@ -31,7 +31,8 @@ public static class DependencyInjection
                     typeof(IQualityRuleEngine),
                     typeof(IRuleContextEnricher),
                     typeof(IOdcsContractParser),
-                    typeof(IBusinessLogicValidator)))
+                    typeof(IBusinessLogicValidator))
+                    .Where(t => t != typeof(Validation.JsonLogicValidator)))
                 .AsImplementedInterfaces()
                 .WithSingletonLifetime()
                 .AddClasses(classes => classes

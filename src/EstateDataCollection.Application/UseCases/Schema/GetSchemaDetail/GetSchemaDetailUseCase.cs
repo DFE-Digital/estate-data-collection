@@ -52,7 +52,7 @@ public sealed class GetSchemaDetailUseCase(
             .Select(r => new SchemaQualityRuleSummary(
                 Id: r.Id,
                 Dimension: r.Type,
-                Severity: r.Severity,
+                Severity: r.Severity.ToKeyString().ToUpperInvariant(),
                 TargetPath: r.Path,
                 Engine: r.ResolveEngine(),
                 ErrorMessage: r.EffectiveMessage,
@@ -85,6 +85,7 @@ public sealed class GetSchemaDetailUseCase(
             LastTestRunInvalidFixtures: metadata.LastTestRunInvalidFixtures ?? [],
             LastTestRunWarnings: metadata.LastTestRunWarnings ?? [],
             LastTestRunEngineTraces: lastRunEngineTraces,
-            RegisteredEngines: registeredEngines);
+            RegisteredEngines: registeredEngines,
+            ValidationPolicy: metadata.ValidationPolicy);
     }
 }

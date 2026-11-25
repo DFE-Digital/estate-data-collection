@@ -9,4 +9,5 @@ public sealed record UpdateSubmissionResult(
     DateTimeOffset SavedAtUtc,
     int DraftCount = 1,
     IReadOnlyList<string>? NextSteps = null,
-    string? Summary = null);
+    string? Summary = null,
+    IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? Issues = null);

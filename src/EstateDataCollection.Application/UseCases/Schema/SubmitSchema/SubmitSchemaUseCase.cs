@@ -30,6 +30,15 @@ public class SubmitSchemaUseCase(
             }
         }
 
+        if (request.ValidationPolicy is not null)
+        {
+            var policyValidation = request.ValidationPolicy.ValidateDefinition();
+            if (policyValidation.IsFailure)
+            {
+                return policyValidation.Error;
+            }
+        }
+
         var exists = await schemaRegistry.ExistsAsync(request.SchemaName, request.Version, cancellationToken);
 
         if (exists.IsFailure)
@@ -54,7 +63,8 @@ public class SubmitSchemaUseCase(
             return resolvedInputs.Error;
         }
 
-        var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, _, _) = resolvedInputs.Value;
+        var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, _, _, parsedValidationPolicy) = resolvedInputs.Value;
+        var effectiveValidationPolicy = request.ValidationPolicy ?? parsedValidationPolicy;
         var rulesParam = string.IsNullOrWhiteSpace(effectiveRulesJson) ? null : effectiveRulesJson;
         var validFixtures = request.SampleValidFixtures ?? [];
         var invalidFixtures = request.SampleInvalidFixtures ?? [];
@@ -65,7 +75,8 @@ public class SubmitSchemaUseCase(
             validFixtures,
             invalidFixtures,
             request.IdentifierConfig,
-            cancellationToken);
+            cancellationToken,
+            effectiveValidationPolicy);
 
         if (verification.IsFailure)
         {
@@ -94,7 +105,8 @@ public class SubmitSchemaUseCase(
                 request.SchemaName,
                 request.Version,
                 effectiveSchemaJson ?? string.Empty,
-                effectiveIdentifierConfig);
+                effectiveIdentifierConfig,
+                effectiveValidationPolicy);
             // Submitted schema packs are always stored in Validated state (unscheduled);
             // effective dates are assigned separately via the Admin API.
             metadata.MarkValidated();
@@ -130,7 +142,8 @@ public class SubmitSchemaUseCase(
             Sha256Hash: metadata.Sha256Hash,
             EffectiveFromUtc: metadata.EffectiveFromUtc,
             EffectiveToUtc: metadata.EffectiveToUtc,
-            IdentifierConfig: metadata.IdentifierConfig
+            IdentifierConfig: metadata.IdentifierConfig,
+            ValidationPolicy: metadata.ValidationPolicy
         );
     }
 }

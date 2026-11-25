@@ -39,6 +39,15 @@ public sealed class ScheduleSchemaUseCase(
             return Error.Validation(ErrorCodes.SchemaRetired, new { request.SchemaName, request.Version });
         }
 
+        if (request.ValidationPolicy is not null)
+        {
+            var policyValidation = request.ValidationPolicy.ValidateDefinition();
+            if (policyValidation.IsFailure)
+            {
+                return policyValidation.Error;
+            }
+        }
+
         var action = request.LifecycleAction?.Trim();
         var isRetireOrDeprecateOnly = request.IdentifierConfig is null &&
                                       (string.Equals(action, "Retire", StringComparison.OrdinalIgnoreCase) ||
@@ -75,6 +84,11 @@ public sealed class ScheduleSchemaUseCase(
             }
         }
 
+        if (request.ValidationPolicy is not null)
+        {
+            metadata.ConfigureValidationPolicy(request.ValidationPolicy);
+        }
+
         try
         {
             if (!string.IsNullOrWhiteSpace(action))
@@ -108,9 +122,9 @@ public sealed class ScheduleSchemaUseCase(
             {
                 metadata.ScheduleActivation(request.EffectiveFromUtc.Value, request.EffectiveToUtc);
             }
-            else if (request.IdentifierConfig is null)
+            else if (request.IdentifierConfig is null && request.ValidationPolicy is null)
             {
-                var msg = "Either EffectiveFromUtc, LifecycleAction, or IdentifierConfig must be provided.";
+                var msg = "Either EffectiveFromUtc, LifecycleAction, IdentifierConfig, or ValidationPolicy must be provided.";
                 _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, msg);
                 return Error.Validation(ErrorCodes.SchemaInvalidSchedule, msg);
             }
@@ -142,6 +156,7 @@ public sealed class ScheduleSchemaUseCase(
             EffectiveFromUtc: metadata.EffectiveFromUtc,
             EffectiveToUtc: metadata.EffectiveToUtc,
             Sha256Hash: metadata.Sha256Hash,
-            IdentifierConfig: metadata.IdentifierConfig);
+            IdentifierConfig: metadata.IdentifierConfig,
+            ValidationPolicy: metadata.ValidationPolicy);
     }
 }

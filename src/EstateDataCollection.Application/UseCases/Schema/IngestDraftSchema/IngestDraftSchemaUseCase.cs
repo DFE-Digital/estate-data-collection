@@ -88,7 +88,7 @@ public sealed partial class IngestDraftSchemaUseCase(
             return resolvedInputs.Error;
         }
 
-        var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, metadataContractId, rawVersionText) = resolvedInputs.Value;
+        var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, metadataContractId, rawVersionText, parsedValidationPolicy) = resolvedInputs.Value;
         var metadataVersion = TryParseMajorVersion(rawVersionText);
 
         // JSON schema metadata takes precedence over ODCS YAML metadata when both are present
@@ -174,7 +174,8 @@ public sealed partial class IngestDraftSchemaUseCase(
             artifact.SampleValidFixtures,
             artifact.SampleInvalidFixtures,
             artifact.IdentifierConfig,
-            cancellationToken);
+            cancellationToken,
+            parsedValidationPolicy);
 
         if (verification.IsFailure)
         {
@@ -207,7 +208,7 @@ public sealed partial class IngestDraftSchemaUseCase(
         SchemaMetadata metadata;
         try
         {
-            metadata = SchemaMetadata.CreateDraft(schemaName, version, effectiveSchemaJson!, effectiveIdentifierConfig);
+            metadata = SchemaMetadata.CreateDraft(schemaName, version, effectiveSchemaJson!, effectiveIdentifierConfig, parsedValidationPolicy);
             // Schema packs ingested from draft-schemas do not carry effective dates;
             // they are promoted in Validated state (EffectiveFromUtc = null, EffectiveToUtc = null)
             // until scheduled via the Admin API.

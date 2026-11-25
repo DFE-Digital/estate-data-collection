@@ -17,4 +17,5 @@ public sealed record GetSubmissionStatusResult(
     int DraftCount = 0,
     DateTimeOffset? LastDraftAtUtc = null,
     IReadOnlyList<string>? NextSteps = null,
-    string? Summary = null);
+    string? Summary = null,
+    IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? Issues = null);

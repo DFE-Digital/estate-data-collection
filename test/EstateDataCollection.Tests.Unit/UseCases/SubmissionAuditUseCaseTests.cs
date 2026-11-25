@@ -178,7 +178,7 @@ public sealed class SubmissionAuditUseCaseTests
             Id = "RULE-CAP",
             Path = "school_capacity",
             Description = "Capacity must be positive",
-            Severity = "ERROR",
+            Severity = EstateDataCollection.Common.Results.RuleSeverity.Error,
             Implementation = JsonNode.Parse("""{">":[{"var":"value"},0]}""")
         };
         var resolved = new ResolvedSchemaBuilder()

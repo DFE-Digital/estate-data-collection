@@ -10,5 +10,6 @@ public sealed record SubmitSchemaResult(
     string Sha256Hash,
     DateTimeOffset? EffectiveFromUtc,
     DateTimeOffset? EffectiveToUtc,
-    SchemaIdentifierConfig? IdentifierConfig = null
+    SchemaIdentifierConfig? IdentifierConfig = null,
+    SchemaValidationPolicy? ValidationPolicy = null
 );

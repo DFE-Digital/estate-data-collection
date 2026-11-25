@@ -12,7 +12,7 @@ using Microsoft.Azure.Functions.Worker;
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 
 /// <summary>
-/// Schedules activation windows, lifecycle transitions (Activate, Deprecate, Retire), or URN identifier configuration.
+/// Schedules activation windows, lifecycle transitions (Activate, Deprecate, Retire), identifier configuration, or validation policy.
 /// Route: PATCH /api/schemas/{schemaName}/versions/{version:int}/schedule
 /// </summary>
 public sealed class PatchScheduleSchemaEndpoint(
@@ -65,6 +65,7 @@ public sealed class PatchScheduleSchemaEndpoint(
             EffectiveFromUtc: body.EffectiveFromUtc,
             EffectiveToUtc: body.EffectiveToUtc,
             LifecycleAction: body.LifecycleAction,
-            IdentifierConfig: body.IdentifierConfig);
+            IdentifierConfig: body.IdentifierConfig,
+            ValidationPolicy: body.ValidationPolicy);
     }
 }

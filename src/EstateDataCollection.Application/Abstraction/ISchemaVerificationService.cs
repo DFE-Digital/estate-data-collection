@@ -13,5 +13,6 @@ public interface ISchemaVerificationService : IApplication
         IReadOnlyList<string> sampleValidPayloads,
         IReadOnlyList<string> sampleInvalidPayloads,
         SchemaIdentifierConfig? identifierConfig = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        SchemaValidationPolicy? validationPolicy = null);
 }

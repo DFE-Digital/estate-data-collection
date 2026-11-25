@@ -212,7 +212,9 @@ public sealed class SubmissionEvaluationService(
             Schema: schema,
             ValidationErrors: report.Errors,
             IdentifierEvaluation: identifierEval,
-            AuditIdentifier: auditIdentifier);
+            AuditIdentifier: auditIdentifier,
+            Issues: report.EffectiveIssues,
+            AllIssues: report.AllIssues ?? report.Errors);
     }
 
     public bool IsMissingDraftError(Error error)
@@ -254,7 +256,8 @@ public sealed class SubmissionEvaluationService(
                             new SubmissionAuditValidationIssue(
                                 eval.ValidationError.PropertyPath,
                                 eval.ValidationError.Message,
-                                eval.ValidationError.RuleId ?? eval.FailureError?.Code)
+                                eval.ValidationError.RuleId ?? eval.FailureError?.Code,
+                                eval.ValidationError.Severity)
                         ])
                     : new ProcessStepDetails(
                         Summary: eval.Identifier is { } id ? $"{id.Type}={id.Value}" : "Not required by schema"));

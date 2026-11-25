@@ -9,4 +9,12 @@ public sealed record PayloadEvaluationResult(
     ResolvedSchema Schema,
     IReadOnlyList<ValidationError> ValidationErrors,
     PayloadIdentifierExtractor.ExtractionEvaluation IdentifierEvaluation,
-    SubmissionAuditIdentifier? AuditIdentifier);
+    SubmissionAuditIdentifier? AuditIdentifier,
+    IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? Issues = null,
+    IReadOnlyList<ValidationError>? AllIssues = null)
+{
+    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> EffectiveIssues
+    {
+        get { return Issues ?? ValidationIssuesHelper.GroupBySeverity(AllIssues ?? ValidationErrors); }
+    }
+}

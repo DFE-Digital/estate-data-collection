@@ -24,6 +24,15 @@ public class SchemaMetadata
     public SchemaIdentifierConfig? IdentifierConfig { get; private set; }
 
     [JsonInclude]
+    public SchemaValidationPolicy? ValidationPolicy { get; private set; }
+
+    [JsonIgnore]
+    public SchemaValidationPolicy EffectiveValidationPolicy
+    {
+        get { return ValidationPolicy ?? SchemaValidationPolicy.Default; }
+    }
+
+    [JsonInclude]
     public DateTimeOffset? LastTestRunAtUtc { get; private set; }
 
     [JsonInclude]
@@ -56,13 +65,15 @@ public class SchemaMetadata
         string name,
         int version,
         string rawJsonSchema,
-        SchemaIdentifierConfig? identifierConfig = null)
+        SchemaIdentifierConfig? identifierConfig = null,
+        SchemaValidationPolicy? validationPolicy = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(version);
         ArgumentException.ThrowIfNullOrWhiteSpace(rawJsonSchema);
 
         var normalizedConfig = ValidateAndNormaliseIdentifier(identifierConfig);
+        var normalizedPolicy = ValidateAndNormalisePolicy(validationPolicy);
 
         return new SchemaMetadata
         {
@@ -71,7 +82,8 @@ public class SchemaMetadata
             RawJsonSchema = rawJsonSchema,
             Sha256Hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawJsonSchema))),
             State = SchemaLifecycleState.Draft,
-            IdentifierConfig = normalizedConfig
+            IdentifierConfig = normalizedConfig,
+            ValidationPolicy = normalizedPolicy
         };
     }
 
@@ -218,6 +230,14 @@ public class SchemaMetadata
     }
 
     /// <summary>
+    /// Configures or updates the per-schema-version validation policy (severity gating, workflow pipeline override, draft reference policy).
+    /// </summary>
+    public void ConfigureValidationPolicy(SchemaValidationPolicy? validationPolicy)
+    {
+        ValidationPolicy = ValidateAndNormalisePolicy(validationPolicy);
+    }
+
+    /// <summary>
     /// Records the result and app version of executing the stored schema regression tests
     /// (schema syntax, business logic rules, identifier extraction, and valid/invalid fixtures).
     /// </summary>
@@ -257,6 +277,25 @@ public class SchemaMetadata
         }
 
         return identifierConfig.Normalise();
+    }
+
+    private static SchemaValidationPolicy? ValidateAndNormalisePolicy(SchemaValidationPolicy? validationPolicy)
+    {
+        if (validationPolicy is null)
+        {
+            return null;
+        }
+
+        var validation = validationPolicy.ValidateDefinition();
+        if (validation.IsFailure)
+        {
+            var reason = validation.Error.ValidationErrors.FirstOrDefault()?.Message
+                         ?? validation.Error.Description
+                         ?? "Invalid validation policy configuration.";
+            throw new ArgumentException(reason, nameof(validationPolicy));
+        }
+
+        return validationPolicy.Normalise();
     }
 
     public void ScheduleActivation(DateTimeOffset effectiveFromUtc, DateTimeOffset? effectiveToUtc = null)

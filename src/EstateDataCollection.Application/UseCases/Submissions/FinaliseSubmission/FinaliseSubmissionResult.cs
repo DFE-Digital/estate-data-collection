@@ -1,3 +1,5 @@
+using EstateDataCollection.Common.Results;
+
 namespace EstateDataCollection.Application.UseCases.Submissions.FinaliseSubmission;
 
 public sealed record FinaliseSubmissionResult(
@@ -8,4 +10,5 @@ public sealed record FinaliseSubmissionResult(
     string ProcessedBlobUri,
     DateTimeOffset FinalisedAtUtc,
     string? Identifier = null,
-    string? IdentifierType = null);
+    string? IdentifierType = null,
+    IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? Issues = null);

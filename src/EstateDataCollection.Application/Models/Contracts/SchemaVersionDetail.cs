@@ -30,5 +30,6 @@ public sealed record SchemaVersionDetail(
     IReadOnlyList<InvalidFixtureOutcome>? LastTestRunInvalidFixtures = null,
     IReadOnlyList<string>? LastTestRunWarnings = null,
     IReadOnlyList<ValidationEngineTrace>? LastTestRunEngineTraces = null,
-    IReadOnlyList<ValidationEngineDescriptor>? RegisteredEngines = null
+    IReadOnlyList<ValidationEngineDescriptor>? RegisteredEngines = null,
+    SchemaValidationPolicy? ValidationPolicy = null
 );

@@ -40,7 +40,7 @@ public class VerifySchemaUseCase(
             return resolvedInputs.Error;
         }
 
-        var (schemaInput, rulesInput, _, _, _) = resolvedInputs.Value;
+        var (schemaInput, rulesInput, _, _, _, _) = resolvedInputs.Value;
         var effectiveRulesInput = string.IsNullOrWhiteSpace(rulesInput) && !string.IsNullOrWhiteSpace(schemaInput)
             ? null
             : rulesInput;

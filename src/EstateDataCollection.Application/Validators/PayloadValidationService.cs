@@ -60,7 +60,8 @@ public sealed class PayloadValidationService(
             : null;
         var scope = ambientScope ?? ownedScope!;
 
-        var errors = new List<ValidationError>();
+        var policy = schema.Metadata.EffectiveValidationPolicy;
+        var allIssues = new List<ValidationError>();
         var engineTraces = new List<ValidationEngineTrace>();
 
         // Step 1: Structural JSON Schema Validation
@@ -97,7 +98,9 @@ public sealed class PayloadValidationService(
 
         if (schemaResult.Value.Errors is { Count: > 0 } schemaErrors)
         {
-            errors.AddRange(schemaErrors);
+            allIssues.AddRange(schemaErrors.Select(e => string.IsNullOrWhiteSpace(e.EngineId)
+                ? e with { EngineId = "json-schema" }
+                : e));
         }
 
         var shouldRunRules = !isDraftUpdate || _options.RunQualityRulesOnDraftUpdate;
@@ -122,7 +125,7 @@ public sealed class PayloadValidationService(
 
                 AddSkippedRuleEngineTraces(engineTraces, schema.Rules, distinctEngines, skippedDraftSummary);
             }
-            else if (errors.Count > 0)
+            else if (allIssues.Count > 0)
             {
                 const string skippedSchemaFailureSummary = "Skipped because structural JSON Schema validation failed";
                 scope.RecordSkipped(
@@ -140,15 +143,18 @@ public sealed class PayloadValidationService(
                     () => logicValidator.ValidateAsync(rawPayloadJson, schema.Rules, cancellationToken),
                     val =>
                     {
-                        var violationCount = val.Errors?.Count ?? 0;
+                        var blockingRuleIssues = ValidationIssuesHelper.GetBlockingIssues(val.Errors, policy.FailOnMinimumSeverity);
+                        var totalIssueCount = val.Errors?.Count ?? 0;
                         return new ProcessStepDetails(
-                            Outcome: violationCount == 0
+                            Outcome: blockingRuleIssues.Count == 0
                                 ? SubmissionProcessOutcome.Succeeded
                                 : SubmissionProcessOutcome.ValidationErrorsFound,
                             ItemCount: schema.Rules.Count,
-                            Summary: violationCount == 0
+                            Summary: totalIssueCount == 0
                                 ? $"Evaluated {schema.Rules.Count} quality rule(s) with 0 failures"
-                                : $"Evaluated {schema.Rules.Count} quality rule(s); {violationCount} violation(s)",
+                                : blockingRuleIssues.Count == 0
+                                    ? $"Evaluated {schema.Rules.Count} quality rule(s); {totalIssueCount} advisory/warning issue(s)"
+                                    : $"Evaluated {schema.Rules.Count} quality rule(s); {blockingRuleIssues.Count} blocking violation(s)",
                             Errors: MapAuditIssues(val.Errors));
                     },
                     err => new ProcessStepDetails(
@@ -170,12 +176,12 @@ public sealed class PayloadValidationService(
 
                 if (logicResult.Value.Errors is { Count: > 0 } logicErrors)
                 {
-                    errors.AddRange(logicErrors);
+                    allIssues.AddRange(logicErrors);
                 }
             }
         }
 
-        // Step 3: School / Establishment Identifier Extraction Check
+        // Step 3: Establishment Identifier Extraction Check
         PayloadIdentifierExtractor.ExtractionEvaluation? identifierEval = null;
         var shouldCheckIdentifier = !isDraftUpdate || _options.ValidateIdentifierOnDraftUpdate;
         if (shouldCheckIdentifier)
@@ -197,7 +203,8 @@ public sealed class PayloadValidationService(
                                 new SubmissionAuditValidationIssue(
                                     eval.ValidationError.PropertyPath,
                                     eval.ValidationError.Message,
-                                    eval.ValidationError.RuleId ?? eval.FailureError?.Code)
+                                    eval.ValidationError.RuleId ?? eval.FailureError?.Code,
+                                    eval.ValidationError.Severity)
                             ]);
                     }
 
@@ -243,12 +250,16 @@ public sealed class PayloadValidationService(
             if (!identifierEval.IsValid && identifierEval.ValidationError is not null)
             {
                 var normalizedIdentifierPath = PayloadIdentifierExtractor.NormalisePathForComparison(identifierEval.ValidationError.PropertyPath);
-                var alreadyReportedOnSamePath = errors.Any(e =>
+                var alreadyReportedOnSamePath = allIssues.Any(e =>
+                    e.Severity.IsAtOrAbove(policy.FailOnMinimumSeverity) &&
                     string.Equals(PayloadIdentifierExtractor.NormalisePathForComparison(e.PropertyPath), normalizedIdentifierPath, StringComparison.OrdinalIgnoreCase));
 
                 if (!alreadyReportedOnSamePath)
                 {
-                    errors.Add(identifierEval.ValidationError);
+                    var idError = string.IsNullOrWhiteSpace(identifierEval.ValidationError.EngineId)
+                        ? identifierEval.ValidationError with { EngineId = "identifier-extraction" }
+                        : identifierEval.ValidationError;
+                    allIssues.Add(idError);
                 }
             }
         }
@@ -263,14 +274,23 @@ public sealed class PayloadValidationService(
                 Summary: "Skipped during draft update per ValidationOptions"));
         }
 
-        return new PayloadValidationReport(errors, scope.Processes.ToArray(), identifierEval, engineTraces);
+        var groupedIssues = ValidationIssuesHelper.GroupBySeverity(allIssues);
+        var blockingIssues = ValidationIssuesHelper.GetBlockingIssues(allIssues, policy.FailOnMinimumSeverity);
+
+        return new PayloadValidationReport(
+            Errors: blockingIssues,
+            ProcessesExecuted: scope.Processes.ToArray(),
+            IdentifierEvaluation: identifierEval,
+            EngineTraces: engineTraces,
+            Issues: groupedIssues,
+            AllIssues: allIssues);
     }
 
     private static IReadOnlyList<SubmissionAuditValidationIssue>? MapAuditIssues(IReadOnlyList<ValidationError>? validationErrors)
     {
         return validationErrors is { Count: > 0 }
             ? validationErrors
-                .Select(e => new SubmissionAuditValidationIssue(e.PropertyPath, e.Message, e.RuleId))
+                .Select(e => new SubmissionAuditValidationIssue(e.PropertyPath, e.Message, e.RuleId, e.Severity))
                 .ToArray()
             : null;
     }

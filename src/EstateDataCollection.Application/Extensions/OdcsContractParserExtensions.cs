@@ -40,7 +40,8 @@ public static class OdcsContractParserExtensions
                 RulesJson: !string.IsNullOrWhiteSpace(rulesJson) ? rulesJson : parsed.Value.GeneratedRulesJson,
                 RawOdcsYaml: odcsYaml,
                 ContractId: parsed.Value.ContractId,
-                Version: parsed.Value.Version));
+                Version: parsed.Value.Version,
+                ValidationPolicy: parsed.Value.ValidationPolicy));
         }
 
         if (parser is not null && !string.IsNullOrWhiteSpace(schemaJson) && parser.IsOdcsYaml(schemaJson, fileName))
@@ -58,7 +59,8 @@ public static class OdcsContractParserExtensions
                 RulesJson: !string.IsNullOrWhiteSpace(rulesJson) ? rulesJson : parsed.Value.GeneratedRulesJson,
                 RawOdcsYaml: schemaJson,
                 ContractId: parsed.Value.ContractId,
-                Version: parsed.Value.Version));
+                Version: parsed.Value.Version,
+                ValidationPolicy: parsed.Value.ValidationPolicy));
         }
 
         return Result<ResolvedContractInputs>.Success(new ResolvedContractInputs(

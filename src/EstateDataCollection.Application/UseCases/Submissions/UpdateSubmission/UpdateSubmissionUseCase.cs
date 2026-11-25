@@ -136,7 +136,8 @@ public class UpdateSubmissionUseCase(
             SavedAtUtc: DateTimeOffset.UtcNow,
             DraftCount: draftCountAfterSave,
             NextSteps: guidance.NextSteps,
-            Summary: guidance.Summary
+            Summary: guidance.Summary,
+            Issues: evaluation.Value.EffectiveIssues
         );
     }
 }

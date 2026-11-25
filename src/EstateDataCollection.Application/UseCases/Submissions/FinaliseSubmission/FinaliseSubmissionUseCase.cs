@@ -149,7 +149,8 @@ public class FinaliseSubmissionUseCase(
             promotion.Value,
             DateTimeOffset.UtcNow,
             Identifier: extractedIdentifier?.Value,
-            IdentifierType: extractedIdentifier?.Type
+            IdentifierType: extractedIdentifier?.Type,
+            Issues: evaluation.Value.EffectiveIssues
         );
     }
 }

@@ -77,7 +77,8 @@ public class GetSubmissionStatusUseCase(
                 DraftCount: inventory.Count,
                 LastDraftAtUtc: inventory.LastDraftAtUtc,
                 NextSteps: finalisedGuidance.NextSteps,
-                Summary: finalisedGuidance.Summary);
+                Summary: finalisedGuidance.Summary,
+                Issues: ValidationIssuesHelper.EmptyIssues);
         }
 
         var draftPayload = await evaluationService.AssembleStoredDraftAsync(
@@ -129,7 +130,8 @@ public class GetSubmissionStatusUseCase(
                     DraftCount: 0,
                     LastDraftAtUtc: null,
                     NextSteps: emptyGuidance.NextSteps,
-                    Summary: emptyGuidance.Summary);
+                    Summary: emptyGuidance.Summary,
+                    Issues: ValidationIssuesHelper.GroupBySeverity(missingDraftErrors));
             }
 
             return draftPayload.Error;
@@ -189,6 +191,7 @@ public class GetSubmissionStatusUseCase(
             DraftCount: effectiveDraftCount,
             LastDraftAtUtc: inventory.LastDraftAtUtc,
             NextSteps: draftGuidance.NextSteps,
-            Summary: draftGuidance.Summary);
+            Summary: draftGuidance.Summary,
+            Issues: evaluation.EffectiveIssues);
     }
 }
