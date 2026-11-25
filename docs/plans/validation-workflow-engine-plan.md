@@ -14,6 +14,44 @@
 6. **Support cross-submission lookups (draft + finalised)** governed by per-schema draft policy.
 7. **Turn `POST /schemas/verify` into a non-failing diagnostic report** and expand `SchemaLifecycleState` with **`Invalid`**, **`Unvalidated`** (warning-level sign-off), and **`Deleted`** (tombstone preserving `.meta.json` + `.error.json` so consumed version keys cannot be overwritten and fixes must advance to `version + 1`).
 
+## Current State vs Proposed End State (At-a-Glance)
+
+```mermaid
+flowchart TB
+    subgraph Current["Current State (Today)"]
+        C_PIPE["Hardcoded PayloadValidationService\n1. JsonSchema\n2. QualityRules (skipped if schema errors)\n3. Identifier Extraction (last step)"]
+        C_RULE["JsonLogicValidator\nUnordered rules; skips WARNING;\nno Critical/Info handling or DependsOn"]
+        C_CTX["RuleTargetResolver & Engines\ncontextNode + rootNode only;\nraw IEEE-754 double math;\nno O(N) uniqueness engine"]
+        C_ID["URN-Coupled Code & Flat Processed Blob\nPositive-int URN branch in domain;\nprocessed/{urn}/.../{submissionId}.json"]
+        C_SCH["Schema Verify & Lifecycle\nVerify fails on errors; bad drops stay\nin draft-schemas; no Deleted tombstone"]
+
+        C_PIPE --> C_RULE --> C_CTX --> C_ID --> C_SCH
+    end
+
+    subgraph Proposed["Proposed End State (After Phase 5)"]
+        P_PIPE["Injectable IValidationWorkflowRunner\n(PipelineKey: nullable override -> Default)\n1. json-schema  2. identifier-extraction\n3. cross-submission  4. reference-data\n5. quality-rules  (+ verify analyzer)"]
+        P_RULE["QualityRuleCoordinator + Policy\n4-tier RuleSeverity (Critical/Error/Warning/Info);\nStage/Order/DependsOn/StopOnFailure;\nissues dict + FailOnMinimumSeverity gate"]
+        P_CTX["Enriched Context & Smart Engines\n$parent, $ancestors, $root, $index;\nautomatic float epsilon tolerance;\nbuilt-in O(N) unique engine"]
+        P_ID["Agnostic Identifiers & Bundle Folder\nURN in config defaults only;\nprocessed/.../{submissionId}/payload.json,\nsession.json, audit/*.json + identifier-index"]
+        P_SCH["Verify Report & Full Schema Lifecycle\nVerify always 200 OK diagnostic report;\nInvalid (.error.json) / Unvalidated (signoff)\n/ Deleted (tombstone -> 409 on v reuse)"]
+
+        P_PIPE --> P_RULE --> P_CTX --> P_ID --> P_SCH
+    end
+
+    Current ==>|"Phases 0 to 5"| Proposed
+```
+
+| Dimension | Current State (Today) | Proposed End State (To-Be) | Target Phase |
+| :--- | :--- | :--- | :--- |
+| **Workflow Orchestration** | Hardcoded 3-step sequence in `PayloadValidationService` with identifier extraction at the end | Pluggable `IValidationWorkflowRunner` + `IWorkflowStep` engines; nullable `WorkflowPipelineKey` (`null` → `"Default"`); `identifier-extraction` runs before enrichers | Phase 1–2 |
+| **Rule Severities & Gating** | String severity (`"ERROR"` / `"WARNING"`); `WARNING` skipped by default; flat `PendingErrors` list | Strongly typed `RuleSeverity` (`Critical`, `Error`, `Warning`, `Info`); `issues` dictionary grouped by severity; per-schema `FailOnMinimumSeverity` determines `isSuccessful` | Phase 1 |
+| **Rule Execution Order** | Unordered list grouped by `Path` inside `JsonLogicValidator` | Renamed `QualityRuleCoordinator`; topological sort by `(Stage, Order)` + `DependsOn` cascade skipping + `StopOnFailure` short-circuit across all engines | Phase 1 |
+| **Context & Expressions** | `contextNode`, `childFocusNode`, `rootNode`; no parent chain; CEL casts numbers to `double`; no `unique` engine | Injects `$parent`, `$ancestors`, `$root`, `$index`; automatic float artifact tolerance (`1e-9`) across JSON Logic & CEL; $O(N)$ `UniqueCombinationQualityEngine` | Phase 2 |
+| **External & Sibling Data** | Static `EstateAmbientReferenceEnricher` + `SurveyAnswerContextEnricher` only | Async `IWorkflowStep` enrichers backed by `identifier-index` (finalised + draft siblings w/ `CrossSubmissionDraftPolicy`) and `IReferenceDataProvider` | Phase 3 |
+| **Establishment Identifiers** | `URN`-specific properties (`UrnJsonPaths`, `RequireUrnOnFinalise`, `PayloadInvalidUrn`) and integer coercion | 100% identifier-agnostic code, domain validation, error codes, and Admin UI copy; `URN` retained strictly as config default (`DefaultIdentifierType = "URN"`) | Phase 0 |
+| **Processed Storage** | Single flat JSON blob: `urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json` (`audit/` & `session.json` only in `payloads`) | Self-contained bundle folder `urn={establishmentIdentifier}/.../v={schemaVersion}/{submissionId}/` holding `payload.json`, `session.json`, and `audit/*.json` (+ lookup pointer in `payloads`) | Phase 0 |
+| **Schema Verify & Lifecycle** | `Verify` fails on errors/warnings; failed drafts remain in `draft-schemas` with `.error.json`; no `Invalid`, `Unvalidated`, or `Deleted` state | `POST /schemas/verify` always returns `200 OK` report; `ContractConsistencyAnalyzer`; `Invalid` & `Unvalidated` (sign-off) persisted in `schemas` with `.error.json`; `Deleted` tombstone blocks version reuse (`409 Conflict`) | Phase 4 |
+
 ### Architecture Overview
 
 ```mermaid
