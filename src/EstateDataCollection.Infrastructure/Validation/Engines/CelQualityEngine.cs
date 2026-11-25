@@ -1,45 +1,55 @@
 using System.Collections.Concurrent;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using Celly;
+using Celly.Common;
 using Celly.Interpreter;
 using Celly.Providers;
+using Celly.Stdlib;
 using Celly.Values;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Extensions;
 using EstateDataCollection.Common.Results;
 using Microsoft.Extensions.Options;
 
 namespace EstateDataCollection.Infrastructure.Validation.Engines;
 
-public sealed partial class CelQualityEngine(
-    IOptions<ValidationOptions>? options = null
-) : IQualityRuleEngine
+public sealed class CelQualityEngine : IQualityRuleEngine
 {
+    private const string ParentAlias = "__edc_parent";
+    private const string AncestorsAlias = "__edc_ancestors";
+    private const string RootAlias = "__edc_root";
+    private const string IndexAlias = "__edc_index";
+
+    private readonly ValidationOptions _options;
+    private readonly CelEnv _env;
+    private readonly ConcurrentDictionary<string, CelProgram> _compiledCache = new(StringComparer.Ordinal);
+
+    public CelQualityEngine(IOptions<ValidationOptions>? options = null)
+    {
+        _options = options?.Value ?? new ValidationOptions();
+        _env = CelEnv.Create(new CelEnvSettings
+        {
+            EnableOptionalSyntax = true,
+            ConfigureFunctions = ConfigureToleranceAndArithmeticOperators
+        });
+
+        Descriptor = new ValidationEngineDescriptor(
+            EngineId: "cel",
+            DisplayName: "CEL Quality Engine",
+            Kind: ValidationEngineKinds.QualityRule,
+            Description: $"Evaluates Common Expression Language (CEL) quality rules with RFC3339 timestamps, comprehensions, ancestor context, automatic float epsilon tolerance, compiled program caching, and {(_options.CelMaxIterations > 0 ? _options.CelMaxIterations : 10_000)} max iterations.");
+    }
+
     public string EngineName
     {
         get { return "cel"; }
     }
 
-    public ValidationEngineDescriptor Descriptor { get; } = new(
-        EngineId: "cel",
-        DisplayName: "CEL Quality Engine",
-        Kind: ValidationEngineKinds.QualityRule,
-        Description: $"Evaluates Common Expression Language (CEL) quality rules with RFC3339 timestamps, comprehensions, compiled program caching, and {(options?.Value.CelMaxIterations is > 0 ? options.Value.CelMaxIterations : 10_000)} max iterations.");
-
-    private readonly ValidationOptions _options = options?.Value ?? new ValidationOptions();
-
-    private static readonly CelEnv SharedEnv = CelEnv.Create(new CelEnvSettings
-    {
-        EnableOptionalSyntax = true
-    });
-
-    private readonly ConcurrentDictionary<string, CelProgram> _compiledCache = new(StringComparer.Ordinal);
-
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])this\.", RegexOptions.CultureInvariant)]
-    private static partial Regex ThisDotPrefixRegex();
+    public ValidationEngineDescriptor Descriptor { get; }
 
     public IReadOnlyList<ValidationMessage> ValidateSyntax(BusinessRule rule, string ruleId)
     {
@@ -52,7 +62,7 @@ public sealed partial class CelQualityEngine(
         try
         {
             var normalized = NormaliseCelExpression(exprText);
-            _ = _compiledCache.GetOrAdd(normalized, static expr => SharedEnv.Compile(expr));
+            _ = _compiledCache.GetOrAdd(normalized, expr => _env.Compile(expr));
             return [];
         }
         catch (Exception ex)
@@ -66,13 +76,13 @@ public sealed partial class CelQualityEngine(
         var exprText = ExtractExpressionString(rule.EffectiveAssertion);
         if (string.IsNullOrWhiteSpace(exprText))
         {
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, $"Rule '{rule.Id}' CEL expression is empty.");
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed.GetName(), $"Rule '{rule.Id}' CEL expression is empty.");
         }
 
         try
         {
             var normalized = NormaliseCelExpression(exprText);
-            var program = _compiledCache.GetOrAdd(normalized, static expr => SharedEnv.Compile(expr));
+            var program = _compiledCache.GetOrAdd(normalized, expr => _env.Compile(expr));
 
             var bindings = BuildBindings(enrichedContextNode, rootNode);
             var activation = new MapActivation(bindings, NativeTypeAdapter.Instance);
@@ -81,11 +91,17 @@ public sealed partial class CelQualityEngine(
                 MaxIterations = _options.CelMaxIterations > 0 ? _options.CelMaxIterations : 10_000
             };
 
+            var effectiveEpsilon = NumericToleranceScope.Current
+                                   ?? (_options.CurrencyRoundingTolerance is { } currency
+                                       ? (double)currency
+                                       : _options.FloatArtifactEpsilon);
+
+            using var _ = NumericToleranceScope.Push(effectiveEpsilon);
             var result = program.Eval(activation, limits);
 
             if (result is ErrorValue errVal)
             {
-                return Error.Validation(ErrorCodes.SchemaVerificationFailed, $"Rule '{rule.Id}' CEL evaluation error: {errVal}");
+                return Error.Validation(ErrorCodes.SchemaVerificationFailed.GetName(), $"Rule '{rule.Id}' CEL evaluation error: {errVal}");
             }
 
             var native = result.ToNative();
@@ -95,12 +111,132 @@ public sealed partial class CelQualityEngine(
             }
 
             return Error.Validation(
-                ErrorCodes.SchemaVerificationFailed,
+                ErrorCodes.SchemaVerificationFailed.GetName(),
                 $"Rule '{rule.Id}' CEL expression must evaluate to a boolean, but returned '{result.Type.Name}'.");
         }
         catch (Exception ex)
         {
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, $"Rule '{rule.Id}' CEL evaluation failed: {ex.Message}");
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed.GetName(), $"Rule '{rule.Id}' CEL evaluation failed: {ex.Message}");
+        }
+    }
+
+    private void ConfigureToleranceAndArithmeticOperators(FunctionRegistry registry)
+    {
+        // Promote mixed int/double JSON numeric operands cleanly for ODCS-generated expressions (e.g. qty * rate)
+        WrapMixedDoubleArithmetic(registry, Operators.Add);
+        WrapMixedDoubleArithmetic(registry, Operators.Subtract);
+        WrapMixedDoubleArithmetic(registry, Operators.Multiply);
+        WrapMixedDoubleArithmetic(registry, Operators.Divide);
+
+        WrapComparisonOperator(registry, Operators.Equals, CelComparisonOp.Equals);
+        WrapComparisonOperator(registry, Operators.NotEquals, CelComparisonOp.NotEquals);
+        WrapComparisonOperator(registry, Operators.Less, CelComparisonOp.Less);
+        WrapComparisonOperator(registry, Operators.LessEquals, CelComparisonOp.LessEquals);
+        WrapComparisonOperator(registry, Operators.Greater, CelComparisonOp.Greater);
+        WrapComparisonOperator(registry, Operators.GreaterEquals, CelComparisonOp.GreaterEquals);
+    }
+
+    private static void WrapMixedDoubleArithmetic(FunctionRegistry registry, string operatorName)
+    {
+        var original = registry.Find(operatorName);
+        if (original is null)
+        {
+            return;
+        }
+
+        registry.Register(operatorName, args =>
+        {
+            if (args.Length == 2 &&
+                (args[0] is DoubleValue || args[1] is DoubleValue) &&
+                !(args[0] is DoubleValue && args[1] is DoubleValue) &&
+                TryGetDouble(args[0], out var left) &&
+                TryGetDouble(args[1], out var right))
+            {
+                return original([DoubleValue.Of(left), DoubleValue.Of(right)]);
+            }
+
+            return original(args);
+        });
+    }
+
+    private enum CelComparisonOp
+    {
+        Equals,
+        NotEquals,
+        Less,
+        LessEquals,
+        Greater,
+        GreaterEquals
+    }
+
+    private void WrapComparisonOperator(FunctionRegistry registry, string operatorName, CelComparisonOp op)
+    {
+        var original = registry.Find(operatorName);
+        if (original is null)
+        {
+            return;
+        }
+
+        registry.Register(operatorName, args =>
+        {
+            if (args.Length != 2)
+            {
+                return original(args);
+            }
+
+            var eps = NumericToleranceScope.Current
+                      ?? (_options.CurrencyRoundingTolerance is { } currency
+                          ? (double)currency
+                          : _options.FloatArtifactEpsilon);
+
+            if (eps <= 0)
+            {
+                return original(args);
+            }
+
+            // Apply automatic epsilon tolerance whenever at least one operand is a floating-point DoubleValue
+            // and both operands are numeric (so integer == integer stays exact).
+            if ((args[0] is DoubleValue || args[1] is DoubleValue) &&
+                TryGetDouble(args[0], out var left) &&
+                TryGetDouble(args[1], out var right) &&
+                !double.IsNaN(left) && !double.IsNaN(right) &&
+                !double.IsInfinity(left) && !double.IsInfinity(right))
+            {
+                var diff = left - right;
+                var result = op switch
+                {
+                    CelComparisonOp.Equals => Math.Abs(diff) <= eps,
+                    CelComparisonOp.NotEquals => Math.Abs(diff) > eps,
+                    CelComparisonOp.Greater => diff > eps,
+                    CelComparisonOp.GreaterEquals => diff >= -eps,
+                    CelComparisonOp.Less => diff < -eps,
+                    CelComparisonOp.LessEquals => diff <= eps,
+                    _ => false
+                };
+
+                return BoolValue.Of(result);
+            }
+
+            return original(args);
+        });
+    }
+
+    private static bool TryGetDouble(CelValue val, out double result)
+    {
+        switch (val)
+        {
+            case DoubleValue d:
+                result = d.Value;
+                return true;
+            case IntValue i:
+                result = i.Value;
+                return true;
+            case UintValue u:
+                result = u.Value;
+                return true;
+            default:
+                result = 0;
+                return false;
         }
     }
 
@@ -134,8 +270,109 @@ public sealed partial class CelQualityEngine(
 
     private static string NormaliseCelExpression(string expression)
     {
-        // Allow authors to write "this.field" in addition to "self.field" or direct "field"
-        return ThisDotPrefixRegex().Replace(expression.Trim(), "self.");
+        // Rewrite outside single/double-quoted string literals:
+        // - "this." -> "self."
+        // - "$parent", "$ancestors", "$root", "$index" -> CEL-valid identifiers ("__edc_parent", etc.)
+        var input = expression.Trim();
+        var sb = new StringBuilder(input.Length + 16);
+        var i = 0;
+        char? quoteChar = null;
+
+        while (i < input.Length)
+        {
+            var ch = input[i];
+
+            if (quoteChar.HasValue)
+            {
+                sb.Append(ch);
+                if (ch == '\\' && i + 1 < input.Length)
+                {
+                    sb.Append(input[i + 1]);
+                    i += 2;
+                    continue;
+                }
+
+                if (ch == quoteChar.Value)
+                {
+                    quoteChar = null;
+                }
+
+                i++;
+                continue;
+            }
+
+            if (ch is '\'' or '"')
+            {
+                quoteChar = ch;
+                sb.Append(ch);
+                i++;
+                continue;
+            }
+
+            if (ch == '$')
+            {
+                var prevOk = i == 0 || !IsIdentChar(input[i - 1]);
+                if (prevOk)
+                {
+                    if (MatchesToken(input, i, "$parent"))
+                    {
+                        sb.Append(ParentAlias);
+                        i += "$parent".Length;
+                        continue;
+                    }
+
+                    if (MatchesToken(input, i, "$ancestors"))
+                    {
+                        sb.Append(AncestorsAlias);
+                        i += "$ancestors".Length;
+                        continue;
+                    }
+
+                    if (MatchesToken(input, i, "$root"))
+                    {
+                        sb.Append(RootAlias);
+                        i += "$root".Length;
+                        continue;
+                    }
+
+                    if (MatchesToken(input, i, "$index"))
+                    {
+                        sb.Append(IndexAlias);
+                        i += "$index".Length;
+                        continue;
+                    }
+                }
+            }
+
+            if (ch == 't' && (i == 0 || !IsIdentChar(input[i - 1])) &&
+                input.AsSpan(i).StartsWith("this.", StringComparison.Ordinal))
+            {
+                sb.Append("self.");
+                i += "this.".Length;
+                continue;
+            }
+
+            sb.Append(ch);
+            i++;
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool MatchesToken(string input, int index, string token)
+    {
+        if (!input.AsSpan(index).StartsWith(token, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var end = index + token.Length;
+        return end >= input.Length || !IsIdentChar(input[end]);
+    }
+
+    private static bool IsIdentChar(char c)
+    {
+        return char.IsLetterOrDigit(c) || c == '_';
     }
 
     private static Dictionary<string, object?> BuildBindings(JsonNode enrichedContextNode, JsonNode rootNode)
@@ -146,7 +383,7 @@ public sealed partial class CelQualityEngine(
         {
             foreach (var (key, value) in obj)
             {
-                dict[key] = ConvertJsonNodeToClr(value);
+                dict[MapBindingKey(key)] = ConvertJsonNodeToClr(value);
             }
         }
 
@@ -155,7 +392,24 @@ public sealed partial class CelQualityEngine(
         dict["item"] = selfValue;
         dict["root"] = ConvertJsonNodeToClr(rootNode);
 
+        if (!dict.ContainsKey(RootAlias))
+        {
+            dict[RootAlias] = dict["root"];
+        }
+
         return dict;
+    }
+
+    private static string MapBindingKey(string key)
+    {
+        return key switch
+        {
+            "$parent" => ParentAlias,
+            "$ancestors" => AncestorsAlias,
+            "$root" => RootAlias,
+            "$index" => IndexAlias,
+            _ => key
+        };
     }
 
     private static object? ConvertJsonNodeToClr(JsonNode? node)
@@ -229,7 +483,7 @@ public sealed partial class CelQualityEngine(
             var map = new Dictionary<string, object?>(obj.Count, StringComparer.Ordinal);
             foreach (var (k, v) in obj)
             {
-                map[k] = ConvertJsonNodeToClr(v);
+                map[MapBindingKey(k)] = ConvertJsonNodeToClr(v);
             }
             return map;
         }

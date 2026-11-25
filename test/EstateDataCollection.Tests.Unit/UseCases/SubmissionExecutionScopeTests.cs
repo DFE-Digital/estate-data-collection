@@ -163,12 +163,13 @@ public sealed class SubmissionExecutionScopeTests
         var result = await service.ValidatePayloadWithTraceAsync("{}", resolved, isDraftUpdate: false, CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
-        scope.Processes.Should().HaveCount(2);
+        scope.Processes.Should().HaveCount(3);
         scope.Processes[0].ProcessName.Should().Be("JsonSchemaValidator");
         scope.Processes[0].Outcome.Should().Be(SubmissionProcessOutcome.Succeeded);
-        scope.Processes[1].ProcessName.Should().Be("QualityRulesValidator");
-        scope.Processes[1].Outcome.Should().Be(SubmissionProcessOutcome.Failed);
-        scope.Processes[1].Engine.Should().Be("cel");
+        scope.Processes[1].ProcessName.Should().Be("IdentifierExtractor");
+        scope.Processes[2].ProcessName.Should().Be("QualityRulesValidator");
+        scope.Processes[2].Outcome.Should().Be(SubmissionProcessOutcome.Failed);
+        scope.Processes[2].Engine.Should().Be("cel");
     }
 
     [Fact]
@@ -206,21 +207,21 @@ public sealed class SubmissionExecutionScopeTests
         schemaStep.ErrorCode.Should().BeNull();
         schemaStep.Errors.Should().BeNull();
 
-        var ruleStep = scope.Processes[1];
-        ruleStep.ProcessName.Should().Be("QualityRulesValidator");
-        ruleStep.Outcome.Should().Be(SubmissionProcessOutcome.ValidationErrorsFound);
-        ruleStep.Errors.Should().ContainSingle();
-        ruleStep.Errors![0].PropertyPath.Should().Be("$.school_capacity");
-        ruleStep.Errors[0].Message.Should().Be("Capacity must be > 0");
-        ruleStep.Errors[0].RuleId.Should().Be("RULE-CAP");
-
-        var idStep = scope.Processes[2];
+        var idStep = scope.Processes[1];
         idStep.ProcessName.Should().Be("IdentifierExtractor");
         idStep.Outcome.Should().Be(SubmissionProcessOutcome.ValidationErrorsFound);
         idStep.ErrorCode.Should().Be("Payload.InvalidIdentifier");
         idStep.Errors.Should().ContainSingle();
         idStep.Errors![0].PropertyPath.Should().Be("#/urn");
         idStep.Errors[0].RuleId.Should().Be("Payload.InvalidIdentifier");
+
+        var ruleStep = scope.Processes[2];
+        ruleStep.ProcessName.Should().Be("QualityRulesValidator");
+        ruleStep.Outcome.Should().Be(SubmissionProcessOutcome.ValidationErrorsFound);
+        ruleStep.Errors.Should().ContainSingle();
+        ruleStep.Errors![0].PropertyPath.Should().Be("$.school_capacity");
+        ruleStep.Errors[0].Message.Should().Be("Capacity must be > 0");
+        ruleStep.Errors[0].RuleId.Should().Be("RULE-CAP");
     }
 
     [Fact]

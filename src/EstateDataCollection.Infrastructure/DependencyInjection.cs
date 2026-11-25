@@ -1,6 +1,7 @@
 using Azure.Identity;
 using Azure.Storage.Blobs;
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Validators.Workflow;
 using EstateDataCollection.Common.Markers;
 using EstateDataCollection.Infrastructure.Configuration;
 using Microsoft.Extensions.Configuration;
@@ -35,6 +36,9 @@ public static class DependencyInjection
                     .Where(t => t != typeof(Validation.JsonLogicValidator)))
                 .AsImplementedInterfaces()
                 .WithSingletonLifetime()
+                .AddClasses(classes => classes.AssignableTo<IWorkflowStep>())
+                .AsImplementedInterfaces()
+                .WithScopedLifetime()
                 .AddClasses(classes => classes
                     .AssignableTo<IInfrastructure>()
                     .Where(t =>
@@ -42,7 +46,8 @@ public static class DependencyInjection
                         !typeof(IQualityRuleEngine).IsAssignableFrom(t) &&
                         !typeof(IRuleContextEnricher).IsAssignableFrom(t) &&
                         !typeof(IOdcsContractParser).IsAssignableFrom(t) &&
-                        !typeof(IBusinessLogicValidator).IsAssignableFrom(t)))
+                        !typeof(IBusinessLogicValidator).IsAssignableFrom(t) &&
+                        !typeof(IWorkflowStep).IsAssignableFrom(t)))
                 .AsImplementedInterfaces()
                 .WithScopedLifetime()
                 .AddClasses(classes => classes.AssignableTo<IInstrumentation>())

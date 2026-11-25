@@ -79,8 +79,8 @@ public sealed class ValidationEngineIsolationTests
         validReport.Errors.Should().BeEmpty();
         validReport.ProcessesExecuted.Select(p => p.ProcessName).Should().ContainInOrder(
             "JsonSchemaValidator",
-            "QualityRulesValidator",
-            "IdentifierExtractor");
+            "IdentifierExtractor",
+            "QualityRulesValidator");
 
         validReport.EngineTraces.Should().NotBeNull();
         validReport.EngineTraces!.Should().HaveCount(4);

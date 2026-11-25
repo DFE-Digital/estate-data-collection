@@ -42,8 +42,9 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
         {
             engineList =
             [
-                new JsonLogicQualityEngine(),
-                new CelQualityEngine(options)
+                new JsonLogicQualityEngine(options),
+                new CelQualityEngine(options),
+                new UniqueCombinationQualityEngine()
             ];
         }
 
@@ -56,7 +57,7 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
             .Select(e => e.Descriptor)
             .ToArray();
 
-        _enabledEngines = (_options.EnabledEngines ?? ["jsonlogic", "cel"])
+        _enabledEngines = (_options.EnabledEngines ?? ["jsonlogic", "cel", "unique"])
             .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
         _contextEnrichers = contextEnrichers is null
@@ -137,9 +138,10 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
             }
 
             // ODCS rules use 'description' + 'implementation', whereas standalone rules use 'message' + 'assert'.
-            // Advisory Info rules may omit implementation/assert when Description or Message is provided.
+            // Unique rules may specify 'fields', and advisory Info rules may omit implementation/assert.
             if (string.IsNullOrWhiteSpace(rule.Message) &&
                 rule.Implementation is null &&
+                rule.Fields is not { Count: > 0 } &&
                 rule.Severity != RuleSeverity.Info)
             {
                 syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, "'message' is required.", source: ValidationSources.Rule, ruleId: ruleId));
@@ -159,7 +161,8 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
                 continue;
             }
 
-            if (rule.EffectiveAssertion is null)
+            var isBatchOrFieldsRule = engine is IBatchQualityRuleEngine || rule.Fields is { Count: > 0 };
+            if (rule.EffectiveAssertion is null && !isBatchOrFieldsRule)
             {
                 if (rule.Severity != RuleSeverity.Info)
                 {
@@ -185,9 +188,24 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
         return Result<IReadOnlyList<ValidationMessage>>.Success([]);
     }
 
+    public Task<Result<BusinessRuleValidationResult>> ValidateAsync(
+        string payloadJson,
+        IReadOnlyList<BusinessRule> rules,
+        CancellationToken cancellationToken = default)
+    {
+        return ValidateAsync(
+            payloadJson,
+            rules,
+            additionalAmbientContext: null,
+            numericToleranceOverride: null,
+            cancellationToken);
+    }
+
     public async Task<Result<BusinessRuleValidationResult>> ValidateAsync(
         string payloadJson,
         IReadOnlyList<BusinessRule> rules,
+        IReadOnlyDictionary<string, JsonNode?>? additionalAmbientContext,
+        double? numericToleranceOverride = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(payloadJson))
@@ -200,6 +218,10 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
             return Result<BusinessRuleValidationResult>.Success(
                 new BusinessRuleValidationResult(EngineTraces: [], Issues: ValidationIssuesHelper.EmptyIssues));
         }
+
+        using var toleranceScope = numericToleranceOverride.HasValue
+            ? NumericToleranceScope.Push(numericToleranceOverride.Value)
+            : null;
 
         try
         {
@@ -262,7 +284,10 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
                     continue;
                 }
 
-                if (rule.EffectiveAssertion is not null || rule.Severity == RuleSeverity.Info)
+                if (rule.EffectiveAssertion is not null ||
+                    rule.Fields is { Count: > 0 } ||
+                    engine is IBatchQualityRuleEngine ||
+                    rule.Severity == RuleSeverity.Info)
                 {
                     resolvedRules.Add(new ResolvedRuleEntry(rule, engine!, i));
                     _ = GetOrCreateAccumulator(engine!.Descriptor);
@@ -273,19 +298,32 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
             {
                 // Step 2: Topological & runbook sort by (Stage, Order) honoring DependsOn
                 var orderedRules = SortRulesForRunbook(resolvedRules);
-                var ambientContext = RuleTargetResolver.BuildAmbientContext(rootNode, _contextEnrichers);
-                var pathTargetCache = new Dictionary<string, IReadOnlyList<(RuleTargetResolver.ResolvedRuleTarget Target, JsonNode EnrichedNode)>>(StringComparer.Ordinal);
+                var ambientContext = BuildMergedAmbientContext(rootNode, additionalAmbientContext);
+                var rawTargetCache = new Dictionary<string, IReadOnlyList<RuleTargetResolver.ResolvedRuleTarget>>(StringComparer.Ordinal);
+                var enrichedTargetCache = new Dictionary<string, IReadOnlyList<(RuleTargetResolver.ResolvedRuleTarget Target, JsonNode EnrichedNode)>>(StringComparer.Ordinal);
                 var failedRuleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 int? haltedAfterStage = null;
 
-                IReadOnlyList<(RuleTargetResolver.ResolvedRuleTarget Target, JsonNode EnrichedNode)> GetOrResolvePathTargets(string path)
+                IReadOnlyList<RuleTargetResolver.ResolvedRuleTarget> GetOrResolveRawTargets(string path)
                 {
-                    if (pathTargetCache.TryGetValue(path, out var cached))
+                    if (rawTargetCache.TryGetValue(path, out var cachedRaw))
+                    {
+                        return cachedRaw;
+                    }
+
+                    var targets = RuleTargetResolver.ResolvePathTargets(rootNode, path);
+                    rawTargetCache[path] = targets;
+                    return targets;
+                }
+
+                IReadOnlyList<(RuleTargetResolver.ResolvedRuleTarget Target, JsonNode EnrichedNode)> GetOrResolveEnrichedTargets(string path)
+                {
+                    if (enrichedTargetCache.TryGetValue(path, out var cached))
                     {
                         return cached;
                     }
 
-                    var targets = RuleTargetResolver.ResolvePathTargets(rootNode, path);
+                    var targets = GetOrResolveRawTargets(path);
                     var prepared = new List<(RuleTargetResolver.ResolvedRuleTarget, JsonNode)>(targets.Count);
                     foreach (var target in targets)
                     {
@@ -294,11 +332,13 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
                             target.ChildFocusNode,
                             rootNode,
                             ambientContext,
-                            _contextEnrichers);
+                            _contextEnrichers,
+                            target.Ancestors,
+                            target.Index);
                         prepared.Add((target, enriched));
                     }
 
-                    pathTargetCache[path] = prepared;
+                    enrichedTargetCache[path] = prepared;
                     return prepared;
                 }
 
@@ -329,37 +369,36 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
                         continue;
                     }
 
-                    var pathTargets = GetOrResolvePathTargets(rule.Path ?? string.Empty);
                     acc.RulesEvaluatedCount++;
                     var ruleFailed = false;
 
-                    foreach (var (target, enrichedNode) in pathTargets)
+                    if (engine is IBatchQualityRuleEngine batchEngine &&
+                        (rule.Severity != RuleSeverity.Info || rule.EffectiveAssertion is not null || rule.Fields is { Count: > 0 }))
                     {
-                        var targetPath = string.IsNullOrWhiteSpace(target.InstancePath) ? (rule.Path ?? "/") : target.InstancePath;
-
-                        // Advisory Info rule without assertion: emit advisory notice directly at target path
-                        if (rule.EffectiveAssertion is null)
+                        var rawTargets = GetOrResolveRawTargets(rule.Path ?? string.Empty);
+                        var batchItems = new List<ResolvedTargetItem>(rawTargets.Count);
+                        foreach (var target in rawTargets)
                         {
-                            violations.Add(new ValidationError(
-                                PropertyPath: targetPath,
-                                Message: rule.EffectiveMessage,
-                                RuleId: rule.Id,
-                                Severity: RuleSeverity.Info,
-                                Action: rule.EffectiveAction,
-                                EngineId: engine.EngineName));
-                            acc.AdvisoryInfoCount++;
-                            continue;
+                            var targetPath = string.IsNullOrWhiteSpace(target.InstancePath) ? (rule.Path ?? "/") : target.InstancePath;
+                            batchItems.Add(new ResolvedTargetItem(
+                                targetPath,
+                                target.ContextNode,
+                                target.ChildFocusNode,
+                                target.Ancestors,
+                                target.Index,
+                                ambientContext));
                         }
 
-                        var evalStart = Stopwatch.GetTimestamp();
-                        var evalOutcome = engine.Evaluate(rule, enrichedNode, rootNode);
-                        acc.ElapsedTicks += Stopwatch.GetTimestamp() - evalStart;
+                        var batchStart = Stopwatch.GetTimestamp();
+                        var batchOutcome = batchEngine.EvaluateBatch(rule, batchItems, rootNode);
+                        acc.ElapsedTicks += Stopwatch.GetTimestamp() - batchStart;
 
-                        if (evalOutcome.IsFailure)
+                        if (batchOutcome.IsFailure)
                         {
-                            var errMsg = evalOutcome.Error.Description ?? $"Rule '{rule.Id}' evaluation failed.";
+                            var errMsg = batchOutcome.Error.Description ?? $"Rule '{rule.Id}' evaluation failed.";
+                            var fallbackPath = batchItems.Count > 0 ? batchItems[0].TargetPath : (rule.Path ?? "/");
                             violations.Add(new ValidationError(
-                                PropertyPath: targetPath,
+                                PropertyPath: fallbackPath,
                                 Message: errMsg,
                                 RuleId: rule.Id,
                                 Severity: rule.Severity,
@@ -369,26 +408,92 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
                             acc.HasFailure = true;
                             acc.LastErrorSummary ??= errMsg;
                             ruleFailed = true;
-                            continue;
                         }
-
-                        if (!evalOutcome.Value)
+                        else if (batchOutcome.Value.Count > 0)
                         {
-                            _instrumentation.RuleViolation(
-                                rule.Id,
-                                engine.EngineName,
-                                rule.Severity.ToKeyString(),
-                                targetPath,
-                                rule.EffectiveMessage);
-                            violations.Add(new ValidationError(
-                                PropertyPath: targetPath,
-                                Message: rule.EffectiveMessage,
-                                RuleId: rule.Id,
-                                Severity: rule.Severity,
-                                Action: rule.EffectiveAction,
-                                EngineId: engine.EngineName));
-                            acc.ViolationCount++;
-                            ruleFailed = true;
+                            foreach (var violation in batchOutcome.Value)
+                            {
+                                var msg = !string.IsNullOrWhiteSpace(violation.Message)
+                                    ? violation.Message!
+                                    : rule.EffectiveMessage;
+                                _instrumentation.RuleViolation(
+                                    rule.Id,
+                                    engine.EngineName,
+                                    rule.Severity.ToKeyString(),
+                                    violation.TargetPath,
+                                    msg);
+                                violations.Add(new ValidationError(
+                                    PropertyPath: violation.TargetPath,
+                                    Message: msg,
+                                    RuleId: rule.Id,
+                                    Severity: rule.Severity,
+                                    Action: rule.EffectiveAction,
+                                    EngineId: engine.EngineName));
+                                acc.ViolationCount++;
+                                ruleFailed = true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var pathTargets = GetOrResolveEnrichedTargets(rule.Path ?? string.Empty);
+                        foreach (var (target, enrichedNode) in pathTargets)
+                        {
+                            var targetPath = string.IsNullOrWhiteSpace(target.InstancePath) ? (rule.Path ?? "/") : target.InstancePath;
+
+                            // Advisory Info rule without assertion: emit advisory notice directly at target path
+                            if (rule.EffectiveAssertion is null)
+                            {
+                                violations.Add(new ValidationError(
+                                    PropertyPath: targetPath,
+                                    Message: rule.EffectiveMessage,
+                                    RuleId: rule.Id,
+                                    Severity: RuleSeverity.Info,
+                                    Action: rule.EffectiveAction,
+                                    EngineId: engine.EngineName));
+                                acc.AdvisoryInfoCount++;
+                                continue;
+                            }
+
+                            var evalStart = Stopwatch.GetTimestamp();
+                            var evalOutcome = engine.Evaluate(rule, enrichedNode, rootNode);
+                            acc.ElapsedTicks += Stopwatch.GetTimestamp() - evalStart;
+
+                            if (evalOutcome.IsFailure)
+                            {
+                                var errMsg = evalOutcome.Error.Description ?? $"Rule '{rule.Id}' evaluation failed.";
+                                violations.Add(new ValidationError(
+                                    PropertyPath: targetPath,
+                                    Message: errMsg,
+                                    RuleId: rule.Id,
+                                    Severity: rule.Severity,
+                                    Action: rule.EffectiveAction,
+                                    EngineId: engine.EngineName));
+                                acc.ViolationCount++;
+                                acc.HasFailure = true;
+                                acc.LastErrorSummary ??= errMsg;
+                                ruleFailed = true;
+                                continue;
+                            }
+
+                            if (!evalOutcome.Value)
+                            {
+                                _instrumentation.RuleViolation(
+                                    rule.Id,
+                                    engine.EngineName,
+                                    rule.Severity.ToKeyString(),
+                                    targetPath,
+                                    rule.EffectiveMessage);
+                                violations.Add(new ValidationError(
+                                    PropertyPath: targetPath,
+                                    Message: rule.EffectiveMessage,
+                                    RuleId: rule.Id,
+                                    Severity: rule.Severity,
+                                    Action: rule.EffectiveAction,
+                                    EngineId: engine.EngineName));
+                                acc.ViolationCount++;
+                                ruleFailed = true;
+                            }
                         }
                     }
 
@@ -429,6 +534,24 @@ public class QualityRuleCoordinator : IBusinessLogicValidator
             _instrumentation.ValidationMalformedJson(ex.Message);
             return Error.Validation(ErrorCodes.JsonMalformed, new { ex.Message });
         }
+    }
+
+    private IReadOnlyDictionary<string, JsonNode?> BuildMergedAmbientContext(
+        JsonNode rootNode,
+        IReadOnlyDictionary<string, JsonNode?>? additionalAmbientContext)
+    {
+        var baseAmbient = RuleTargetResolver.BuildAmbientContext(rootNode, _contextEnrichers);
+        if (additionalAmbientContext is null || additionalAmbientContext.Count == 0)
+        {
+            return baseAmbient;
+        }
+
+        var merged = new Dictionary<string, JsonNode?>(baseAmbient, StringComparer.Ordinal);
+        foreach (var (key, value) in additionalAmbientContext)
+        {
+            merged[key] = value?.DeepClone();
+        }
+        return merged;
     }
 
     private static IReadOnlyList<ResolvedRuleEntry> SortRulesForRunbook(IReadOnlyList<ResolvedRuleEntry> entries)

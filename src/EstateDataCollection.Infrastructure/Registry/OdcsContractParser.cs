@@ -440,6 +440,8 @@ public sealed class OdcsContractParser : IOdcsContractParser
                                 ?? (TryGetCustomBool(ruleCustomProps, ["stopOnFailure"], out var cpStop) ? cpStop : null);
             var action = GetString(qObj, "action")
                          ?? (TryGetCustomString(ruleCustomProps, ["action"], out var cpAction) ? cpAction : null);
+            var fields = GetStringList(qObj, "fields")
+                         ?? (TryGetCustomStringList(ruleCustomProps, ["fields"], out var cpFields) ? cpFields : null);
 
             JsonNode? implementation = null;
             if (qObj.TryGetPropertyValue("implementation", out var implNode) && implNode is not null)
@@ -465,6 +467,7 @@ public sealed class OdcsContractParser : IOdcsContractParser
                 StopOnFailure = stopOnFailure,
                 Action = action,
                 Path = resolvedPath,
+                Fields = fields,
                 Implementation = implementation
             });
         }

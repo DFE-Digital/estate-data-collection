@@ -7,7 +7,7 @@ namespace EstateDataCollection.Application.Validators.Logic;
 /// <summary>
 /// Unified quality / business validation rule supporting both ODCS v3.2.0 quality checks
 /// (id, type, engine, description, implementation) and standalone rules.json files
-/// (id, description, severity, path, message, engine, implementation/assert, stage, order, dependsOn, stopOnFailure, action).
+/// (id, description, severity, path, message, engine, implementation/assert, stage, order, dependsOn, stopOnFailure, action, fields).
 /// </summary>
 public sealed class BusinessRule
 {
@@ -20,7 +20,7 @@ public sealed class BusinessRule
 
     /// <summary>
     /// Target validation engine (e.g. "jsonlogic", "cel", "unique").
-    /// When omitted in standalone rules, falls back to ValidationOptions.DefaultEngine ("jsonlogic").
+    /// When omitted in standalone rules, falls back to Type == "unique" -> "unique" or ValidationOptions.DefaultEngine ("jsonlogic").
     /// </summary>
     public string? Engine { get; init; }
 
@@ -72,7 +72,12 @@ public sealed class BusinessRule
     public string Message { get; init; } = string.Empty;
 
     /// <summary>
-    /// ODCS v3.2.0 "implementation" rule definition (JsonObject for JsonLogic, string for CEL).
+    /// Optional field paths for composite uniqueness rules (<c>type: "unique"</c> / <c>engine: "unique"</c>).
+    /// </summary>
+    public IReadOnlyList<string>? Fields { get; init; }
+
+    /// <summary>
+    /// ODCS v3.2.0 "implementation" rule definition (JsonObject for JsonLogic, string for CEL, object/array for unique).
     /// </summary>
     [JsonPropertyName("implementation")]
     public JsonNode? Implementation { get; init; }
@@ -118,6 +123,16 @@ public sealed class BusinessRule
 
     public string ResolveEngine(string defaultEngine = "jsonlogic")
     {
-        return !string.IsNullOrWhiteSpace(Engine) ? Engine.Trim() : defaultEngine;
+        if (!string.IsNullOrWhiteSpace(Engine))
+        {
+            return Engine.Trim();
+        }
+
+        if (string.Equals(Type, "unique", StringComparison.OrdinalIgnoreCase))
+        {
+            return "unique";
+        }
+
+        return defaultEngine;
     }
 }

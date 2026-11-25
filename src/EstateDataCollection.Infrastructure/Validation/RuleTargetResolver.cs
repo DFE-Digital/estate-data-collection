@@ -12,7 +12,9 @@ public static class RuleTargetResolver
     public readonly record struct ResolvedRuleTarget(
         string InstancePath,
         JsonNode ContextNode,
-        JsonNode? ChildFocusNode);
+        JsonNode? ChildFocusNode,
+        IReadOnlyList<JsonNode>? Ancestors = null,
+        int? Index = null);
 
     public static IReadOnlyDictionary<string, JsonNode?> BuildAmbientContext(
         JsonNode rootNode,
@@ -32,12 +34,12 @@ public static class RuleTargetResolver
         var results = new List<ResolvedRuleTarget>();
         if (string.IsNullOrWhiteSpace(pathPattern) || pathPattern == "/")
         {
-            results.Add(new ResolvedRuleTarget("/", root, root));
+            results.Add(new ResolvedRuleTarget("/", root, root, [], Index: null));
             return results;
         }
 
         var segments = pathPattern.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        TraverseSegments(root, segments, 0, "", results);
+        TraverseSegments(root, segments, 0, "", [], null, results);
         return results;
     }
 
@@ -47,6 +49,25 @@ public static class RuleTargetResolver
         JsonNode rootNode,
         IReadOnlyDictionary<string, JsonNode?> ambientContext,
         IReadOnlyList<IRuleContextEnricher> enrichers)
+    {
+        return CreateEnrichedContextNode(
+            contextNode,
+            childFocusNode,
+            rootNode,
+            ambientContext,
+            enrichers,
+            ancestors: null,
+            index: null);
+    }
+
+    public static JsonObject CreateEnrichedContextNode(
+        JsonNode contextNode,
+        JsonNode? childFocusNode,
+        JsonNode rootNode,
+        IReadOnlyDictionary<string, JsonNode?> ambientContext,
+        IReadOnlyList<IRuleContextEnricher> enrichers,
+        IReadOnlyList<JsonNode>? ancestors,
+        int? index)
     {
         var enriched = contextNode.DeepClone() as JsonObject ?? new JsonObject();
 
@@ -77,6 +98,16 @@ public static class RuleTargetResolver
             }
         }
 
+        // Inject hierarchical ancestor & positional context ($parent, $ancestors, $root, $index)
+        // without clobbering real domain payload properties.
+        enriched["$parent"] = BuildParentChain(ancestors);
+        enriched["$ancestors"] = BuildAncestorsArray(ancestors, rootNode);
+        enriched["$root"] = rootNode.DeepClone();
+        if (index.HasValue)
+        {
+            enriched["$index"] = JsonValue.Create(index.Value);
+        }
+
         // Server-derived ambient context (e.g. valid_site_ids, valid_block_ids, valid_evidence_ids)
         // must overwrite any identically named keys in the submitter payload so clients cannot spoof them.
         foreach (var (key, value) in ambientContext)
@@ -95,16 +126,65 @@ public static class RuleTargetResolver
         return enriched;
     }
 
+    private static JsonNode? BuildParentChain(IReadOnlyList<JsonNode>? ancestors)
+    {
+        if (ancestors is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        // Build singly-linked $parent chain from outermost (index 0) to immediate parent (index Count - 1)
+        // so both $parent.field and $parent.$parent.field resolve cleanly.
+        JsonNode? currentParent = null;
+        for (var i = 0; i < ancestors.Count; i++)
+        {
+            var cloned = ancestors[i].DeepClone();
+            if (cloned is JsonObject obj && currentParent is not null)
+            {
+                obj["$parent"] = currentParent;
+            }
+            currentParent = cloned;
+        }
+
+        return currentParent;
+    }
+
+    private static JsonArray BuildAncestorsArray(IReadOnlyList<JsonNode>? ancestors, JsonNode rootNode)
+    {
+        var arr = new JsonArray();
+        if (ancestors is not { Count: > 0 })
+        {
+            return arr;
+        }
+
+        foreach (var ancestor in ancestors)
+        {
+            if (!ReferenceEquals(ancestor, rootNode))
+            {
+                arr.Add(ancestor.DeepClone());
+            }
+        }
+
+        return arr;
+    }
+
     private static void TraverseSegments(
         JsonNode currentNode,
         string[] segments,
         int segmentIndex,
         string currentJsonPointer,
+        List<JsonNode> ancestors,
+        int? currentIndex,
         List<ResolvedRuleTarget> accumulator)
     {
         if (segmentIndex >= segments.Length)
         {
-            accumulator.Add(new ResolvedRuleTarget(currentJsonPointer, currentNode, currentNode));
+            accumulator.Add(new ResolvedRuleTarget(
+                currentJsonPointer,
+                currentNode,
+                currentNode,
+                ancestors.ToArray(),
+                currentIndex));
             return;
         }
 
@@ -119,7 +199,12 @@ public static class RuleTargetResolver
         {
             var targetPath = $"{currentJsonPointer}/{propertyName}";
             currentObj.TryGetPropertyValue(propertyName, out var childNode);
-            accumulator.Add(new ResolvedRuleTarget(targetPath, currentNode, childNode));
+            accumulator.Add(new ResolvedRuleTarget(
+                targetPath,
+                currentNode,
+                childNode,
+                ancestors.ToArray(),
+                currentIndex));
             return;
         }
 
@@ -136,18 +221,34 @@ public static class RuleTargetResolver
         {
             if (nextNode is JsonArray arr)
             {
-                for (var i = 0; i < arr.Count; i++)
+                ancestors.Add(currentNode);
+                try
                 {
-                    if (arr[i] is { } item)
+                    for (var i = 0; i < arr.Count; i++)
                     {
-                        TraverseSegments(item, segments, segmentIndex + 1, $"{nextPointer}/{i}", accumulator);
+                        if (arr[i] is { } item)
+                        {
+                            TraverseSegments(item, segments, segmentIndex + 1, $"{nextPointer}/{i}", ancestors, i, accumulator);
+                        }
                     }
+                }
+                finally
+                {
+                    ancestors.RemoveAt(ancestors.Count - 1);
                 }
             }
         }
         else
         {
-            TraverseSegments(nextNode, segments, segmentIndex + 1, nextPointer, accumulator);
+            ancestors.Add(currentNode);
+            try
+            {
+                TraverseSegments(nextNode, segments, segmentIndex + 1, nextPointer, ancestors, currentIndex, accumulator);
+            }
+            finally
+            {
+                ancestors.RemoveAt(ancestors.Count - 1);
+            }
         }
     }
 }

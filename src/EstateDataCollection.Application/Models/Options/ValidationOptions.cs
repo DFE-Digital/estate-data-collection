@@ -12,10 +12,10 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
 
     /// <summary>
     /// Quality rule engines enabled at runtime and during schema verification.
-    /// Defaults to "jsonlogic" and "cel".
+    /// Defaults to "jsonlogic", "cel", and "unique".
     /// </summary>
     [Required]
-    public IReadOnlyList<string> EnabledEngines { get; init; } = ["jsonlogic", "cel"];
+    public IReadOnlyList<string> EnabledEngines { get; init; } = ["jsonlogic", "cel", "unique"];
 
     /// <summary>
     /// Default engine used when a rule does not explicitly specify an "engine" field.
@@ -30,13 +30,13 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
     public UnknownEngineBehavior UnknownEngineBehavior { get; init; } = UnknownEngineBehavior.Fail;
 
     /// <summary>
-    /// Whether quality rules (JsonLogic, CEL) are evaluated during draft updates (PUT /submissions/{id}).
+    /// Whether quality rules (JsonLogic, CEL, unique) are evaluated during draft updates (PUT /submissions/{id}).
     /// </summary>
     public bool RunQualityRulesOnDraftUpdate { get; init; } = true;
 
     /// <summary>
     /// Whether establishment identifier extraction is checked during draft updates (PUT /submissions/{id})
-    /// and surfaced in PendingErrors.
+    /// and surfaced in validation issues.
     /// </summary>
     public bool ValidateIdentifierOnDraftUpdate { get; init; } = true;
 
@@ -95,4 +95,15 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
     /// Maximum comprehension/loop iterations allowed per CEL evaluation.
     /// </summary>
     public int CelMaxIterations { get; init; } = 10_000;
+
+    /// <summary>
+    /// Automatic epsilon tolerance applied to floating-point comparisons to absorb binary float rounding noise
+    /// (e.g. 0.1 + 0.2 == 0.30000000000000004) without masking genuine multi-decimal mismatches like 0.001 == 0.
+    /// </summary>
+    public double FloatArtifactEpsilon { get; init; } = 1e-9;
+
+    /// <summary>
+    /// Optional global currency rounding tolerance override (e.g. 0.005m) for financial total equality checks.
+    /// </summary>
+    public decimal? CurrencyRoundingTolerance { get; init; }
 }

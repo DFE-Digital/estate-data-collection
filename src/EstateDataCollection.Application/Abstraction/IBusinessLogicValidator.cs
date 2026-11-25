@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Markers;
 using EstateDataCollection.Common.Results;
@@ -16,4 +17,12 @@ public interface IBusinessLogicValidator : IInfrastructure
         string payloadJson,
         IReadOnlyList<BusinessRule> rules,
         CancellationToken cancellationToken = default);
+
+    Task<Result<BusinessRuleValidationResult>> ValidateAsync(
+        string payloadJson,
+        IReadOnlyList<BusinessRule> rules,
+        IReadOnlyDictionary<string, JsonNode?>? additionalAmbientContext,
+        double? numericToleranceOverride = null,
+        CancellationToken cancellationToken = default)
+        => ValidateAsync(payloadJson, rules, cancellationToken);
 }

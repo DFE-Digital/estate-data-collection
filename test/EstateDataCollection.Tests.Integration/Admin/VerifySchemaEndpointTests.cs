@@ -30,7 +30,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
 
         var data = result.ShouldBeApiSuccess<GetValidationEnginesResult>(StatusCodes.Status200OK);
         data.Engines.Select(e => e.EngineId).Should().BeEquivalentTo(
-            ["json-schema", "jsonlogic", "cel", "identifier-extractor"]);
+            ["json-schema", "jsonlogic", "cel", "unique", "identifier-extractor"]);
     }
 
     [Theory]
@@ -93,7 +93,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
         var data = result.ShouldBeApiSuccess<VerifySchemaResult>(StatusCodes.Status200OK);
         data.EngineTraces.Should().NotBeNull();
         data.EngineTraces!.Select(t => t.Descriptor.EngineId).Should().BeEquivalentTo(
-            ["json-schema", "jsonlogic", "cel", "identifier-extractor"]);
+            ["json-schema", "jsonlogic", "cel", "unique", "identifier-extractor"]);
     }
 
     [Fact]

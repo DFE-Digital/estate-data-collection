@@ -38,4 +38,10 @@ public static class SubmissionProcessCatalog
 
     public static readonly SubmissionProcessDescriptor IdentifierExtractor =
         new("IdentifierExtractor", "identifier-extractor");
+
+    public static readonly SubmissionProcessDescriptor CrossSubmissionEnrichment =
+        new("CrossSubmissionEnrichment", "cross-submission-enrichment");
+
+    public static readonly SubmissionProcessDescriptor ReferenceDataEnrichment =
+        new("ReferenceDataEnrichment", "reference-data-enrichment");
 }
