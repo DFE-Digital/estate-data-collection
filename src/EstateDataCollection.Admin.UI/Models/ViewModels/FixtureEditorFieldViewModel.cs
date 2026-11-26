@@ -7,5 +7,5 @@ public sealed record FixtureEditorFieldViewModel(
     string TextareaCssClass,
     string AriaDescribedBy)
 {
-    public bool HasError => string.IsNullOrWhiteSpace(ErrorMessage);
+    public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
 }
