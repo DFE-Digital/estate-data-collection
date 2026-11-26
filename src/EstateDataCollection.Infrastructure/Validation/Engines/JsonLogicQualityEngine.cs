@@ -20,7 +20,7 @@ public sealed class JsonLogicQualityEngine(
     private static readonly object RegistryLock = new();
     private static bool _toleranceHandlersInstalled;
 
-    public static readonly ValidationEngineDescriptor EngineDescriptor = new(
+    public static readonly WorkflowEngineDescriptor EngineDescriptor = new(
         EngineId: "jsonlogic",
         DisplayName: "JsonLogic Quality Engine",
         Kind: ValidationEngineKinds.QualityRule,
@@ -34,15 +34,9 @@ public sealed class JsonLogicQualityEngine(
         EnsureToleranceComparisonHandlers();
     }
 
-    public string EngineName
-    {
-        get { return EngineDescriptor.EngineId; }
-    }
+    public string EngineName => EngineDescriptor.EngineId;
 
-    public ValidationEngineDescriptor Descriptor
-    {
-        get { return EngineDescriptor; }
-    }
+    public WorkflowEngineDescriptor Descriptor => EngineDescriptor;
 
     public IReadOnlyList<ValidationMessage> ValidateSyntax(BusinessRule rule, string ruleId)
     {

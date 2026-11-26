@@ -21,10 +21,7 @@ public sealed class SubmissionSession
     [JsonInclude]
     public string? ProcessedBundlePrefix { get; private set; }
 
-    public bool IsFinalised
-    {
-        get { return FinalisedAtUtc.HasValue; }
-    }
+    public bool IsFinalised => FinalisedAtUtc.HasValue;
 
     public static SubmissionSession Create(string schemaName, int schemaVersion)
     {

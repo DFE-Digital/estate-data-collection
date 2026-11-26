@@ -7,10 +7,7 @@ public sealed record NotificationBannerViewModel(
     string Message,
     string? Detail = null)
 {
-    public bool HasDetail
-    {
-        get { return !string.IsNullOrWhiteSpace(Detail); }
-    }
+    public bool HasDetail => !string.IsNullOrWhiteSpace(Detail);
 
     public static NotificationBannerViewModel? From(
         string variant,

@@ -8,15 +8,9 @@ public sealed record BusinessRuleValidationResult(
     IReadOnlyList<ValidationEngineTrace>? EngineTraces = null,
     IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? Issues = null)
 {
-    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> EffectiveIssues
-    {
-        get { return Issues ?? ValidationIssuesHelper.GroupBySeverity(Errors); }
-    }
+    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> EffectiveIssues => Issues ?? ValidationIssuesHelper.GroupBySeverity(Errors);
 
-    public bool IsValid
-    {
-        get { return Errors is null || Errors.Count == 0; }
-    }
+    public bool IsValid => Errors is null || Errors.Count == 0;
 
     public bool HasBlockingIssues(RuleSeverity failOnMinimumSeverity = RuleSeverity.Error)
     {

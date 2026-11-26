@@ -8,7 +8,7 @@ namespace EstateDataCollection.Application.Abstraction;
 
 public interface IPayloadValidationService : IApplication
 {
-    IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngines() => [];
+    IReadOnlyList<WorkflowEngineDescriptor> GetRegisteredEngines() => [];
 
     Task<Result<IReadOnlyList<ValidationError>>> ValidatePayloadAsync(
         string rawPayloadJson,
@@ -31,14 +31,14 @@ public interface IPayloadValidationService : IApplication
     Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceAsync(
         string rawPayloadJson,
         ResolvedSchema schema,
-        ValidationOperationKind operationKind,
+        WorkflowOperationKind operationKind,
         IReadOnlyDictionary<string, JsonNode?>? ambientFixtures = null,
         CancellationToken cancellationToken = default)
     {
         return ValidatePayloadWithTraceAsync(
             rawPayloadJson,
             schema,
-            operationKind == ValidationOperationKind.SubmissionDraft,
+            operationKind == WorkflowOperationKind.SubmissionDraft,
             cancellationToken);
     }
 }

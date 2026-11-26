@@ -22,30 +22,15 @@ public sealed record ValidationEngineDiagnosticsViewModel(
         RegisteredEngines: [],
         RegisteredSubtitle: null);
 
-    public bool HasTraces
-    {
-        get { return TraceRows.Count > 0; }
-    }
+    public bool HasTraces => TraceRows.Count > 0;
 
-    public bool HasSubtitle
-    {
-        get { return !string.IsNullOrWhiteSpace(Subtitle); }
-    }
+    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
 
-    public bool HasRegisteredEngines
-    {
-        get { return RegisteredEngines.Count > 0; }
-    }
+    public bool HasRegisteredEngines => RegisteredEngines.Count > 0;
 
-    public bool HasRegisteredSubtitle
-    {
-        get { return !string.IsNullOrWhiteSpace(RegisteredSubtitle); }
-    }
+    public bool HasRegisteredSubtitle => !string.IsNullOrWhiteSpace(RegisteredSubtitle);
 
-    public bool HasContent
-    {
-        get { return HasTraces || HasRegisteredEngines; }
-    }
+    public bool HasContent => HasTraces || HasRegisteredEngines;
 
     public static ValidationEngineDiagnosticsViewModel FromTraces(
         IReadOnlyList<ValidationEngineTrace>? traces,
@@ -68,7 +53,7 @@ public sealed record ValidationEngineDiagnosticsViewModel(
 
     public static ValidationEngineDiagnosticsViewModel FromDetail(
         IReadOnlyList<ValidationEngineTrace>? traces,
-        IReadOnlyList<ValidationEngineDescriptor>? registeredEngines,
+        IReadOnlyList<WorkflowEngineDescriptor>? registeredEngines,
         IReadOnlyList<SchemaQualityRuleSummary>? qualityRules,
         SchemaIdentifierConfig? identifierConfig,
         string traceHeading = "Last Test Run Engine Diagnostics",
@@ -135,7 +120,7 @@ public sealed record ValidationEngineDiagnosticsViewModel(
     }
 
     private static IReadOnlyList<RegisteredValidationEngineRowViewModel> MapRegisteredEngines(
-        IReadOnlyList<ValidationEngineDescriptor>? registeredEngines,
+        IReadOnlyList<WorkflowEngineDescriptor>? registeredEngines,
         IReadOnlyList<SchemaQualityRuleSummary>? qualityRules,
         SchemaIdentifierConfig? identifierConfig)
     {

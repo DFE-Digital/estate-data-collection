@@ -92,8 +92,8 @@ public sealed class GetSchemaDetailAndEnginesUseCaseTests
         var validationService = Substitute.For<IPayloadValidationService>();
         validationService.GetRegisteredEngines().Returns(
         [
-            new ValidationEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates JSON Schema"),
-            new ValidationEngineDescriptor("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule, "Evaluates CEL rules")
+            new WorkflowEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates JSON Schema"),
+            new WorkflowEngineDescriptor("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule, "Evaluates CEL rules")
         ]);
 
         var resolved = new ResolvedSchemaBuilder()
@@ -139,8 +139,8 @@ public sealed class GetSchemaDetailAndEnginesUseCaseTests
         var validationService = Substitute.For<IPayloadValidationService>();
         validationService.GetRegisteredEngines().Returns(
         [
-            new ValidationEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates JSON Schema"),
-            new ValidationEngineDescriptor("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule, "Evaluates CEL rules")
+            new WorkflowEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates JSON Schema"),
+            new WorkflowEngineDescriptor("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule, "Evaluates CEL rules")
         ]);
         var sut = new GetValidationEnginesUseCase(validationService);
 

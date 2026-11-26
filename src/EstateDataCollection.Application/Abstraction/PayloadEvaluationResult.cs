@@ -13,8 +13,5 @@ public sealed record PayloadEvaluationResult(
     IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? Issues = null,
     IReadOnlyList<ValidationError>? AllIssues = null)
 {
-    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> EffectiveIssues
-    {
-        get { return Issues ?? ValidationIssuesHelper.GroupBySeverity(AllIssues ?? ValidationErrors); }
-    }
+    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> EffectiveIssues => Issues ?? ValidationIssuesHelper.GroupBySeverity(AllIssues ?? ValidationErrors);
 }

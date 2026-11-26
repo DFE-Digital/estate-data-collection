@@ -67,7 +67,7 @@ public sealed class DashboardAndSchemaCardRenderingTests
                 engineTraces:
                 [
                     new ValidationEngineTrace(
-                        new ValidationEngineDescriptor("json-schema", "JsonSchema.Net", ValidationEngineKinds.StructuralSchema, "Schema"),
+                        new WorkflowEngineDescriptor("json-schema", "JsonSchema.Net", ValidationEngineKinds.StructuralSchema, "Schema"),
                         "Succeeded",
                         3,
                         0,

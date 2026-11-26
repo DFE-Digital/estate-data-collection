@@ -8,23 +8,14 @@ namespace EstateDataCollection.Application.Validators.Workflow.Steps;
 
 public sealed class IdentifierExtractionWorkflowStep : IWorkflowStep
 {
-    public string StepId
-    {
-        get { return WorkflowStepIds.IdentifierExtraction; }
-    }
+    public string StepId => WorkflowStepIds.IdentifierExtraction;
 
-    public SubmissionProcessDescriptor ProcessDescriptor
-    {
-        get { return SubmissionProcessCatalog.IdentifierExtractor; }
-    }
+    public SubmissionProcessDescriptor ProcessDescriptor => SubmissionProcessCatalog.IdentifierExtractor;
 
-    public ValidationEngineDescriptor EngineDescriptor
-    {
-        get { return PayloadIdentifierExtractor.Descriptor; }
-    }
+    public WorkflowEngineDescriptor EngineDescriptor => PayloadIdentifierExtractor.Descriptor;
 
     public Task<Result<WorkflowStepOutcome>> ExecuteAsync(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         CancellationToken cancellationToken = default)
     {
         var shouldCheckIdentifier = !context.IsDraftUpdate || context.Options.ValidateIdentifierOnDraftUpdate;

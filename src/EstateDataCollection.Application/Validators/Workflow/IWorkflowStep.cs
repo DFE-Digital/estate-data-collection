@@ -8,11 +8,11 @@ public interface IWorkflowStep
 {
     string StepId { get; }
     SubmissionProcessDescriptor ProcessDescriptor { get; }
-    ValidationEngineDescriptor EngineDescriptor { get; }
+    WorkflowEngineDescriptor EngineDescriptor { get; }
 
     Task<Result<WorkflowStepOutcome>> ExecuteAsync(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         CancellationToken cancellationToken = default);
 
-    void RecordSkipped(ValidationWorkflowContext context, string reason) { }
+    void RecordSkipped(WorkflowContext context, string reason) { }
 }

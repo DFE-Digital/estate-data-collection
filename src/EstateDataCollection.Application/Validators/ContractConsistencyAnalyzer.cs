@@ -36,16 +36,13 @@ public sealed partial class ContractConsistencyAnalyzer : IContractConsistencyAn
         "__edc_ancestors", "__edc_index"
     };
 
-    public static ValidationEngineDescriptor EngineDescriptor { get; } = new(
+    public static WorkflowEngineDescriptor EngineDescriptor { get; } = new(
         EngineId: EngineIdValue,
         DisplayName: "Contract Consistency Analyzer",
         Kind: ValidationEngineKinds.ContractConsistency,
         Description: "Static analyzer checking rule-to-schema paths, field casing, enum literals, DependsOn DAG/stage integrity, severity threshold inversions, and required-vs-optional conflicts.");
 
-    public ValidationEngineDescriptor Descriptor
-    {
-        get { return EngineDescriptor; }
-    }
+    public WorkflowEngineDescriptor Descriptor => EngineDescriptor;
 
     public ContractConsistencyReport Analyze(
         string? rawSchemaJson,

@@ -14,20 +14,20 @@ public sealed class PayloadValidationService(
     IBusinessLogicValidator logicValidator,
     IOptions<ValidationOptions>? options = null,
     ProcessExecutionInstrumentation? processInstrumentation = null,
-    IValidationWorkflowRunner? workflowRunner = null,
+    IWorkflowRunner? workflowRunner = null,
     IContractConsistencyAnalyzer? consistencyAnalyzer = null
 ) : IPayloadValidationService
 {
     private readonly ValidationOptions _options = options?.Value ?? new ValidationOptions();
-    private readonly IValidationWorkflowRunner _workflowRunner =
-        workflowRunner ?? ValidationWorkflowRunner.CreateDefault(schemaValidator, logicValidator, processInstrumentation);
-    private readonly ValidationEngineDescriptor _consistencyDescriptor =
+    private readonly IWorkflowRunner _workflowRunner =
+        workflowRunner ?? WorkflowRunner.CreateDefault(schemaValidator, logicValidator, processInstrumentation);
+    private readonly WorkflowEngineDescriptor _consistencyDescriptor =
         consistencyAnalyzer?.Descriptor ?? ContractConsistencyAnalyzer.EngineDescriptor;
 
-    public IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngines()
+    public IReadOnlyList<WorkflowEngineDescriptor> GetRegisteredEngines()
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var engines = new List<ValidationEngineDescriptor>();
+        var engines = new List<WorkflowEngineDescriptor>();
 
         foreach (var stepDescriptor in _workflowRunner.GetRegisteredEngineDescriptors())
         {
@@ -74,8 +74,8 @@ public sealed class PayloadValidationService(
         CancellationToken cancellationToken = default)
     {
         var operationKind = isDraftUpdate
-            ? ValidationOperationKind.SubmissionDraft
-            : ValidationOperationKind.SubmissionFinalise;
+            ? WorkflowOperationKind.SubmissionDraft
+            : WorkflowOperationKind.SubmissionFinalise;
 
         return ValidatePayloadWithTraceAsync(
             rawPayloadJson,
@@ -88,7 +88,7 @@ public sealed class PayloadValidationService(
     public Task<Result<PayloadValidationReport>> ValidatePayloadWithTraceAsync(
         string rawPayloadJson,
         ResolvedSchema schema,
-        ValidationOperationKind operationKind,
+        WorkflowOperationKind operationKind,
         IReadOnlyDictionary<string, JsonNode?>? ambientFixtures = null,
         CancellationToken cancellationToken = default)
     {
@@ -96,7 +96,7 @@ public sealed class PayloadValidationService(
             ? id
             : (Guid?)null;
 
-        var context = new ValidationWorkflowContext(
+        var context = new WorkflowContext(
             operationKind,
             schema,
             rawPayloadJson,

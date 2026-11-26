@@ -14,15 +14,10 @@ public readonly record struct SubmissionIdentifier
     public string Type { get; }
     public string Value { get; }
 
-    public int? AsPositiveInt
-    {
-        get
-        {
-            return int.TryParse(Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
-                ? parsed
-                : null;
-        }
-    }
+    public int? AsPositiveInt =>
+        int.TryParse(Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+            ? parsed
+            : null;
 
     private SubmissionIdentifier(string type, string value)
     {

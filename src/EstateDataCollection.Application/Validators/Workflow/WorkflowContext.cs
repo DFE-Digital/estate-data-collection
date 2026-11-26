@@ -8,15 +8,15 @@ using EstateDataCollection.Domain.Submission;
 
 namespace EstateDataCollection.Application.Validators.Workflow;
 
-public sealed class ValidationWorkflowContext(
-    ValidationOperationKind operationKind,
+public sealed class WorkflowContext(
+    WorkflowOperationKind operationKind,
     ResolvedSchema schema,
     string rawPayloadJson,
     ValidationOptions? options = null,
     Guid? submissionId = null,
     IReadOnlyDictionary<string, JsonNode?>? ambientFixtures = null)
 {
-    public ValidationOperationKind OperationKind { get; } = operationKind;
+    public WorkflowOperationKind OperationKind { get; } = operationKind;
     public ResolvedSchema Schema { get; } = schema;
     public string RawPayloadJson { get; } = rawPayloadJson;
     public ValidationOptions Options { get; } = options ?? new ValidationOptions();
@@ -24,10 +24,7 @@ public sealed class ValidationWorkflowContext(
     public Guid? SubmissionId { get; } = submissionId;
     public IReadOnlyDictionary<string, JsonNode?>? AmbientFixtures { get; } = ambientFixtures;
 
-    public bool IsDraftUpdate
-    {
-        get { return OperationKind == ValidationOperationKind.SubmissionDraft; }
-    }
+    public bool IsDraftUpdate => OperationKind == WorkflowOperationKind.SubmissionDraft;
 
     public double EffectiveNumericTolerance
     {
@@ -49,10 +46,7 @@ public sealed class ValidationWorkflowContext(
 
     public PayloadIdentifierExtractor.ExtractionEvaluation? IdentifierEvaluation { get; set; }
 
-    public SubmissionIdentifier? ExtractedIdentifier
-    {
-        get { return IdentifierEvaluation?.Identifier; }
-    }
+    public SubmissionIdentifier? ExtractedIdentifier => IdentifierEvaluation?.Identifier;
 
     public Dictionary<string, JsonNode?> AmbientContext { get; } = new(StringComparer.Ordinal);
 
@@ -69,10 +63,7 @@ public sealed class ValidationWorkflowContext(
         get { return AllIssues.Any(e => e.Severity == RuleSeverity.Critical); }
     }
 
-    public bool HasBlockingIssues
-    {
-        get { return ValidationIssuesHelper.HasIssuesAtOrAbove(AllIssues, Policy.FailOnMinimumSeverity); }
-    }
+    public bool HasBlockingIssues => ValidationIssuesHelper.HasIssuesAtOrAbove(AllIssues, Policy.FailOnMinimumSeverity);
 
     public bool HasStepFailed(string stepId)
     {

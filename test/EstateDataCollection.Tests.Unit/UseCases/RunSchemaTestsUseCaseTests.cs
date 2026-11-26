@@ -51,7 +51,7 @@ public sealed class RunSchemaTestsUseCaseTests
         ValidationEngineTrace[] traces =
         [
             new(
-                new ValidationEngineDescriptor("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule, "CEL expressions"),
+                new WorkflowEngineDescriptor("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule, "CEL expressions"),
                 "Succeeded",
                 ItemsEvaluated: 3,
                 ViolationCount: 0,

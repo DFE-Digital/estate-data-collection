@@ -22,29 +22,15 @@ public sealed record WorkbenchViewModel(
     WorkbenchVerifyViewModel? Verification = null,
     Error? PageError = null)
 {
-    public ErrorSummaryViewModel? ErrorSummary
-    {
-        get { return ErrorSummaryViewModel.From(PageError); }
-    }
+    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);
 
-    public bool IsJsonMode
-    {
-        get { return string.Equals(InputMode, "json", StringComparison.Ordinal); }
-    }
+    public bool IsJsonMode => string.Equals(InputMode, "json", StringComparison.Ordinal);
 
-    public bool IsOdcsMode
-    {
-        get { return !IsJsonMode; }
-    }
+    public bool IsOdcsMode => !IsJsonMode;
 
-    public bool AreFixturesExpanded
-    {
-        get
-        {
-            return !string.IsNullOrWhiteSpace(ValidFixtureJson) ||
-                   !string.IsNullOrWhiteSpace(InvalidFixtureJson);
-        }
-    }
+    public bool AreFixturesExpanded =>
+        !string.IsNullOrWhiteSpace(ValidFixtureJson) ||
+        !string.IsNullOrWhiteSpace(InvalidFixtureJson);
 
     public IdentifierConfigFieldsetViewModel IdentifierConfig
     {

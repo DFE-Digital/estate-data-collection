@@ -14,7 +14,7 @@ public class JsonSchemaNetValidator(
     IOptions<ValidationOptions>? options = null
 ) : ISchemaValidator
 {
-    public ValidationEngineDescriptor Descriptor { get; } = new(
+    public WorkflowEngineDescriptor Descriptor { get; } = new(
         EngineId: "json-schema",
         DisplayName: "JsonSchema.Net Validator",
         Kind: ValidationEngineKinds.StructuralSchema,

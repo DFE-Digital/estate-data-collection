@@ -34,10 +34,7 @@ public sealed record SchemaIdentifierConfig
     public bool? Required { get; init; }
 
     [JsonIgnore]
-    public bool IsDisabled
-    {
-        get { return string.Equals(Type?.Trim(), NoneType, StringComparison.OrdinalIgnoreCase); }
-    }
+    public bool IsDisabled => string.Equals(Type?.Trim(), NoneType, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Validates structural invariants of this identifier configuration (type label and pointer syntax).

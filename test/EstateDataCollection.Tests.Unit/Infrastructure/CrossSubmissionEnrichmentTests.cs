@@ -60,7 +60,7 @@ public sealed class CrossSubmissionEnrichmentTests
         indexRepo.ReadSiblingPayloadAsync(finalisedSibling, Arg.Any<CancellationToken>())
             .Returns(Result<string?>.Success("""{"blocks":[{"id":"BLK-B"}]}"""));
 
-        var runner = ValidationWorkflowRunner.CreateDefault(
+        var runner = WorkflowRunner.CreateDefault(
             new JsonSchemaNetValidator(),
             new QualityRuleCoordinator(),
             identifierIndexRepository: indexRepo);
@@ -108,7 +108,7 @@ public sealed class CrossSubmissionEnrichmentTests
         var report = (await service.ValidatePayloadWithTraceAsync(
             ValidPayload,
             schema,
-            ValidationOperationKind.SubmissionDraft)).ShouldSucceed();
+            WorkflowOperationKind.SubmissionDraft)).ShouldSucceed();
 
         // Assert
         report.Errors.Should().BeEmpty();
@@ -132,7 +132,7 @@ public sealed class CrossSubmissionEnrichmentTests
         var report = (await service.ValidatePayloadWithTraceAsync(
             ValidPayload,
             schema,
-            ValidationOperationKind.SubmissionFinalise)).ShouldSucceed();
+            WorkflowOperationKind.SubmissionFinalise)).ShouldSucceed();
 
         // Assert
         report.Errors.Should().ContainSingle(e =>
@@ -157,7 +157,7 @@ public sealed class CrossSubmissionEnrichmentTests
         var report = (await service.ValidatePayloadWithTraceAsync(
             ValidPayload,
             schema,
-            ValidationOperationKind.SubmissionFinalise)).ShouldSucceed();
+            WorkflowOperationKind.SubmissionFinalise)).ShouldSucceed();
 
         // Assert
         report.Errors.Should().BeEmpty();
@@ -181,7 +181,7 @@ public sealed class CrossSubmissionEnrichmentTests
         var report = (await service.ValidatePayloadWithTraceAsync(
             ValidPayload,
             schema,
-            ValidationOperationKind.SubmissionFinalise)).ShouldSucceed();
+            WorkflowOperationKind.SubmissionFinalise)).ShouldSucceed();
 
         // Assert
         report.Errors.Should().ContainSingle(e => e.RuleId == "CrossSubmission.DraftReferenceWarning");
@@ -202,7 +202,7 @@ public sealed class CrossSubmissionEnrichmentTests
         var report = (await service.ValidatePayloadWithTraceAsync(
             ValidPayload,
             schema,
-            ValidationOperationKind.SubmissionFinalise)).ShouldSucceed();
+            WorkflowOperationKind.SubmissionFinalise)).ShouldSucceed();
 
         // Assert
         report.Errors.Should().BeEmpty();

@@ -9,42 +9,22 @@ public sealed record SubmissionsViewModel(
     GetSubmissionsResult? Result,
     Error? PageError = null)
 {
-    public ErrorSummaryViewModel? ErrorSummary
-    {
-        get { return ErrorSummaryViewModel.From(PageError); }
-    }
+    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);
 
-    public string SelectedSchemaName
-    {
-        get { return Result?.SchemaName ?? string.Empty; }
-    }
+    public string SelectedSchemaName => Result?.SchemaName ?? string.Empty;
 
-    public string SelectedVersionDisplay
-    {
-        get { return Result?.SchemaVersion?.ToString(CultureInfo.InvariantCulture) ?? string.Empty; }
-    }
+    public string SelectedVersionDisplay => Result?.SchemaVersion?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
 
-    public string SelectedStatus
-    {
-        get { return Result?.Status ?? "All"; }
-    }
+    public string SelectedStatus => Result?.Status ?? "All";
 
-    public string SearchQuery
-    {
-        get { return Result?.Query ?? string.Empty; }
-    }
+    public string SearchQuery => Result?.Query ?? string.Empty;
 
-    public bool HasActiveFilters
-    {
-        get
-        {
-            return !string.IsNullOrWhiteSpace(SelectedSchemaName) ||
-                   Result?.SchemaVersion is not null ||
-                   (!string.IsNullOrWhiteSpace(SelectedStatus) &&
-                    !string.Equals(SelectedStatus, "All", StringComparison.OrdinalIgnoreCase)) ||
-                   !string.IsNullOrWhiteSpace(SearchQuery);
-        }
-    }
+    public bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(SelectedSchemaName) ||
+        Result?.SchemaVersion is not null ||
+        (!string.IsNullOrWhiteSpace(SelectedStatus) &&
+         !string.Equals(SelectedStatus, "All", StringComparison.OrdinalIgnoreCase)) ||
+        !string.IsNullOrWhiteSpace(SearchQuery);
 
     public IReadOnlyList<SelectSchemaFilterOptionViewModel> SchemaOptions
     {
@@ -96,15 +76,9 @@ public sealed record SubmissionsViewModel(
 
     private IReadOnlyList<SubmissionListItemViewModel>? _items;
 
-    public bool HasItems
-    {
-        get { return Items.Count > 0; }
-    }
+    public bool HasItems => Items.Count > 0;
 
-    public int TotalCount
-    {
-        get { return Items.Count; }
-    }
+    public int TotalCount => Items.Count;
 
     public int DraftCount
     {

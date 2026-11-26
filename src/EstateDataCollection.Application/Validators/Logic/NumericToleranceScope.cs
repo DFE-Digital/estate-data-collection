@@ -9,10 +9,7 @@ public static class NumericToleranceScope
 {
     private static readonly AsyncLocal<double?> CurrentTolerance = new();
 
-    public static double? Current
-    {
-        get { return CurrentTolerance.Value; }
-    }
+    public static double? Current => CurrentTolerance.Value;
 
     public static IDisposable Push(double? tolerance)
     {

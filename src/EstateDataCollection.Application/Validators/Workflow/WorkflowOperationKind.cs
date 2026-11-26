@@ -1,6 +1,6 @@
 namespace EstateDataCollection.Application.Validators.Workflow;
 
-public enum ValidationOperationKind
+public enum WorkflowOperationKind
 {
     SubmissionDraft = 0,
     SubmissionFinalise = 1,

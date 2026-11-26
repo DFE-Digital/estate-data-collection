@@ -8,59 +8,30 @@ public sealed record WorkbenchVerifyViewModel(
     VerifySchemaResult? Result = null,
     Error? Error = null)
 {
-    public bool ShowPanel
-    {
-        get { return HasRun; }
-    }
+    public bool ShowPanel => HasRun;
 
-    public bool HasError
-    {
-        get { return HasRun && Error is not null; }
-    }
+    public bool HasError => HasRun && Error is not null;
 
-    public ErrorSummaryViewModel? ErrorSummary
-    {
-        get { return ErrorSummaryViewModel.From(Error); }
-    }
+    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(Error);
 
-    public bool HasResult
-    {
-        get { return HasRun && Error is null && Result is not null; }
-    }
+    public bool HasResult => HasRun && Error is null && Result is not null;
 
-    public bool HasReport
-    {
-        get { return HasRun && Result is not null; }
-    }
+    public bool HasReport => HasRun && Result is not null;
 
-    public NotificationBannerViewModel? SuccessBanner
-    {
-        get
-        {
-            return Result is null
-                ? null
-                : NotificationBannerViewModel.Success(
-                    message: Result.Message,
-                    title: "Verification passed",
-                    detail:
-                    "Contract syntax, identifier alignment, quality rules, and any provided sample fixtures passed dry-run verification.");
-        }
-    }
+    public NotificationBannerViewModel? SuccessBanner =>
+        Result is null
+            ? null
+            : NotificationBannerViewModel.Success(
+                message: Result.Message,
+                title: "Verification passed",
+                detail:
+                "Contract syntax, identifier alignment, quality rules, and any provided sample fixtures passed dry-run verification.");
 
-    public bool HasWarnings
-    {
-        get { return Result?.Warnings is { Count: > 0 }; }
-    }
+    public bool HasWarnings => Result?.Warnings is { Count: > 0 };
 
-    public int WarningCount
-    {
-        get { return Result?.Warnings?.Count ?? 0; }
-    }
+    public int WarningCount => Result?.Warnings?.Count ?? 0;
 
-    public IReadOnlyList<string> Warnings
-    {
-        get { return Result?.Warnings ?? []; }
-    }
+    public IReadOnlyList<string> Warnings => Result?.Warnings ?? [];
 
     public bool AllWarningsAreUnknownInvalidFixtures
     {
@@ -76,10 +47,7 @@ public sealed record WorkbenchVerifyViewModel(
         }
     }
 
-    public bool ShowWarningBullets
-    {
-        get { return HasWarnings && !AllWarningsAreUnknownInvalidFixtures; }
-    }
+    public bool ShowWarningBullets => HasWarnings && !AllWarningsAreUnknownInvalidFixtures;
 
     public IReadOnlyList<SeverityIssueGroupViewModel> IssueGroups
     {
@@ -88,10 +56,7 @@ public sealed record WorkbenchVerifyViewModel(
 
     private IReadOnlyList<SeverityIssueGroupViewModel>? _issueGroups;
 
-    public bool HasIssueGroups
-    {
-        get { return IssueGroups.Count > 0; }
-    }
+    public bool HasIssueGroups => IssueGroups.Count > 0;
 
     public IReadOnlyList<ValidationErrorItemViewModel> AnalyzerFindings
     {
@@ -105,35 +70,17 @@ public sealed record WorkbenchVerifyViewModel(
 
     private IReadOnlyList<ValidationErrorItemViewModel>? _analyzerFindings;
 
-    public bool HasAnalyzerFindings
-    {
-        get { return AnalyzerFindings.Count > 0; }
-    }
+    public bool HasAnalyzerFindings => AnalyzerFindings.Count > 0;
 
-    public IReadOnlyList<string> SyntaxErrors
-    {
-        get { return Result?.SyntaxErrors ?? []; }
-    }
+    public IReadOnlyList<string> SyntaxErrors => Result?.SyntaxErrors ?? [];
 
-    public bool HasSyntaxErrors
-    {
-        get { return SyntaxErrors.Count > 0; }
-    }
+    public bool HasSyntaxErrors => SyntaxErrors.Count > 0;
 
-    public IReadOnlyList<string> FixtureErrors
-    {
-        get { return Result?.FixtureErrors ?? []; }
-    }
+    public IReadOnlyList<string> FixtureErrors => Result?.FixtureErrors ?? [];
 
-    public bool HasFixtureErrors
-    {
-        get { return FixtureErrors.Count > 0; }
-    }
+    public bool HasFixtureErrors => FixtureErrors.Count > 0;
 
-    public bool HasInvalidFixtureOutcomes
-    {
-        get { return Result?.InvalidFixtureOutcomes is { Count: > 0 }; }
-    }
+    public bool HasInvalidFixtureOutcomes => Result?.InvalidFixtureOutcomes is { Count: > 0 };
 
     public IReadOnlyList<VerifyInvalidOutcomeViewModel> InvalidFixtureOutcomes
     {
@@ -155,35 +102,17 @@ public sealed record WorkbenchVerifyViewModel(
 
     private ValidationEngineDiagnosticsViewModel? _engineDiagnostics;
 
-    public bool HasResolvedIdentifierConfig
-    {
-        get { return Result?.ResolvedIdentifierConfig is not null; }
-    }
+    public bool HasResolvedIdentifierConfig => Result?.ResolvedIdentifierConfig is not null;
 
-    public bool IsIdentifierDisabled
-    {
-        get { return Result?.ResolvedIdentifierConfig?.IsDisabled == true; }
-    }
+    public bool IsIdentifierDisabled => Result?.ResolvedIdentifierConfig?.IsDisabled == true;
 
-    public bool IsIdentifierEnabled
-    {
-        get { return Result?.ResolvedIdentifierConfig is { IsDisabled: false }; }
-    }
+    public bool IsIdentifierEnabled => Result?.ResolvedIdentifierConfig is { IsDisabled: false };
 
-    public string IdentifierType
-    {
-        get { return Result?.ResolvedIdentifierConfig?.Type ?? string.Empty; }
-    }
+    public string IdentifierType => Result?.ResolvedIdentifierConfig?.Type ?? string.Empty;
 
-    public string IdentifierPointerDisplay
-    {
-        get { return Result?.ResolvedIdentifierConfig?.JsonPointer ?? "default"; }
-    }
+    public string IdentifierPointerDisplay => Result?.ResolvedIdentifierConfig?.JsonPointer ?? "default";
 
-    public string IdentifierRequiredDisplay
-    {
-        get { return Result?.ResolvedIdentifierConfig?.Required == true ? "Yes" : "No"; }
-    }
+    public string IdentifierRequiredDisplay => Result?.ResolvedIdentifierConfig?.Required == true ? "Yes" : "No";
 
     public GovUkTabsViewModel Tabs
     {
@@ -200,38 +129,21 @@ public sealed record WorkbenchVerifyViewModel(
 
     private GovUkTabsViewModel? _tabs;
 
-    public bool ShowTabs
-    {
-        get { return Tabs.Tabs.Count > 1; }
-    }
+    public bool ShowTabs => Tabs.Tabs.Count > 1;
 
-    public bool HasSummaryDetails
-    {
-        get
-        {
-            return HasIssueGroups ||
-                   HasAnalyzerFindings ||
-                   HasSyntaxErrors ||
-                   HasFixtureErrors ||
-                   HasInvalidFixtureOutcomes ||
-                   HasResolvedIdentifierConfig;
-        }
-    }
+    public bool HasSummaryDetails =>
+        HasIssueGroups ||
+        HasAnalyzerFindings ||
+        HasSyntaxErrors ||
+        HasFixtureErrors ||
+        HasInvalidFixtureOutcomes ||
+        HasResolvedIdentifierConfig;
 
-    public bool NoSummaryDetails
-    {
-        get { return !HasSummaryDetails; }
-    }
+    public bool NoSummaryDetails => !HasSummaryDetails;
 
-    public GovUkTabItemViewModel? SummaryTab
-    {
-        get { return Tabs.Find("verify-summary"); }
-    }
+    public GovUkTabItemViewModel? SummaryTab => Tabs.Find("verify-summary");
 
-    public GovUkTabItemViewModel? EngineDiagnosticsTab
-    {
-        get { return Tabs.Find("verify-engine-diagnostics"); }
-    }
+    public GovUkTabItemViewModel? EngineDiagnosticsTab => Tabs.Find("verify-engine-diagnostics");
 
     private IReadOnlyList<VerifyInvalidOutcomeViewModel> BuildInvalidFixtureOutcomes()
     {

@@ -30,7 +30,7 @@ public sealed class SchemaVersionDetailBuilder
     private List<InvalidFixtureOutcome>? _lastTestRunInvalidFixtures;
     private List<string>? _lastTestRunWarnings;
     private List<ValidationEngineTrace>? _lastTestRunEngineTraces;
-    private List<ValidationEngineDescriptor>? _registeredEngines;
+    private List<WorkflowEngineDescriptor>? _registeredEngines;
 
     public SchemaVersionDetailBuilder WithSchema(string schemaName, int version = 1)
     {
@@ -262,7 +262,7 @@ public sealed class SchemaVersionDetailBuilder
     {
         _lastTestRunEngineTraces ??= [];
         _lastTestRunEngineTraces.Add(new ValidationEngineTrace(
-            new ValidationEngineDescriptor(
+            new WorkflowEngineDescriptor(
                 engineId,
                 displayName,
                 kind,
@@ -282,7 +282,7 @@ public sealed class SchemaVersionDetailBuilder
         string? description = null)
     {
         _registeredEngines ??= [];
-        _registeredEngines.Add(new ValidationEngineDescriptor(
+        _registeredEngines.Add(new WorkflowEngineDescriptor(
             engineId,
             displayName,
             kind,

@@ -6,16 +6,16 @@ using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.Validators.Workflow;
 
-public sealed class ValidationWorkflowRunner : IValidationWorkflowRunner
+public sealed class WorkflowRunner : IWorkflowRunner
 {
     private readonly Dictionary<string, IWorkflowStep> _stepsById;
-    private readonly Dictionary<(ValidationOperationKind OperationKind, string PipelineKey), ValidationWorkflowDefinition> _definitions;
+    private readonly Dictionary<(WorkflowOperationKind OperationKind, string PipelineKey), WorkflowDefinition> _definitions;
     private readonly ProcessExecutionInstrumentation? _processInstrumentation;
-    private readonly IReadOnlyList<ValidationEngineDescriptor> _engineDescriptors;
+    private readonly IReadOnlyList<WorkflowEngineDescriptor> _engineDescriptors;
 
-    public ValidationWorkflowRunner(
+    public WorkflowRunner(
         IEnumerable<IWorkflowStep> steps,
-        IEnumerable<ValidationWorkflowDefinition>? definitions = null,
+        IEnumerable<WorkflowDefinition>? definitions = null,
         ProcessExecutionInstrumentation? processInstrumentation = null)
     {
         _processInstrumentation = processInstrumentation;
@@ -26,7 +26,7 @@ public sealed class ValidationWorkflowRunner : IValidationWorkflowRunner
             _stepsById[step.StepId] = step;
         }
 
-        _definitions = new Dictionary<(ValidationOperationKind, string), ValidationWorkflowDefinition>();
+        _definitions = new Dictionary<(WorkflowOperationKind, string), WorkflowDefinition>();
 
         // Register built-in Default pipelines
         RegisterDefaultDefinitions();
@@ -37,7 +37,7 @@ public sealed class ValidationWorkflowRunner : IValidationWorkflowRunner
             foreach (var def in definitions)
             {
                 var key = string.IsNullOrWhiteSpace(def.PipelineKey)
-                    ? ValidationWorkflowDefinition.DefaultPipelineKey
+                    ? WorkflowDefinition.DefaultPipelineKey
                     : def.PipelineKey.Trim();
                 _definitions[(def.OperationKind, key)] = def;
             }
@@ -46,7 +46,7 @@ public sealed class ValidationWorkflowRunner : IValidationWorkflowRunner
         _engineDescriptors = BuildEngineDescriptors(_stepsById.Values);
     }
 
-    public static ValidationWorkflowRunner CreateDefault(
+    public static WorkflowRunner CreateDefault(
         ISchemaValidator schemaValidator,
         IBusinessLogicValidator logicValidator,
         ProcessExecutionInstrumentation? processInstrumentation = null,
@@ -71,20 +71,20 @@ public sealed class ValidationWorkflowRunner : IValidationWorkflowRunner
 
         steps.Add(new QualityRulesWorkflowStep(logicValidator));
 
-        return new ValidationWorkflowRunner(steps, definitions: null, processInstrumentation);
+        return new WorkflowRunner(steps, definitions: null, processInstrumentation);
     }
 
-    public IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngineDescriptors()
+    public IReadOnlyList<WorkflowEngineDescriptor> GetRegisteredEngineDescriptors()
     {
         return _engineDescriptors;
     }
 
     public async Task<Result<PayloadValidationReport>> RunAsync(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         CancellationToken cancellationToken = default)
     {
         var pipelineKey = string.IsNullOrWhiteSpace(context.Policy.WorkflowPipelineKey)
-            ? ValidationWorkflowDefinition.DefaultPipelineKey
+            ? WorkflowDefinition.DefaultPipelineKey
             : context.Policy.WorkflowPipelineKey.Trim();
 
         if (!_definitions.TryGetValue((context.OperationKind, pipelineKey), out var definition))
@@ -155,34 +155,34 @@ public sealed class ValidationWorkflowRunner : IValidationWorkflowRunner
 
     private void RegisterDefaultDefinitions()
     {
-        _definitions[(ValidationOperationKind.SubmissionDraft, ValidationWorkflowDefinition.DefaultPipelineKey)] =
-            new ValidationWorkflowDefinition(
-                ValidationOperationKind.SubmissionDraft,
-                ValidationWorkflowDefinition.DefaultPipelineKey,
-                ValidationWorkflowDefinition.DefaultSubmissionSteps);
+        _definitions[(WorkflowOperationKind.SubmissionDraft, WorkflowDefinition.DefaultPipelineKey)] =
+            new WorkflowDefinition(
+                WorkflowOperationKind.SubmissionDraft,
+                WorkflowDefinition.DefaultPipelineKey,
+                WorkflowDefinition.DefaultSubmissionSteps);
 
-        _definitions[(ValidationOperationKind.SubmissionFinalise, ValidationWorkflowDefinition.DefaultPipelineKey)] =
-            new ValidationWorkflowDefinition(
-                ValidationOperationKind.SubmissionFinalise,
-                ValidationWorkflowDefinition.DefaultPipelineKey,
-                ValidationWorkflowDefinition.DefaultSubmissionSteps);
+        _definitions[(WorkflowOperationKind.SubmissionFinalise, WorkflowDefinition.DefaultPipelineKey)] =
+            new WorkflowDefinition(
+                WorkflowOperationKind.SubmissionFinalise,
+                WorkflowDefinition.DefaultPipelineKey,
+                WorkflowDefinition.DefaultSubmissionSteps);
 
-        _definitions[(ValidationOperationKind.SchemaVerify, ValidationWorkflowDefinition.DefaultPipelineKey)] =
-            new ValidationWorkflowDefinition(
-                ValidationOperationKind.SchemaVerify,
-                ValidationWorkflowDefinition.DefaultPipelineKey,
-                ValidationWorkflowDefinition.DefaultSubmissionSteps);
+        _definitions[(WorkflowOperationKind.SchemaVerify, WorkflowDefinition.DefaultPipelineKey)] =
+            new WorkflowDefinition(
+                WorkflowOperationKind.SchemaVerify,
+                WorkflowDefinition.DefaultPipelineKey,
+                WorkflowDefinition.DefaultSubmissionSteps);
 
-        _definitions[(ValidationOperationKind.SchemaIngest, ValidationWorkflowDefinition.DefaultPipelineKey)] =
-            new ValidationWorkflowDefinition(
-                ValidationOperationKind.SchemaIngest,
-                ValidationWorkflowDefinition.DefaultPipelineKey,
-                ValidationWorkflowDefinition.DefaultSubmissionSteps);
+        _definitions[(WorkflowOperationKind.SchemaIngest, WorkflowDefinition.DefaultPipelineKey)] =
+            new WorkflowDefinition(
+                WorkflowOperationKind.SchemaIngest,
+                WorkflowDefinition.DefaultPipelineKey,
+                WorkflowDefinition.DefaultSubmissionSteps);
     }
 
     private static bool ShouldRunBinding(
         WorkflowStepBinding binding,
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         bool previousStepSucceeded,
         out string? skipReason)
     {
@@ -217,9 +217,9 @@ public sealed class ValidationWorkflowRunner : IValidationWorkflowRunner
         }
     }
 
-    private static IReadOnlyList<ValidationEngineDescriptor> BuildEngineDescriptors(IEnumerable<IWorkflowStep> steps)
+    private static IReadOnlyList<WorkflowEngineDescriptor> BuildEngineDescriptors(IEnumerable<IWorkflowStep> steps)
     {
-        var list = new List<ValidationEngineDescriptor>();
+        var list = new List<WorkflowEngineDescriptor>();
         foreach (var step in steps)
         {
             if (string.Equals(step.StepId, WorkflowStepIds.QualityRules, StringComparison.OrdinalIgnoreCase))

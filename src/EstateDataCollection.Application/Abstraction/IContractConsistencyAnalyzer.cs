@@ -11,7 +11,7 @@ public sealed record ContractConsistencyReport(
 
 public interface IContractConsistencyAnalyzer : IApplication
 {
-    ValidationEngineDescriptor Descriptor { get; }
+    WorkflowEngineDescriptor Descriptor { get; }
 
     ContractConsistencyReport Analyze(
         string? rawSchemaJson,

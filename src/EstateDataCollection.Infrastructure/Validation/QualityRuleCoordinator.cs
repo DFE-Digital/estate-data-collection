@@ -21,7 +21,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly FrozenDictionary<string, IQualityRuleEngine> _engines;
-    private readonly IReadOnlyList<ValidationEngineDescriptor> _registeredDescriptors;
+    private readonly IReadOnlyList<WorkflowEngineDescriptor> _registeredDescriptors;
     private readonly FrozenSet<string> _enabledEngines;
     private readonly IReadOnlyList<IRuleContextEnricher> _contextEnrichers;
     private readonly ValidationOptions _options;
@@ -78,7 +78,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
     {
     }
 
-    public IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngines()
+    public IReadOnlyList<WorkflowEngineDescriptor> GetRegisteredEngines()
     {
         return _registeredDescriptors;
     }
@@ -237,7 +237,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
             var resolvedRules = new List<ResolvedRuleEntry>(rules.Count);
             var traceAccumulators = new Dictionary<string, EngineTraceAccumulator>(StringComparer.OrdinalIgnoreCase);
 
-            EngineTraceAccumulator GetOrCreateAccumulator(ValidationEngineDescriptor descriptor)
+            EngineTraceAccumulator GetOrCreateAccumulator(WorkflowEngineDescriptor descriptor)
             {
                 if (!traceAccumulators.TryGetValue(descriptor.EngineId, out var acc))
                 {

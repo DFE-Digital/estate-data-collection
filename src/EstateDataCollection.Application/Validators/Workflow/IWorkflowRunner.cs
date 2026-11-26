@@ -4,11 +4,11 @@ using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.Validators.Workflow;
 
-public interface IValidationWorkflowRunner : IApplication
+public interface IWorkflowRunner : IApplication
 {
-    IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngineDescriptors();
+    IReadOnlyList<WorkflowEngineDescriptor> GetRegisteredEngineDescriptors();
 
     Task<Result<PayloadValidationReport>> RunAsync(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         CancellationToken cancellationToken = default);
 }

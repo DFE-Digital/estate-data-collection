@@ -21,15 +21,15 @@ public sealed class WorkflowPipelineRoutingTests
     private static (PayloadValidationService Service, SpyWorkflowStep SpyStep) CreateServiceWithCustomPipeline()
     {
         var customStep = new SpyWorkflowStep("custom-fast-step");
-        var customDef = new ValidationWorkflowDefinition(
-            ValidationOperationKind.SubmissionFinalise,
+        var customDef = new WorkflowDefinition(
+            WorkflowOperationKind.SubmissionFinalise,
             "CustomFast",
             [
                 new WorkflowStepBinding(WorkflowStepIds.JsonSchema),
                 new WorkflowStepBinding("custom-fast-step", WorkflowStepCondition.PreviousStepSucceeded)
             ]);
 
-        var runner = new ValidationWorkflowRunner(
+        var runner = new WorkflowRunner(
             [
                 new JsonSchemaWorkflowStep(new JsonSchemaNetValidator()),
                 new IdentifierExtractionWorkflowStep(),
@@ -109,9 +109,9 @@ public sealed class WorkflowPipelineRoutingTests
         public int Invocations { get; private set; }
         public string StepId => stepId;
         public SubmissionProcessDescriptor ProcessDescriptor => new("SpyStep", "spy");
-        public ValidationEngineDescriptor EngineDescriptor => new("spy", "Spy", ValidationEngineKinds.QualityRule, "Spy step");
+        public WorkflowEngineDescriptor EngineDescriptor => new("spy", "Spy", ValidationEngineKinds.QualityRule, "Spy step");
 
-        public Task<Result<WorkflowStepOutcome>> ExecuteAsync(ValidationWorkflowContext context, CancellationToken cancellationToken = default)
+        public Task<Result<WorkflowStepOutcome>> ExecuteAsync(WorkflowContext context, CancellationToken cancellationToken = default)
         {
             Invocations++;
             return Task.FromResult(SubmissionExecutionScope.StepSync(

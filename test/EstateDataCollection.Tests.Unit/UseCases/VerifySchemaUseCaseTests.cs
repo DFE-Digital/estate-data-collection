@@ -28,7 +28,7 @@ public class VerifySchemaUseCaseTests
         ValidationEngineTrace[] traces =
         [
             new(
-                new ValidationEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates structure"),
+                new WorkflowEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates structure"),
                 "Succeeded",
                 ItemsEvaluated: 3,
                 ViolationCount: 0,

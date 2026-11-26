@@ -4,7 +4,7 @@ namespace EstateDataCollection.Application.Abstraction;
 /// Declarative self-description emitted by an isolated validation engine so callers,
 /// telemetry, and admin tooling can inspect active engines without runtime reflection.
 /// </summary>
-public sealed record ValidationEngineDescriptor(
+public sealed record WorkflowEngineDescriptor(
     string EngineId,
     string DisplayName,
     string Kind,

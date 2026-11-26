@@ -10,30 +10,19 @@ public sealed class JsonSchemaWorkflowStep(
     ISchemaValidator schemaValidator
 ) : IWorkflowStep
 {
-    public string StepId
-    {
-        get { return WorkflowStepIds.JsonSchema; }
-    }
+    public string StepId => WorkflowStepIds.JsonSchema;
 
-    public SubmissionProcessDescriptor ProcessDescriptor
-    {
-        get { return SubmissionProcessCatalog.JsonSchemaValidator; }
-    }
+    public SubmissionProcessDescriptor ProcessDescriptor => SubmissionProcessCatalog.JsonSchemaValidator;
 
-    public ValidationEngineDescriptor EngineDescriptor
-    {
-        get
-        {
-            return schemaValidator.Descriptor ?? new ValidationEngineDescriptor(
-                "json-schema",
-                "JSON Schema Validator",
-                ValidationEngineKinds.StructuralSchema,
-                "Structural JSON Schema validator.");
-        }
-    }
+    public WorkflowEngineDescriptor EngineDescriptor =>
+        schemaValidator.Descriptor ?? new WorkflowEngineDescriptor(
+            "json-schema",
+            "JSON Schema Validator",
+            ValidationEngineKinds.StructuralSchema,
+            "Structural JSON Schema validator.");
 
     public async Task<Result<WorkflowStepOutcome>> ExecuteAsync(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         CancellationToken cancellationToken = default)
     {
         var schemaStart = Stopwatch.GetTimestamp();

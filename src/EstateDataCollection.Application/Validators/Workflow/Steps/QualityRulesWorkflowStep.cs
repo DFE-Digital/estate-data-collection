@@ -9,30 +9,19 @@ public sealed class QualityRulesWorkflowStep(
     IBusinessLogicValidator logicValidator
 ) : IWorkflowStep
 {
-    public string StepId
-    {
-        get { return WorkflowStepIds.QualityRules; }
-    }
+    public string StepId => WorkflowStepIds.QualityRules;
 
-    public SubmissionProcessDescriptor ProcessDescriptor
-    {
-        get { return SubmissionProcessCatalog.QualityRulesValidator; }
-    }
+    public SubmissionProcessDescriptor ProcessDescriptor => SubmissionProcessCatalog.QualityRulesValidator;
 
-    public ValidationEngineDescriptor EngineDescriptor
-    {
-        get
-        {
-            return new ValidationEngineDescriptor(
-                WorkflowStepIds.QualityRules,
-                "Quality Rules Coordinator",
-                ValidationEngineKinds.QualityRule,
-                "Coordinates ordered quality rule execution across registered engines.");
-        }
-    }
+    public WorkflowEngineDescriptor EngineDescriptor =>
+        new(
+            WorkflowStepIds.QualityRules,
+            "Quality Rules Coordinator",
+            ValidationEngineKinds.QualityRule,
+            "Coordinates ordered quality rule execution across registered engines.");
 
     public async Task<Result<WorkflowStepOutcome>> ExecuteAsync(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         CancellationToken cancellationToken = default)
     {
         if (context.Schema.Rules is not { Count: > 0 } rules)
@@ -112,7 +101,7 @@ public sealed class QualityRulesWorkflowStep(
         return new WorkflowStepOutcome(Succeeded: !hasBlocking);
     }
 
-    public void RecordSkipped(ValidationWorkflowContext context, string reason)
+    public void RecordSkipped(WorkflowContext context, string reason)
     {
         if (context.Schema.Rules is not { Count: > 0 } rules)
         {
@@ -128,7 +117,7 @@ public sealed class QualityRulesWorkflowStep(
     }
 
     private void RecordSkippedInternal(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         IReadOnlyList<Logic.BusinessRule> rules,
         string[] distinctEngines,
         string engineList,
@@ -155,7 +144,7 @@ public sealed class QualityRulesWorkflowStep(
         }
     }
 
-    private ValidationEngineDescriptor ResolveRuleEngineDescriptor(string engineId)
+    private WorkflowEngineDescriptor ResolveRuleEngineDescriptor(string engineId)
     {
         var registered = logicValidator.GetRegisteredEngines();
         if (registered is not null)
@@ -169,7 +158,7 @@ public sealed class QualityRulesWorkflowStep(
             }
         }
 
-        return new ValidationEngineDescriptor(
+        return new WorkflowEngineDescriptor(
             EngineId: engineId,
             DisplayName: engineId,
             Kind: ValidationEngineKinds.QualityRule,

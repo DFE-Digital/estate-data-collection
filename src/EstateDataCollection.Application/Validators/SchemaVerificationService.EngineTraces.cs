@@ -348,9 +348,9 @@ public sealed partial class SchemaVerificationService
             : baseSummary;
     }
 
-    private sealed class EngineRunState(ValidationEngineDescriptor descriptor)
+    private sealed class EngineRunState(WorkflowEngineDescriptor descriptor)
     {
-        public ValidationEngineDescriptor Descriptor { get; } = descriptor;
+        public WorkflowEngineDescriptor Descriptor { get; } = descriptor;
         public int RuleCount { get; set; }
         public int ItemsEvaluated { get; set; }
         public int ViolationCount { get; set; }
@@ -361,9 +361,6 @@ public sealed partial class SchemaVerificationService
         public bool HasFailure { get; set; }
         public string? FirstIssue { get; set; }
 
-        public long TotalDurationMs
-        {
-            get { return (long)Stopwatch.GetElapsedTime(0, ElapsedTicks).TotalMilliseconds + ExplicitDurationMs; }
-        }
+        public long TotalDurationMs => (long)Stopwatch.GetElapsedTime(0, ElapsedTicks).TotalMilliseconds + ExplicitDurationMs;
     }
 }

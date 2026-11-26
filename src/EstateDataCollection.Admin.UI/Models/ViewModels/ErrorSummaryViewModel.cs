@@ -7,10 +7,7 @@ public sealed record ErrorSummaryViewModel(
     string Description,
     IReadOnlyList<ValidationErrorItemViewModel> ValidationErrors)
 {
-    public bool HasValidationErrors
-    {
-        get { return ValidationErrors.Count > 0; }
-    }
+    public bool HasValidationErrors => ValidationErrors.Count > 0;
 
     public static ErrorSummaryViewModel? From(Error? error)
     {

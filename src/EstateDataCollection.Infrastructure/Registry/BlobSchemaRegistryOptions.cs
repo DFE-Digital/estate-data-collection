@@ -4,10 +4,7 @@ namespace EstateDataCollection.Infrastructure.Registry;
 
 public class BlobSchemaRegistryOptions : Common.Markers.IOption<BlobSchemaRegistryOptions>
 {
-    public static string SectionName
-    {
-        get { return "Blob:Schema"; }
-    }
+    public static string SectionName => "Blob:Schema";
 
     [Required, MinLength(1)]
     public string ContainerName { get; init; } = "schemas";

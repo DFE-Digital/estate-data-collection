@@ -31,13 +31,13 @@ public sealed class DashboardAndCatalogueViewModelTests
                 engineTraces:
                 [
                     new ValidationEngineTrace(
-                        new ValidationEngineDescriptor("json-schema", "JSON Schema", ValidationEngineKinds.StructuralSchema, "Schema"),
+                        new WorkflowEngineDescriptor("json-schema", "JSON Schema", ValidationEngineKinds.StructuralSchema, "Schema"),
                         "Succeeded",
                         2,
                         0,
                         1),
                     new ValidationEngineTrace(
-                        new ValidationEngineDescriptor("jsonlogic", "JsonLogic", ValidationEngineKinds.QualityRule, "Rules"),
+                        new WorkflowEngineDescriptor("jsonlogic", "JsonLogic", ValidationEngineKinds.QualityRule, "Rules"),
                         "Skipped",
                         0,
                         0,

@@ -82,7 +82,7 @@ public sealed class WorkbenchAndSchemaDetailViewModelTests
             EngineTraces:
             [
                 new ValidationEngineTrace(
-                    new ValidationEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates structure"),
+                    new WorkflowEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates structure"),
                     "Succeeded",
                     3,
                     0,

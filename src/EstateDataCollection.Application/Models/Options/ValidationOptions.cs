@@ -5,10 +5,7 @@ namespace EstateDataCollection.Application.Models.Options;
 
 public sealed class ValidationOptions : IOption<ValidationOptions>
 {
-    public static string SectionName
-    {
-        get { return "Validation"; }
-    }
+    public static string SectionName => "Validation";
 
     /// <summary>
     /// Quality rule engines enabled at runtime and during schema verification.

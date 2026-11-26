@@ -27,10 +27,7 @@ public class SchemaMetadata
     public SchemaValidationPolicy? ValidationPolicy { get; private set; }
 
     [JsonIgnore]
-    public SchemaValidationPolicy EffectiveValidationPolicy
-    {
-        get { return ValidationPolicy ?? SchemaValidationPolicy.Default; }
-    }
+    public SchemaValidationPolicy EffectiveValidationPolicy => ValidationPolicy ?? SchemaValidationPolicy.Default;
 
     [JsonInclude]
     public DateTimeOffset? LastTestRunAtUtc { get; private set; }
@@ -159,47 +156,29 @@ public class SchemaMetadata
     /// <summary>
     /// Can this schema accept any traffic? (Active versions and Deprecated versions in grace period)
     /// </summary>
-    public bool CanAcceptTraffic
-    {
-        get { return State is SchemaLifecycleState.Active or SchemaLifecycleState.Deprecated; }
-    }
+    public bool CanAcceptTraffic => State is SchemaLifecycleState.Active or SchemaLifecycleState.Deprecated;
 
     /// <summary>
     /// Is this eligible to be the default version when no explicit version is requested?
     /// </summary>
-    public bool CanBeDefault
-    {
-        get { return State is SchemaLifecycleState.Active; }
-    }
+    public bool CanBeDefault => State is SchemaLifecycleState.Active;
 
     /// <summary>
     /// Can the schema definition still be edited or overwritten?
     /// </summary>
-    public bool IsMutable
-    {
-        get { return State is SchemaLifecycleState.Draft; }
-    }
+    public bool IsMutable => State is SchemaLifecycleState.Draft;
 
     /// <summary>
     /// Can dry-run test payloads be executed against this schema?
     /// </summary>
-    public bool AllowsDryRun
-    {
-        get { return State is SchemaLifecycleState.Draft or SchemaLifecycleState.Validated or SchemaLifecycleState.Unvalidated; }
-    }
+    public bool AllowsDryRun => State is SchemaLifecycleState.Draft or SchemaLifecycleState.Validated or SchemaLifecycleState.Unvalidated;
 
     /// <summary>
     /// Can the schema be used
     /// </summary>
-    public bool IsRetired
-    {
-        get { return State is SchemaLifecycleState.Retired; }
-    }
+    public bool IsRetired => State is SchemaLifecycleState.Retired;
 
-    public bool IsDeleted
-    {
-        get { return State is SchemaLifecycleState.Deleted; }
-    }
+    public bool IsDeleted => State is SchemaLifecycleState.Deleted;
 
     #endregion
 

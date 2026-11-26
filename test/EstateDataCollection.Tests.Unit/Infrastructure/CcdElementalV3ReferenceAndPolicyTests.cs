@@ -36,7 +36,7 @@ public sealed class CcdElementalV3ReferenceAndPolicyTests
         indexRepo.ReadSiblingPayloadAsync(siblingEntry, Arg.Any<CancellationToken>())
             .Returns(Result<string?>.Success("""{"sites":[{"id":"SITE-MAIN","blocks":[{"id":"BLK-A"},{"id":"BLK-B"}]}]}"""));
 
-        var runner = ValidationWorkflowRunner.CreateDefault(
+        var runner = WorkflowRunner.CreateDefault(
             new JsonSchemaNetValidator(),
             new QualityRuleCoordinator(),
             identifierIndexRepository: indexRepo,
@@ -65,7 +65,7 @@ public sealed class CcdElementalV3ReferenceAndPolicyTests
         var report = (await validationService.ValidatePayloadWithTraceAsync(
             CcdElementalV3PayloadBuilder.DefaultValidPayloadJson,
             resolvedSchema,
-            ValidationOperationKind.SubmissionFinalise)).ShouldSucceed();
+            WorkflowOperationKind.SubmissionFinalise)).ShouldSucceed();
 
         // Assert
         report.IsSuccessful(RuleSeverity.Error).Should().BeTrue();
@@ -113,12 +113,12 @@ public sealed class CcdElementalV3ReferenceAndPolicyTests
         var errorGateReport = (await validationService.ValidatePayloadWithTraceAsync(
             warningPayload,
             errorGateSchema,
-            ValidationOperationKind.SubmissionFinalise)).ShouldSucceed();
+            WorkflowOperationKind.SubmissionFinalise)).ShouldSucceed();
 
         var strictReport = (await validationService.ValidatePayloadWithTraceAsync(
             warningPayload,
             strictWarningSchema,
-            ValidationOperationKind.SubmissionFinalise)).ShouldSucceed();
+            WorkflowOperationKind.SubmissionFinalise)).ShouldSucceed();
 
         // Assert
         errorGateReport.IsSuccessful(RuleSeverity.Error).Should().BeTrue();

@@ -15,21 +15,15 @@ namespace EstateDataCollection.Infrastructure.Validation.Engines;
 /// </summary>
 public sealed class UniqueCombinationQualityEngine : IBatchQualityRuleEngine
 {
-    public static readonly ValidationEngineDescriptor EngineDescriptor = new(
+    public static readonly WorkflowEngineDescriptor EngineDescriptor = new(
         EngineId: "unique",
         DisplayName: "Unique Combination Engine",
         Kind: ValidationEngineKinds.QualityRule,
         Description: "Evaluates O(N) composite uniqueness constraints across arrays with ancestor field support.");
 
-    public string EngineName
-    {
-        get { return EngineDescriptor.EngineId; }
-    }
+    public string EngineName => EngineDescriptor.EngineId;
 
-    public ValidationEngineDescriptor Descriptor
-    {
-        get { return EngineDescriptor; }
-    }
+    public WorkflowEngineDescriptor Descriptor => EngineDescriptor;
 
     public IReadOnlyList<ValidationMessage> ValidateSyntax(BusinessRule rule, string ruleId)
     {

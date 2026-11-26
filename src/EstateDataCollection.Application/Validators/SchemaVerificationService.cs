@@ -29,8 +29,8 @@ public sealed partial class SchemaVerificationService(
     private readonly SchemaVerificationServiceInstrumentation _instrumentation =
         instrumentation ?? new SchemaVerificationServiceInstrumentation(NullLogger<SchemaVerificationService>.Instance);
 
-    private readonly ValidationEngineDescriptor _schemaEngineDescriptor =
-        schemaValidator?.Descriptor ?? new ValidationEngineDescriptor(
+    private readonly WorkflowEngineDescriptor _schemaEngineDescriptor =
+        schemaValidator?.Descriptor ?? new WorkflowEngineDescriptor(
             EngineId: "json-schema",
             DisplayName: "JSON Schema Validator",
             Kind: ValidationEngineKinds.StructuralSchema,
@@ -70,7 +70,7 @@ public sealed partial class SchemaVerificationService(
         {
             if (!ruleTraces.TryGetValue(engineId, out var state))
             {
-                var descriptor = new ValidationEngineDescriptor(
+                var descriptor = new WorkflowEngineDescriptor(
                     EngineId: engineId,
                     DisplayName: engineId,
                     Kind: ValidationEngineKinds.QualityRule,

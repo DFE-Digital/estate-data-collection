@@ -58,7 +58,7 @@ public sealed class SchemaTestsPageRenderingTests
                 engineTraces:
                 [
                     new ValidationEngineTrace(
-                        new ValidationEngineDescriptor("jsonlogic", "JsonLogic Engine", ValidationEngineKinds.QualityRule, "JsonLogic"),
+                        new WorkflowEngineDescriptor("jsonlogic", "JsonLogic Engine", ValidationEngineKinds.QualityRule, "JsonLogic"),
                         "Succeeded",
                         2,
                         0,

@@ -15,10 +15,7 @@ public sealed record SchemaVerificationResult(
     IReadOnlyList<ValidationError>? AdditionalIssues = null
 )
 {
-    public bool IsSuccessful
-    {
-        get { return SyntaxErrors.Count == 0 && FixtureErrors.Count == 0; }
-    }
+    public bool IsSuccessful => SyntaxErrors.Count == 0 && FixtureErrors.Count == 0;
 
     public bool HasWarnings
     {
@@ -39,15 +36,9 @@ public sealed record SchemaVerificationResult(
         get { return [.. (Warnings ?? []).Select(w => w.Message)]; }
     }
 
-    public IReadOnlyList<ValidationMessage> ValidationMessages
-    {
-        get { return [.. SyntaxErrors, .. FixtureErrors]; }
-    }
+    public IReadOnlyList<ValidationMessage> ValidationMessages => [.. SyntaxErrors, .. FixtureErrors];
 
-    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> Issues
-    {
-        get { return BuildIssues(); }
-    }
+    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> Issues => BuildIssues();
 
     public IReadOnlyList<ValidationError> ToValidationErrors(string defaultPropertyPath = "schema")
     {

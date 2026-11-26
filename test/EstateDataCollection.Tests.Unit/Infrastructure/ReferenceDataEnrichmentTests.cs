@@ -92,7 +92,7 @@ public sealed class ReferenceDataEnrichmentTests
             Options.Create(new BlobSubmissionRepositoryOptions()),
             Options.Create(new ValidationOptions { ReferenceDataLocalPath = referenceRoot }));
 
-        var runner = ValidationWorkflowRunner.CreateDefault(
+        var runner = WorkflowRunner.CreateDefault(
             new JsonSchemaNetValidator(),
             new QualityRuleCoordinator(),
             referenceDataProvider: provider);
@@ -120,7 +120,7 @@ public sealed class ReferenceDataEnrichmentTests
         var report = (await service.ValidatePayloadWithTraceAsync(
             validPayload,
             schema,
-            ValidationOperationKind.SchemaVerify,
+            WorkflowOperationKind.SchemaVerify,
             ambientFixtures)).ShouldSucceed();
 
         // Assert
@@ -149,7 +149,7 @@ public sealed class ReferenceDataEnrichmentTests
         var report = (await service.ValidatePayloadWithTraceAsync(
             invalidPayload,
             schema,
-            ValidationOperationKind.SchemaVerify,
+            WorkflowOperationKind.SchemaVerify,
             ambientFixtures)).ShouldSucceed();
 
         // Assert

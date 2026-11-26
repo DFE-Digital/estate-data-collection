@@ -13,30 +13,19 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
     IIdentifierIndexRepository? indexRepository = null
 ) : IWorkflowStep
 {
-    public string StepId
-    {
-        get { return WorkflowStepIds.CrossSubmissionEnrichment; }
-    }
+    public string StepId => WorkflowStepIds.CrossSubmissionEnrichment;
 
-    public SubmissionProcessDescriptor ProcessDescriptor
-    {
-        get { return SubmissionProcessCatalog.CrossSubmissionEnrichment; }
-    }
+    public SubmissionProcessDescriptor ProcessDescriptor => SubmissionProcessCatalog.CrossSubmissionEnrichment;
 
-    public ValidationEngineDescriptor EngineDescriptor
-    {
-        get
-        {
-            return new ValidationEngineDescriptor(
-                WorkflowStepIds.CrossSubmissionEnrichment,
-                "Cross-Submission Enrichment",
-                ValidationEngineKinds.ContextEnrichment,
-                "Loads sibling submissions sharing the extracted establishment identifier (draft + finalised) and enforces draft-reference policies.");
-        }
-    }
+    public WorkflowEngineDescriptor EngineDescriptor =>
+        new(
+            WorkflowStepIds.CrossSubmissionEnrichment,
+            "Cross-Submission Enrichment",
+            ValidationEngineKinds.ContextEnrichment,
+            "Loads sibling submissions sharing the extracted establishment identifier (draft + finalised) and enforces draft-reference policies.");
 
     public async Task<Result<WorkflowStepOutcome>> ExecuteAsync(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         CancellationToken cancellationToken = default)
     {
         var swStart = Stopwatch.GetTimestamp();
@@ -91,9 +80,7 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
                 var entriesResult = await indexRepository.GetEntriesAsync(extractedId.Type, extractedId.Value, cancellationToken);
                 if (entriesResult is null || entriesResult.IsFailure)
                 {
-                    return entriesResult is not null
-                        ? Result<EnrichmentEvalSummary>.Failure(entriesResult.Error)
-                        : Result<EnrichmentEvalSummary>.Success(new EnrichmentEvalSummary(0, [], "No sibling submissions found"));
+                    return Result<EnrichmentEvalSummary>.Failure(entriesResult.Error);
                 }
 
                 var currentId = context.SubmissionId ?? Guid.Empty;
@@ -211,7 +198,7 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
         return ApplyDraftPolicyAndTrace(context, stepResult.Value, swStart);
     }
 
-    public void RecordSkipped(ValidationWorkflowContext context, string reason)
+    public void RecordSkipped(WorkflowContext context, string reason)
     {
         SubmissionExecutionScope.Current?.RecordSkipped(
             ProcessDescriptor,
@@ -228,7 +215,7 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
     }
 
     private WorkflowStepOutcome ApplyDraftPolicyAndTrace(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         EnrichmentEvalSummary eval,
         long swStart)
     {
@@ -236,7 +223,7 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
         var issueCount = 0;
         var succeeded = true;
 
-        if (context.OperationKind == ValidationOperationKind.SubmissionFinalise && eval.DraftIds.Count > 0)
+        if (context.OperationKind == WorkflowOperationKind.SubmissionFinalise && eval.DraftIds.Count > 0)
         {
             var pointer = context.Schema.Metadata.IdentifierConfig?.JsonPointer ?? context.Options.DefaultIdentifierPointerFallback;
             var draftList = string.Join(", ", eval.DraftIds);
@@ -319,7 +306,7 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
         return false;
     }
 
-    private static void InjectCrossSubmissionAmbient(ValidationWorkflowContext context, JsonObject crossObj)
+    private static void InjectCrossSubmissionAmbient(WorkflowContext context, JsonObject crossObj)
     {
         context.AmbientContext["cross_submission"] = crossObj.DeepClone();
 

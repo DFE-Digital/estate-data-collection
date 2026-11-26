@@ -152,14 +152,14 @@ public partial class QualityRuleCoordinator
         return false;
     }
 
-    private ValidationEngineDescriptor ResolveDescriptorOrFallback(string engineName)
+    private WorkflowEngineDescriptor ResolveDescriptorOrFallback(string engineName)
     {
         if (_engines.TryGetValue(engineName, out var registered))
         {
             return registered.Descriptor;
         }
 
-        return new ValidationEngineDescriptor(
+        return new WorkflowEngineDescriptor(
             EngineId: engineName,
             DisplayName: engineName,
             Kind: ValidationEngineKinds.QualityRule,
@@ -190,9 +190,9 @@ public partial class QualityRuleCoordinator
 
     private sealed record ResolvedRuleEntry(BusinessRule Rule, IQualityRuleEngine Engine, int OriginalIndex);
 
-    private sealed class EngineTraceAccumulator(ValidationEngineDescriptor descriptor)
+    private sealed class EngineTraceAccumulator(WorkflowEngineDescriptor descriptor)
     {
-        public ValidationEngineDescriptor Descriptor { get; } = descriptor;
+        public WorkflowEngineDescriptor Descriptor { get; } = descriptor;
         public int RulesEvaluatedCount { get; set; }
         public int SkippedUnknownCount { get; set; }
         public int SkippedRunbookCount { get; set; }

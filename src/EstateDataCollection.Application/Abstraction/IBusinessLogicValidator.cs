@@ -7,7 +7,7 @@ namespace EstateDataCollection.Application.Abstraction;
 
 public interface IBusinessLogicValidator : IInfrastructure
 {
-    IReadOnlyList<ValidationEngineDescriptor> GetRegisteredEngines() => [];
+    IReadOnlyList<WorkflowEngineDescriptor> GetRegisteredEngines() => [];
 
     Result<IReadOnlyList<ValidationMessage>> ValidateRulesSyntax(
         string rawRulesJson,

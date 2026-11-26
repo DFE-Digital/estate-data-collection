@@ -12,10 +12,7 @@ public sealed record PayloadValidationReport(
     IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? Issues = null,
     IReadOnlyList<ValidationError>? AllIssues = null)
 {
-    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> EffectiveIssues
-    {
-        get { return Issues ?? ValidationIssuesHelper.GroupBySeverity(AllIssues ?? Errors); }
-    }
+    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> EffectiveIssues => Issues ?? ValidationIssuesHelper.GroupBySeverity(AllIssues ?? Errors);
 
     public bool IsSuccessful(RuleSeverity failOnMinimumSeverity = RuleSeverity.Error)
     {

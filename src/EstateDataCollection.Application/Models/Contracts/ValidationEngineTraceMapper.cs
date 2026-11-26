@@ -37,7 +37,7 @@ internal static class ValidationEngineTraceMapper
 
         return records
             .Select(r => new ValidationEngineTrace(
-                Descriptor: new ValidationEngineDescriptor(
+                Descriptor: new WorkflowEngineDescriptor(
                     EngineId: r.EngineId,
                     DisplayName: r.DisplayName,
                     Kind: r.Kind,

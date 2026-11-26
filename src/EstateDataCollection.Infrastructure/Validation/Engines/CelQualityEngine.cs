@@ -37,19 +37,16 @@ public sealed class CelQualityEngine : IQualityRuleEngine
             ConfigureFunctions = ConfigureToleranceAndArithmeticOperators
         });
 
-        Descriptor = new ValidationEngineDescriptor(
+        Descriptor = new WorkflowEngineDescriptor(
             EngineId: "cel",
             DisplayName: "CEL Quality Engine",
             Kind: ValidationEngineKinds.QualityRule,
             Description: $"Evaluates Common Expression Language (CEL) quality rules with RFC3339 timestamps, comprehensions, ancestor context, automatic float epsilon tolerance, compiled program caching, and {(_options.CelMaxIterations > 0 ? _options.CelMaxIterations : 10_000)} max iterations.");
     }
 
-    public string EngineName
-    {
-        get { return "cel"; }
-    }
+    public string EngineName => "cel";
 
-    public ValidationEngineDescriptor Descriptor { get; }
+    public WorkflowEngineDescriptor Descriptor { get; }
 
     public IReadOnlyList<ValidationMessage> ValidateSyntax(BusinessRule rule, string ruleId)
     {

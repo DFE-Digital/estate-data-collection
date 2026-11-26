@@ -11,30 +11,19 @@ public sealed class ReferenceDataEnrichmentWorkflowStep(
     IReferenceDataProvider? referenceDataProvider = null
 ) : IWorkflowStep
 {
-    public string StepId
-    {
-        get { return WorkflowStepIds.ReferenceDataEnrichment; }
-    }
+    public string StepId => WorkflowStepIds.ReferenceDataEnrichment;
 
-    public SubmissionProcessDescriptor ProcessDescriptor
-    {
-        get { return SubmissionProcessCatalog.ReferenceDataEnrichment; }
-    }
+    public SubmissionProcessDescriptor ProcessDescriptor => SubmissionProcessCatalog.ReferenceDataEnrichment;
 
-    public ValidationEngineDescriptor EngineDescriptor
-    {
-        get
-        {
-            return new ValidationEngineDescriptor(
-                WorkflowStepIds.ReferenceDataEnrichment,
-                "Reference Data Enrichment",
-                ValidationEngineKinds.ContextEnrichment,
-                "Loads versioned reference datasets from blob storage, local paths, or verify fixtures into ambient.reference.");
-        }
-    }
+    public WorkflowEngineDescriptor EngineDescriptor =>
+        new(
+            WorkflowStepIds.ReferenceDataEnrichment,
+            "Reference Data Enrichment",
+            ValidationEngineKinds.ContextEnrichment,
+            "Loads versioned reference datasets from blob storage, local paths, or verify fixtures into ambient.reference.");
 
     public async Task<Result<WorkflowStepOutcome>> ExecuteAsync(
-        ValidationWorkflowContext context,
+        WorkflowContext context,
         CancellationToken cancellationToken = default)
     {
         var hasFixtures = TryExtractFixtureReferenceData(context.AmbientFixtures, out var fixtureDatasets);
@@ -121,7 +110,7 @@ public sealed class ReferenceDataEnrichmentWorkflowStep(
         return new WorkflowStepOutcome(Succeeded: true, Summary: $"Loaded {count} reference dataset key(s)");
     }
 
-    public void RecordSkipped(ValidationWorkflowContext context, string reason)
+    public void RecordSkipped(WorkflowContext context, string reason)
     {
         SubmissionExecutionScope.Current?.RecordSkipped(
             ProcessDescriptor,
@@ -165,7 +154,7 @@ public sealed class ReferenceDataEnrichmentWorkflowStep(
         return false;
     }
 
-    private static void InjectReferenceAmbient(ValidationWorkflowContext context, JsonObject refObj)
+    private static void InjectReferenceAmbient(WorkflowContext context, JsonObject refObj)
     {
         context.AmbientContext["reference"] = refObj.DeepClone();
 

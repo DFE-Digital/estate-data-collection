@@ -23,10 +23,7 @@ public sealed record SchemaStatRowViewModel(
     string FinalisationRateDisplay,
     string LastActivityDisplay)
 {
-    public bool HasSubmissions
-    {
-        get { return TotalSubmissions > 0; }
-    }
+    public bool HasSubmissions => TotalSubmissions > 0;
 
     public static SchemaStatRowViewModel From(SchemaSubmissionStatistic stat)
     {

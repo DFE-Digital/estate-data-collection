@@ -50,10 +50,7 @@ public sealed class BusinessRule
     public bool? StopOnFailure { get; init; }
 
     [JsonIgnore]
-    public bool EffectiveStopOnFailure
-    {
-        get { return StopOnFailure ?? (Severity == RuleSeverity.Critical); }
-    }
+    public bool EffectiveStopOnFailure => StopOnFailure ?? (Severity == RuleSeverity.Critical);
 
     /// <summary>
     /// Optional explicit action metadata (e.g. "reject_submission", "highlight_issue", "allow_submission").
@@ -89,16 +86,10 @@ public sealed class BusinessRule
     public JsonNode? Assert { get; init; }
 
     [JsonIgnore]
-    public JsonNode? EffectiveAssertion
-    {
-        get { return Implementation ?? Assert; }
-    }
+    public JsonNode? EffectiveAssertion => Implementation ?? Assert;
 
     [JsonIgnore]
-    public string EffectiveMessage
-    {
-        get { return !string.IsNullOrWhiteSpace(Message) ? Message : Description; }
-    }
+    public string EffectiveMessage => !string.IsNullOrWhiteSpace(Message) ? Message : Description;
 
     [JsonIgnore]
     public string EffectiveAction

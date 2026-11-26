@@ -14,7 +14,7 @@ namespace EstateDataCollection.Application.Validators;
 /// </summary>
 public static class PayloadIdentifierExtractor
 {
-    public static readonly ValidationEngineDescriptor Descriptor = new(
+    public static readonly WorkflowEngineDescriptor Descriptor = new(
         EngineId: "identifier-extractor",
         DisplayName: "Submission Identifier Extractor",
         Kind: ValidationEngineKinds.IdentifierExtraction,
