@@ -222,6 +222,9 @@ public static class AppRoutes
         public static class Templates
         {
             public const string About = "about";
+            public const string OpenApiJson = "openapi/{documentName}.json";
+            public const string OpenApiYaml = "openapi/{documentName}.yaml";
+            public const string ScalarDocs = "scalar/{*path}";
             public const string Schemas = "schemas";
             public const string SchemaByName = "schemas/{schemaName}";
             public const string SchemaVersionDetail = "schemas/{schemaName}/versions/{version:int}";
@@ -233,8 +236,25 @@ public static class AppRoutes
         }
 
         public const string About = $"{Root}/{Templates.About}";
+        public const string ScalarDocs = $"{Root}/scalar";
         public const string Schemas = $"{Root}/{Templates.Schemas}";
         public const string CreateSubmissionTemplate = $"{Root}/submissions/{{schemaName}}";
+
+        public static string OpenApiJson(string documentName = "v1")
+        {
+            return $"{Root}/{Templates.OpenApiJson}".FormatWith(new
+            {
+                documentName = Uri.EscapeDataString(documentName)
+            });
+        }
+
+        public static string OpenApiYaml(string documentName = "v1")
+        {
+            return $"{Root}/{Templates.OpenApiYaml}".FormatWith(new
+            {
+                documentName = Uri.EscapeDataString(documentName)
+            });
+        }
 
         public static string SchemaByName(string schemaName)
         {

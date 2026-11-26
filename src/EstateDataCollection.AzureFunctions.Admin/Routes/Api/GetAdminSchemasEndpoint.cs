@@ -2,6 +2,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -14,6 +15,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// Admin view of all schemas in the registry, including unscheduled (Validated / Draft), Upcoming, and Retired versions by default.
 /// Route: GET /api/schemas
 /// </summary>
+[RequireRoles(AdminRoleKeys.Automation)]
 public sealed class GetAdminSchemasEndpoint(
     IUseCase<GetSchemasResult, GetSchemasRequest> getSchemasUseCase,
     FunctionEndpointInstrumentation? instrumentation = null

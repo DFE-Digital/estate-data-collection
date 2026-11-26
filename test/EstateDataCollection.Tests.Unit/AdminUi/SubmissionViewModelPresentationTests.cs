@@ -80,6 +80,7 @@ public sealed class SubmissionViewModelPresentationTests
             .WithAuditEntry(entry => entry
                 .WithTimestamp(now)
                 .WithAction("CheckSubmission")
+                .WithActor("Acme Surveys (sub-acme-01)")
                 .WithOutcome("DraftPendingErrors", 200)
                 .WithProcess(
                     SubmissionProcessCatalog.DraftPayloadMerger,
@@ -99,6 +100,8 @@ public sealed class SubmissionViewModelPresentationTests
         vm.IdentifierDisplay.Should().Be("URN: 123456");
         vm.FormattedMergedDraftPayload.Should().Contain("\"urn\": 123456");
         vm.DraftChunks[0].ShortBlobName.Should().Be("01.json");
+        vm.AuditItems[0].HasActor.Should().BeTrue();
+        vm.AuditItems[0].ActorDisplay.Should().Be("Acme Surveys (sub-acme-01)");
         vm.AuditItems[0].Processes[0].ProcessName.Should().Be("DraftPayloadMerger");
         vm.AuditItems[0].Processes[0].OutcomeTagCssClass.Should().Contain("govuk-tag--green");
         vm.AuditItems[0].Processes[0].HasErrorCode.Should().BeFalse();

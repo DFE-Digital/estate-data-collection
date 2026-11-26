@@ -2,6 +2,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetValidationEngines;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +14,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// Introspection endpoint returning all registered structural, quality rule, and identifier validation engines.
 /// Route: GET /api/schemas/engines
 /// </summary>
+[RequireRoles(AdminRoleKeys.Automation)]
 public sealed class GetValidationEnginesEndpoint(
     IUseCase<GetValidationEnginesResult, GetValidationEnginesRequest> getValidationEnginesUseCase,
     FunctionEndpointInstrumentation? instrumentation = null

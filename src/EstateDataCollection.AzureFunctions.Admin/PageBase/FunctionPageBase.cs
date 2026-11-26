@@ -1,17 +1,19 @@
-using System.Text;
-using System.Text.Json;
 using EstateDataCollection.Admin.UI.Models;
 using EstateDataCollection.Admin.UI.Rendering;
+using EstateDataCollection.AzureFunctions.Admin.Security;
 using EstateDataCollection.Common;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EstateDataCollection.AzureFunctions.Admin.PageBase;
 
+[RequireRoles(AdminRoleKeys.Operator)]
 public abstract class FunctionPageBase(
     RazorComponentRenderer renderer,
     FunctionEndpointInstrumentation? instrumentation = null
@@ -35,10 +37,15 @@ public abstract class FunctionPageBase(
         string title,
         string activeNav = "schemas")
     {
+        var userContext = http.HttpContext?.RequestServices?.GetService<IUserContext>();
+        var signedInUser = userContext is { IsAuthenticated: true }
+            ? userContext.DisplayName ?? userContext.Email ?? userContext.UserId
+            : EasyAuthPrincipalParser.ResolveDisplayName(http);
+
         return new AdminPageMeta(
             Title: title,
             ActiveNav: activeNav,
-            SignedInUser: ResolveSignedInUser(http),
+            SignedInUser: signedInUser,
             AppVersion: AppVersionProvider.Version);
     }
 
@@ -86,67 +93,5 @@ public abstract class FunctionPageBase(
         }
 
         return FormCollection.Empty;
-    }
-
-    private static string? ResolveSignedInUser(HttpRequest http)
-    {
-        if (http.Headers.TryGetValue("X-MS-CLIENT-PRINCIPAL-NAME", out var principalName) &&
-            !string.IsNullOrWhiteSpace(principalName))
-        {
-            return principalName.ToString().Trim();
-        }
-
-        if (http.Headers.TryGetValue("X-MS-CLIENT-PRINCIPAL", out var encodedPrincipal) &&
-            !string.IsNullOrWhiteSpace(encodedPrincipal))
-        {
-            var decoded = TryDecodeEasyAuthPrincipal(encodedPrincipal.ToString());
-            if (!string.IsNullOrWhiteSpace(decoded))
-            {
-                return decoded;
-            }
-        }
-
-        var identityName = http.HttpContext?.User?.Identity?.Name;
-        return string.IsNullOrWhiteSpace(identityName) ? null : identityName;
-    }
-
-    private static string? TryDecodeEasyAuthPrincipal(string encoded)
-    {
-        try
-        {
-            var bytes = Convert.FromBase64String(encoded.Trim());
-            using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(bytes));
-            var root = doc.RootElement;
-
-            if (root.TryGetProperty("userDetails", out var userDetails) &&
-                userDetails.ValueKind == JsonValueKind.String &&
-                !string.IsNullOrWhiteSpace(userDetails.GetString()))
-            {
-                return userDetails.GetString();
-            }
-
-            if (root.TryGetProperty("claims", out var claims) && claims.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var claim in claims.EnumerateArray())
-                {
-                    var typ = claim.TryGetProperty("typ", out var typProp) ? typProp.GetString() : null;
-                    var val = claim.TryGetProperty("val", out var valProp) ? valProp.GetString() : null;
-
-                    if (!string.IsNullOrWhiteSpace(val) &&
-                        (string.Equals(typ, "name", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(typ, "preferred_username", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(typ, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        return val;
-                    }
-                }
-            }
-        }
-        catch
-        {
-            // Ignore malformed client principal header
-        }
-
-        return null;
     }
 }

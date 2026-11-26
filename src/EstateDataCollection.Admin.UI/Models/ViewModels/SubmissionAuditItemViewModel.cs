@@ -8,16 +8,20 @@ public sealed record SubmissionAuditItemViewModel(
     string OutcomeStatusText,
     string OutcomeTagCssClass,
     string HttpStatusDisplay,
-    bool HasMessage,
     string Message,
-    bool HasErrorCode,
     string ErrorCode,
-    bool HasTraceId,
     string TraceId,
-    bool HasIdentifier,
     string IdentifierDisplay,
     IReadOnlyList<AuditProcessRowViewModel> Processes,
-    bool HasProcesses,
     IReadOnlyList<ValidationErrorItemViewModel> ValidationIssues,
-    bool HasValidationIssues,
-    string RawAuditJson);
+    string RawAuditJson,
+    string ActorDisplay = "")
+{
+    public bool HasMessage => !string.IsNullOrEmpty(Message);
+    public bool HasErrorCode => !string.IsNullOrEmpty(ErrorCode);
+    public bool HasTraceId => !string.IsNullOrEmpty(TraceId);
+    public bool HasIdentifier => !string.IsNullOrEmpty(IdentifierDisplay);
+    public bool HasProcesses => Processes.Count > 0;
+    public bool HasValidationIssues => ValidationIssues.Count > 0;
+    public bool HasActor => !string.IsNullOrEmpty(ActorDisplay);
+}

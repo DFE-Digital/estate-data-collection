@@ -1,6 +1,7 @@
 using EstateDataCollection.Admin.UI.Assets;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EstateDataCollection.AzureFunctions.Admin.Routes.Admin;
 
+[AllowAnonymous]
 public sealed class GetStaticAssetEndpoint(
     FunctionEndpointInstrumentation? instrumentation = null,
     TimeSpan? cacheDuration = null

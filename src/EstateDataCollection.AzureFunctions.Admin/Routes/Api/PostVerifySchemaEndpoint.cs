@@ -5,6 +5,7 @@ using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -20,6 +21,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// and runs in-flight golden fixture checks without persisting to Blob.
 /// Route: POST /api/schemas/verify
 /// </summary>
+[RequireRoles(AdminRoleKeys.Automation)]
 public sealed class PostVerifySchemaEndpoint(
     IUseCase<VerifySchemaResult, VerifySchemaRequest> verifyUseCase,
     FunctionEndpointInstrumentation? instrumentation = null

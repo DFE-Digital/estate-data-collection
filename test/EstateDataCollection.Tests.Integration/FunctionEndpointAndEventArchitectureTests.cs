@@ -10,6 +10,7 @@ using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Events;
+using EstateDataCollection.Common.Web.Security;
 using EstateDataCollection.Domain;
 using EstateDataCollection.Infrastructure;
 using Microsoft.Azure.Functions.Worker;
@@ -189,6 +190,31 @@ public class FunctionEndpointAndEventArchitectureTests
             {
                 Assert.Fail($"Unexpected Admin host route '{route}'. Expected '{AppRoutes.AdminApi.Prefix}/...', '{AppRoutes.AdminUi.Prefix}...', or '{AppRoutes.Assets.Prefix}/...'.");
             }
+        }
+    }
+
+    [Fact]
+    public void Every_Admin_Endpoint_Should_Declare_AllowAnonymous_Or_RequireRoles()
+    {
+        var adminAssembly = typeof(GetAdminSchemasEndpoint).Assembly;
+        var resolver = new FunctionAuthMetadataResolver(adminAssembly);
+
+        var functionMethods = adminAssembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(IFunctionEndpoint).IsAssignableFrom(t))
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            .Where(m => m.GetCustomAttribute<FunctionAttribute>() is not null)
+            .ToList();
+
+        functionMethods.Should().NotBeEmpty();
+
+        foreach (var method in functionMethods)
+        {
+            var functionName = method.GetCustomAttribute<FunctionAttribute>()!.Name;
+            var metadata = resolver.ResolveByFunctionName(functionName);
+
+            var hasExplicitPolicy = metadata.AllowAnonymous || metadata.RoleRequirements.Count > 0;
+            hasExplicitPolicy.Should().BeTrue(
+                $"{method.DeclaringType?.Name} ({functionName}) must declare [AllowAnonymous] or at least one [RequireRoles(...)].");
         }
     }
 

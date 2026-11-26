@@ -32,6 +32,10 @@
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.1.1" />
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.Storage.Blobs" Version="6.8.2" />
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="2.51.0" />
+    <!-- OpenAPI & API Docs -->
+    <PackageVersion Include="AzureExtensions.Swashbuckle" Version="5.0.5" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageVersion Include="Scalar.Azure.Functions" Version="1.2.1" />
     <!-- Schema Validation & Rules -->
     <PackageVersion Include="JsonSchema.Net" Version="9.7.0" />
     <PackageVersion Include="JsonLogic" Version="6.2.0" />

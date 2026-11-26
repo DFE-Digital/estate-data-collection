@@ -3,6 +3,7 @@ using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -15,6 +16,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// Schedules activation windows, lifecycle transitions (Activate, Deprecate, Retire), or URN identifier configuration.
 /// Route: PATCH /api/schemas/{schemaName}/versions/{version:int}/schedule
 /// </summary>
+[RequireRoles(AdminRoleKeys.Automation)]
 public sealed class PatchScheduleSchemaEndpoint(
     IUseCase<ScheduleSchemaResult, ScheduleSchemaRequest> scheduleUseCase,
     FunctionEndpointInstrumentation? instrumentation = null

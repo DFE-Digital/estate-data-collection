@@ -16,7 +16,11 @@
     "Blob:Submission:ProcessedContainerName": "processed",
     "Blob:Submission:SessionBlobNameFormat": "{submissionId}/session.json",
     "Blob:Submission:PayloadBlobNameFormat": "{submissionId}/draft.json",
-    "Blob:Submission:ProcessedBlobNameFormat": "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
+    "Blob:Submission:ProcessedBlobNameFormat": "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json",
+    "Security:AdminAuth:Enabled": "false",
+    "Security:AdminAuth:RoleMappings:Operator": "Edc.Admin.Operator",
+    "Security:AdminAuth:RoleMappings:Automation": "Edc.Admin.Automation",
+    "Security:AdminAuth:LoginPath": "/.auth/login/aad"
   },
   "Host": {
     "LocalHttpPort": 7072

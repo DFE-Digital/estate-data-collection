@@ -3,6 +3,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -15,6 +16,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// Admin view of a specific schema version's metadata, fields, rules, and raw JSON schema.
 /// Route: GET /api/schemas/{schemaName}/versions/{version:int}
 /// </summary>
+[RequireRoles(AdminRoleKeys.Automation)]
 public sealed class GetAdminSchemaVersionDetailEndpoint(
     IUseCase<SchemaVersionDetail, GetSchemaDetailRequest> getSchemaDetailUseCase,
     FunctionEndpointInstrumentation? instrumentation = null
