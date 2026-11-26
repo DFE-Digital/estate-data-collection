@@ -16,7 +16,21 @@
     "Blob:Submission:ProcessedContainerName": "processed",
     "Blob:Submission:SessionBlobNameFormat": "{submissionId}/session.json",
     "Blob:Submission:PayloadBlobNameFormat": "{submissionId}/draft.json",
-    "Blob:Submission:ProcessedBlobNameFormat": "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
+    "Blob:Submission:ProcessedBlobNameFormat": "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json",
+    "OpenApi:Docs:EnableSpecEndpoints": "true",
+    "OpenApi:Docs:EnableScalarUi": "true",
+    "OpenApi:Docs:EnableTryItOut": "true",
+    "OpenApi:Docs:SpecVersion": "3.0",
+    "OpenApi:Docs:FaUApiGatewayUrl": "",
+    "OpenApi:Docs:FaUApiOAuthTokenUrl": "",
+    "OpenApi:Docs:FaUApiOAuthScope": "",
+    "OpenApi:Docs:WikiBaseUrl": "",
+    "Security:PublicAuth:Enabled": "false",
+    "Security:PublicAuth:RequireActorOnAuthenticatedRoutes": "true",
+    "Security:PublicAuth:SubscriptionKeyHeader": "Ocp-Apim-Subscription-Key",
+    "Security:PublicAuth:SubscriptionIdHeader": "X-FaUAPI-Subscription-Id",
+    "Security:PublicAuth:SubscriptionNameHeader": "X-FaUAPI-Subscription-Name",
+    "Security:PublicAuth:ClientIdHeader": "X-FaUAPI-Client-Id"
   },
   "Host": {
     "LocalHttpPort": 7071

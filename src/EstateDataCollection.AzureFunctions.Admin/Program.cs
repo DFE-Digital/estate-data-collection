@@ -1,5 +1,6 @@
 using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application;
+using EstateDataCollection.AzureFunctions.Admin.Middleware;
 using EstateDataCollection.Common.Web;
 using EstateDataCollection.Domain;
 using EstateDataCollection.Infrastructure;
@@ -12,6 +13,8 @@ var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 builder.UseFunctionsMiddleware();
+
+builder.UseMiddleware<AdminAuthMiddleware>();
 
 builder.Services.AddLogging(builder.Configuration, builder.Logging);
 builder.Services.AddFunctions(typeof(Program).Assembly);

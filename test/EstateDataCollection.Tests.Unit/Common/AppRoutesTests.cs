@@ -45,6 +45,11 @@ public sealed class AppRoutesTests
         AppRoutes.AdminApi.UpdateSchemaTests("edc payload", 1).Should().Be("/api/schemas/edc%20payload/versions/1/tests");
 
         AppRoutes.PublicApi.About.Should().Be("/api/about");
+        AppRoutes.PublicApi.OpenApiJson().Should().Be("/api/openapi/v1.json");
+        AppRoutes.PublicApi.OpenApiJson("v2").Should().Be("/api/openapi/v2.json");
+        AppRoutes.PublicApi.OpenApiYaml().Should().Be("/api/openapi/v1.yaml");
+        AppRoutes.PublicApi.OpenApiYaml("v2").Should().Be("/api/openapi/v2.yaml");
+        AppRoutes.PublicApi.ScalarDocs.Should().Be("/api/scalar");
         AppRoutes.PublicApi.Schemas.Should().Be("/api/schemas");
         AppRoutes.PublicApi.CreateSubmissionTemplate.Should().Be("/api/submissions/{schemaName}");
         AppRoutes.PublicApi.SchemaByName("edc payload").Should().Be("/api/schemas/edc%20payload");

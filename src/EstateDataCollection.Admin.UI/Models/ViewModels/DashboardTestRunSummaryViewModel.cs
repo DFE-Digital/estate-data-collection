@@ -7,10 +7,11 @@ public sealed record DashboardTestRunSummaryViewModel(
     string AppVersion,
     string SummaryTagText,
     string SummaryTagCssClass,
-    bool HasResults,
-    bool NoResults,
     IReadOnlyList<DashboardTestRunItemViewModel> Results)
 {
+    public bool HasResults => Results.Count > 0;
+    public bool NoResults => Results.Count == 0;
+    
     public static DashboardTestRunSummaryViewModel? From(RunSchemaTestsResult? run)
     {
         if (run is null)
@@ -90,8 +91,6 @@ public sealed record DashboardTestRunSummaryViewModel(
             AppVersion: run.AppVersion,
             SummaryTagText: summaryTagText,
             SummaryTagCssClass: summaryTagCssClass,
-            HasResults: items.Count > 0,
-            NoResults: items.Count == 0,
             Results: items);
     }
 }

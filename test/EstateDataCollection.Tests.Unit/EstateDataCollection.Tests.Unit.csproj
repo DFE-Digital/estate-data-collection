@@ -13,5 +13,6 @@
     <ProjectReference Include="..\..\src\EstateDataCollection.Infrastructure\EstateDataCollection.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\EstateDataCollection.Admin.UI\EstateDataCollection.Admin.UI.csproj" />
     <ProjectReference Include="..\..\src\EstateDataCollection.AzureFunctions.Admin\EstateDataCollection.AzureFunctions.Admin.csproj" />
+    <ProjectReference Include="..\..\src\EstateDataCollection.AzureFunctions.Public\EstateDataCollection.AzureFunctions.Public.csproj" />
   </ItemGroup>
 </Project>

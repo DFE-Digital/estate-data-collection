@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Telemetry;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -21,6 +22,7 @@ public sealed class SubmissionExecutionScope : IDisposable
     private readonly List<SubmissionProcessExecution> _processes;
     private readonly ProcessExecutionInstrumentation _instrumentation;
     private readonly ISubmissionAuditStore? _auditStore;
+    private readonly IActorContext? _actorContext;
     private readonly Activity? _rootActivity;
     private readonly SubmissionExecutionScope? _previousScope;
 
@@ -29,12 +31,14 @@ public sealed class SubmissionExecutionScope : IDisposable
         string action,
         ProcessExecutionInstrumentation? instrumentation,
         ISubmissionAuditStore? auditStore,
+        IActorContext? actorContext,
         int initialCapacity)
     {
         SubmissionId = submissionId;
         Action = action;
         _instrumentation = instrumentation ?? DefaultInstrumentation;
         _auditStore = auditStore;
+        _actorContext = actorContext;
         _processes = new List<SubmissionProcessExecution>(initialCapacity);
 
         _rootActivity = EstateDataCollectionTelemetry.ApplicationActivitySource.StartActivity($"Submission:{action}");
@@ -44,6 +48,20 @@ public sealed class SubmissionExecutionScope : IDisposable
             if (submissionId != Guid.Empty)
             {
                 _rootActivity.SetTag("submission.id", submissionId.ToString());
+            }
+
+            if (actorContext?.IsAuthenticated == true)
+            {
+                if (!string.IsNullOrWhiteSpace(actorContext.ActorId))
+                {
+                    _rootActivity.SetTag("actor.id", actorContext.ActorId);
+                }
+
+                _rootActivity.SetTag("actor.auth_type", actorContext.AuthenticationType);
+                if (!string.IsNullOrWhiteSpace(actorContext.SubscriptionId))
+                {
+                    _rootActivity.SetTag("actor.subscription_id", actorContext.SubscriptionId);
+                }
             }
         }
 
@@ -73,9 +91,10 @@ public sealed class SubmissionExecutionScope : IDisposable
         Guid submissionId = default,
         ProcessExecutionInstrumentation? instrumentation = null,
         ISubmissionAuditStore? auditStore = null,
-        int initialCapacity = 8)
+        int initialCapacity = 8,
+        IActorContext? actorContext = null)
     {
-        return new SubmissionExecutionScope(submissionId, action, instrumentation, auditStore, initialCapacity);
+        return new SubmissionExecutionScope(submissionId, action, instrumentation, auditStore, actorContext, initialCapacity);
     }
 
     public static Task<Result<T>> StepAsync<T>(
@@ -361,6 +380,14 @@ public sealed class SubmissionExecutionScope : IDisposable
 
         _instrumentation.RecordAuditAction(Action, outcomeStatus, httpStatus);
 
+        var resolvedActor = !string.IsNullOrWhiteSpace(actor)
+            ? actor
+            : _actorContext?.IsAuthenticated == true
+                ? _actorContext.AuditActorDisplay
+                : null;
+
+        var enrichedDetails = EnrichDetailsWithActor(details, _actorContext);
+
         await SubmissionAuditRecorder.SafeAppendAsync(
             _auditStore,
             SubmissionId,
@@ -374,8 +401,8 @@ public sealed class SubmissionExecutionScope : IDisposable
             message: message,
             validationErrors: validationErrors,
             identifier: identifier,
-            details: details,
-            actor: actor,
+            details: enrichedDetails,
+            actor: resolvedActor,
             cancellationToken: cancellationToken);
     }
 
@@ -480,6 +507,52 @@ public sealed class SubmissionExecutionScope : IDisposable
                 activity.SetStatus(ActivityStatusCode.Error, details.Summary);
             }
         }
+    }
+
+    private static IReadOnlyDictionary<string, string>? EnrichDetailsWithActor(
+        IReadOnlyDictionary<string, string>? existingDetails,
+        IActorContext? actorContext)
+    {
+        if (actorContext is not { IsAuthenticated: true })
+        {
+            return existingDetails;
+        }
+
+        var merged = existingDetails is not null
+            ? new Dictionary<string, string>(existingDetails, StringComparer.Ordinal)
+            : new Dictionary<string, string>(StringComparer.Ordinal);
+
+        merged.TryAdd("actor.authType", actorContext.AuthenticationType);
+
+        if (!string.IsNullOrWhiteSpace(actorContext.ActorId))
+        {
+            merged.TryAdd("actor.id", actorContext.ActorId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(actorContext.ActorName))
+        {
+            merged.TryAdd("actor.name", actorContext.ActorName);
+        }
+
+        if (!string.IsNullOrWhiteSpace(actorContext.SubscriptionId))
+        {
+            merged.TryAdd("actor.subscriptionId", actorContext.SubscriptionId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(actorContext.SubscriptionName))
+        {
+            merged.TryAdd("actor.subscriptionName", actorContext.SubscriptionName);
+        }
+
+        foreach (var (key, value) in actorContext.Metadata)
+        {
+            if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(value))
+            {
+                merged.TryAdd($"actor.meta.{key}", value);
+            }
+        }
+
+        return merged;
     }
 
     private static IReadOnlyList<SubmissionAuditValidationIssue>? MapErrorToIssues(Error error)

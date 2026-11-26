@@ -2,6 +2,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -15,6 +16,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// (.valid.json / .invalid.json) for an existing schema version without mutating the schema contract.
 /// Route: PUT /api/schemas/{schemaName}/versions/{version:int}/tests
 /// </summary>
+[RequireRoles(AdminRoleKeys.Automation)]
 public sealed class PutUpdateSchemaTestsEndpoint(
     IUseCase<UpdateSchemaTestsResult, UpdateSchemaTestsRequest> updateTestsUseCase,
     FunctionEndpointInstrumentation? instrumentation = null

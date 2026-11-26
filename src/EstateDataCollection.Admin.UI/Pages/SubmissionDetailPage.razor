@@ -112,6 +112,10 @@
                                 }
                                 <p class="govuk-body-s govuk-!-margin-bottom-3">
                                     Event ID: <code class="dfe-code-badge">@audit.EventId</code>
+                                    @if (audit.HasActor)
+                                    {
+                                        <span> &bull; Actor: <code class="dfe-code-badge">@audit.ActorDisplay</code></span>
+                                    }
                                     @if (audit.HasErrorCode)
                                     {
                                         <span> &bull; Error Code: <code class="dfe-code-badge">@audit.ErrorCode</code></span>

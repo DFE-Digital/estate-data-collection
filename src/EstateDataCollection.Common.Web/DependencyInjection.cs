@@ -1,12 +1,15 @@
 using System.Reflection;
 using EstateDataCollection.Common.Markers;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Events;
 using EstateDataCollection.Common.Web.Middleware;
+using EstateDataCollection.Common.Web.Security;
 using EstateDataCollection.Infrastructure.Configuration;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -25,6 +28,14 @@ public static class DependencyInjection
     public static IServiceCollection AddFunctions(this IServiceCollection services, Assembly hostAssembly)
     {
         var commonAssembly = typeof(DependencyInjection).Assembly;
+
+        services.TryAddScoped<ActorContext>();
+        services.TryAddScoped<IActorContext>(sp => sp.GetRequiredService<ActorContext>());
+        services.TryAddScoped<UserContext>();
+        services.TryAddScoped<IUserContext>(sp => sp.GetRequiredService<UserContext>());
+
+        services.AddSingleton(new FunctionHostAssemblyMarker(hostAssembly));
+        services.TryAddSingleton<IFunctionAuthMetadataResolver, FunctionAuthMetadataResolver>();
 
         services
             .AddConfigOptions(commonAssembly)

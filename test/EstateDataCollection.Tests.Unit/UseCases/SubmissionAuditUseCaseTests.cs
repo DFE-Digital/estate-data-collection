@@ -15,6 +15,7 @@ using EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Validation;
@@ -42,9 +43,11 @@ public sealed class SubmissionAuditUseCaseTests
             .Returns(Result<string>.Success("sub/audit/entry.json"));
     }
 
-    private IUseCase<TResult, TRequest> Audited<TResult, TRequest>(IUseCase<TResult, TRequest> inner)
+    private IUseCase<TResult, TRequest> Audited<TResult, TRequest>(
+        IUseCase<TResult, TRequest> inner,
+        IActorContext? actorContext = null)
     {
-        return new SubmissionUseCaseAuditDecorator<TResult, TRequest>(inner, _auditStore);
+        return new SubmissionUseCaseAuditDecorator<TResult, TRequest>(inner, _auditStore, actorContext: actorContext);
     }
 
     [Fact]
@@ -72,6 +75,40 @@ public sealed class SubmissionAuditUseCaseTests
         recorded.Outcome.HttpStatus.Should().Be(201);
         recorded.ProcessesConsumed.Select(p => p.ProcessName)
             .Should().Contain(["SchemaResolution", "BlobStorage:CreateSession"]);
+    }
+
+    [Fact]
+    public async Task Audited_Submission_UseCase_With_Authenticated_ActorContext_Should_Record_Actor_And_Metadata()
+    {
+        var actorContext = new ActorContext();
+        actorContext.SetActor(
+            actorId: "sub-acme-01",
+            authenticationType: "FaUApiSubscriptionKey",
+            actorName: "Acme Estate Surveyors",
+            subscriptionId: "sub-acme-01",
+            subscriptionName: "Acme Estate Surveyors",
+            metadata: new Dictionary<string, string> { ["keyFingerprint"] = "fauapi-key:123456abcdef" });
+
+        var metadata = new SchemaMetadataBuilder().Build();
+        var resolved = new ResolvedSchema(metadata, JsonSchema.FromText(JsonSchemaFixtures.ValidV1Schema));
+
+        _registry.ResolveActiveSchemaAsync(metadata.Name, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(Result<ResolvedSchema>.Success(resolved));
+        _infrastructure.CreateSessionAsync(Arg.Any<SubmissionSession>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Result<Guid>.Success(ci.Arg<SubmissionSession>().SubmissionId));
+
+        SubmissionAuditEntry? recorded = null;
+        await _auditStore.AppendAsync(Arg.Do<SubmissionAuditEntry>(e => recorded = e), Arg.Any<CancellationToken>());
+
+        var sut = Audited(new CreateSubmissionUseCase(_registry, _infrastructure), actorContext);
+        await sut.ExecuteAsync(new CreateSubmissionRequest(metadata.Name, null));
+
+        recorded.Should().NotBeNull();
+        recorded!.Actor.Should().Be("Acme Estate Surveyors (sub-acme-01)");
+        recorded.Details.Should().ContainKey("actor.id").WhoseValue.Should().Be("sub-acme-01");
+        recorded.Details.Should().ContainKey("actor.authType").WhoseValue.Should().Be("FaUApiSubscriptionKey");
+        recorded.Details.Should().ContainKey("actor.subscriptionName").WhoseValue.Should().Be("Acme Estate Surveyors");
+        recorded.Details.Should().ContainKey("actor.meta.keyFingerprint").WhoseValue.Should().Be("fauapi-key:123456abcdef");
     }
 
     [Fact]

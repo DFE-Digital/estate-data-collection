@@ -4,6 +4,7 @@ using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Common.Security;
 using EstateDataCollection.Common.Web.Endpoints;
 using EstateDataCollection.Common.Web.Extensions;
 using Microsoft.AspNetCore.Http;
@@ -16,6 +17,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// Persists a verified schema version (JSON Schema + Quality Rules or ODCS YAML) as Validated (unscheduled).
 /// Route: POST /api/schemas/{schemaName}/versions/{version:int}
 /// </summary>
+[RequireRoles(AdminRoleKeys.Automation)]
 public sealed class PostSubmitSchemaEndpoint(
     IUseCase<SubmitSchemaResult, SubmitSchemaRequest> submitUseCase,
     FunctionEndpointInstrumentation? instrumentation = null

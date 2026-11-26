@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Security;
 
 namespace EstateDataCollection.Application.UseCases.Submissions.Audit;
 
@@ -12,7 +13,8 @@ namespace EstateDataCollection.Application.UseCases.Submissions.Audit;
 public sealed class SubmissionUseCaseAuditDecorator<TResult, TRequest>(
     IUseCase<TResult, TRequest> inner,
     ISubmissionAuditStore? auditStore = null,
-    ProcessExecutionInstrumentation? processInstrumentation = null
+    ProcessExecutionInstrumentation? processInstrumentation = null,
+    IActorContext? actorContext = null
 ) : IUseCase<TResult, TRequest>
 {
     public async Task<Result<TResult>> ExecuteAsync(
@@ -28,7 +30,8 @@ public sealed class SubmissionUseCaseAuditDecorator<TResult, TRequest>(
             auditedRequest.AuditActionName,
             auditedRequest.InitialSubmissionId,
             processInstrumentation,
-            auditStore);
+            auditStore,
+            actorContext: actorContext);
 
         var result = await inner.ExecuteAsync(request, cancellationToken);
 
