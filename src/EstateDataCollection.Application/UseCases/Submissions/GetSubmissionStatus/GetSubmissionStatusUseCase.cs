@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,7 +26,7 @@ public class GetSubmissionStatusUseCase(
             SubmissionProcessCatalog.GetSession,
             () => infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken),
             loaded => new ProcessStepDetails(
-                Summary: loaded.IsFinalised ? "Session finalised" : "Draft session loaded"));
+                Summary: loaded.IsFinalised ? SubmissionMessages.SessionFinalised : SubmissionMessages.DraftSessionLoaded));
 
         if (sessionResult.IsFailure)
         {
@@ -92,7 +93,7 @@ public class GetSubmissionStatusUseCase(
             {
                 IReadOnlyList<ValidationError> missingDraftErrors =
                 [
-                    new ValidationError("$", "No draft payload has been uploaded yet.")
+                    new ValidationError("$", SubmissionMessages.NoDraftPayloadUploadedYet)
                 ];
 
                 var emptyGuidance = SubmissionNextStepsBuilder.Build(

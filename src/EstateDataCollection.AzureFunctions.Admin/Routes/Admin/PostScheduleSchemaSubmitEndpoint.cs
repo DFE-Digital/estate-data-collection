@@ -9,6 +9,7 @@ using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
@@ -70,7 +71,7 @@ public sealed class PostScheduleSchemaSubmitEndpoint(
             {
                 validationErrors.Add(new ValidationError(
                     "effectiveFromUtc",
-                    "Effective from must be a valid UTC date/time (YYYY-MM-DDTHH:MM)."));
+                    AdminUiMessages.EffectiveFromInvalidUtc));
             }
         }
 
@@ -88,14 +89,14 @@ public sealed class PostScheduleSchemaSubmitEndpoint(
             {
                 validationErrors.Add(new ValidationError(
                     "effectiveToUtc",
-                    "Effective to must be a valid UTC date/time (YYYY-MM-DDTHH:MM)."));
+                    AdminUiMessages.EffectiveToInvalidUtc));
             }
         }
 
         if (validationErrors.Count > 0)
         {
             return await RenderFailureAsync(
-                Error.Validation("Schedule.InvalidInput", "Invalid schedule input.", validationErrors),
+                Error.Validation("Schedule.InvalidInput", AdminUiMessages.InvalidScheduleInput, validationErrors),
                 StatusCodes.Status422UnprocessableEntity);
         }
 
@@ -131,7 +132,7 @@ public sealed class PostScheduleSchemaSubmitEndpoint(
                     IncludeRetired: true),
                 cancellationToken);
 
-            var meta = CreatePageMeta(http, $"Schedule {schemaName} v{version}", activeNav: "schemas");
+            var meta = CreatePageMeta(http, AdminUiMessages.ScheduleSchemaTitle(schemaName, version), activeNav: "schemas");
             var availableProperties = detailResult.IsSuccess
                 ? IdentifierPropertyDiscovery.FromFieldDescriptors(detailResult.Value.Fields)
                 : [];

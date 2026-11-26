@@ -8,7 +8,7 @@ using EstateDataCollection.Infrastructure.Persistence;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
-namespace EstateDataCollection.Infrastructure.Validation.Enrichment;
+namespace EstateDataCollection.Infrastructure.Workflow.Enrichment;
 
 public sealed class BlobReferenceDataProvider(
     BlobServiceClient blobServiceClient,

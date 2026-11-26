@@ -2,6 +2,7 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Application.Validators.Workflow.Steps;
 using EstateDataCollection.Common.Extensions;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.Validators.Workflow;
@@ -91,7 +92,7 @@ public sealed class WorkflowRunner : IWorkflowRunner
         {
             return Error.Validation(
                 ErrorCodes.SchemaVerificationFailed.GetName(),
-                $"Workflow pipeline '{pipelineKey}' is not registered for operation '{context.OperationKind}'.");
+                WorkflowMessages.WorkflowPipelineNotRegistered(pipelineKey, context.OperationKind));
         }
 
         var ambientScope = SubmissionExecutionScope.Current;
@@ -124,7 +125,7 @@ public sealed class WorkflowRunner : IWorkflowRunner
 
                 return Error.Failure(
                     ErrorCodes.SchemaVerificationFailed.GetName(),
-                    $"Required workflow step '{binding.StepId}' is not registered.");
+                    WorkflowMessages.RequiredWorkflowStepNotRegistered(binding.StepId));
             }
 
             if (!ShouldRunBinding(binding, context, previousStepSucceeded, out var skipReason))
@@ -193,8 +194,8 @@ public sealed class WorkflowRunner : IWorkflowRunner
                 if (context.HasStepFailed(depStepId))
                 {
                     skipReason = string.Equals(depStepId, WorkflowStepIds.JsonSchema, StringComparison.OrdinalIgnoreCase)
-                        ? "Skipped because structural JSON Schema validation failed"
-                        : $"Skipped because prerequisite step '{depStepId}' did not succeed";
+                        ? WorkflowMessages.SkippedStructuralSchemaFailed
+                        : WorkflowMessages.SkippedPrerequisiteStepFailed(depStepId);
                     return false;
                 }
             }
@@ -203,13 +204,13 @@ public sealed class WorkflowRunner : IWorkflowRunner
         switch (binding.RunCondition)
         {
             case WorkflowStepCondition.NoCriticalIssues when context.HasCriticalIssues:
-                skipReason = "Skipped because an earlier step emitted a Critical issue";
+                skipReason = WorkflowMessages.SkippedCriticalIssue;
                 return false;
             case WorkflowStepCondition.NoBlockingIssues when context.HasBlockingIssues:
-                skipReason = "Skipped because an earlier step emitted blocking validation issues";
+                skipReason = WorkflowMessages.SkippedBlockingIssues;
                 return false;
             case WorkflowStepCondition.PreviousStepSucceeded when !previousStepSucceeded:
-                skipReason = "Skipped because the previous workflow step did not succeed";
+                skipReason = WorkflowMessages.SkippedPreviousStepFailed;
                 return false;
             default:
                 skipReason = null;

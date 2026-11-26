@@ -2,6 +2,7 @@ using System.Text.Json;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -25,17 +26,17 @@ public sealed class UpdateSchemaTestsUseCase(
             var validationErrors = new List<ValidationError>();
             if (string.IsNullOrWhiteSpace(request.SchemaName))
             {
-                validationErrors.Add(new ValidationError("schemaName", "Schema name is required."));
+                validationErrors.Add(new ValidationError("schemaName", SchemaValidationMessages.SchemaNameRequired));
             }
 
             if (request.Version < 1)
             {
-                validationErrors.Add(new ValidationError("version", "Schema version must be greater than or equal to 1."));
+                validationErrors.Add(new ValidationError("version", SchemaValidationMessages.SchemaVersionMinimumOne));
             }
 
             return Error.Validation(
                 ErrorCodes.SchemaVerificationFailed,
-                "Invalid schema identifier.",
+                SchemaValidationMessages.InvalidSchemaIdentifier,
                 validationErrors);
         }
 

@@ -5,11 +5,12 @@ using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using Json.Logic;
 using Microsoft.Extensions.Options;
 
-namespace EstateDataCollection.Infrastructure.Validation.Engines;
+namespace EstateDataCollection.Infrastructure.Workflow.Engines;
 
 public sealed class JsonLogicQualityEngine(
     IOptions<ValidationOptions>? options = null
@@ -22,9 +23,9 @@ public sealed class JsonLogicQualityEngine(
 
     public static readonly WorkflowEngineDescriptor EngineDescriptor = new(
         EngineId: "jsonlogic",
-        DisplayName: "JsonLogic Quality Engine",
+        DisplayName: WorkflowMessages.JsonLogicDisplayName,
         Kind: ValidationEngineKinds.QualityRule,
-        Description: "Evaluates structured JSON Logic quality rules with ISO-8601 comparison, .length property binding, !in operator, ancestor context, and automatic float epsilon tolerance.");
+        Description: WorkflowMessages.JsonLogicDescription);
 
     private readonly ValidationOptions _options = options?.Value ?? new ValidationOptions();
     private readonly ConcurrentDictionary<string, JsonNode> _normalizedAstCache = new(StringComparer.Ordinal);
@@ -43,12 +44,12 @@ public sealed class JsonLogicQualityEngine(
         var assertion = rule.EffectiveAssertion;
         if (assertion is null)
         {
-            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, "'implementation' (or 'assert') logic condition is required.", source: ValidationSources.Rule, ruleId: ruleId)];
+            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, WorkflowMessages.JsonLogicAssertionRequired, source: ValidationSources.Rule, ruleId: ruleId)];
         }
 
         if (assertion is not JsonObject)
         {
-            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, "JsonLogic 'implementation' must be a JSON object expression.", source: ValidationSources.Rule, ruleId: ruleId)];
+            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, WorkflowMessages.JsonLogicImplementationMustBeObject, source: ValidationSources.Rule, ruleId: ruleId)];
         }
 
         try
@@ -57,14 +58,14 @@ public sealed class JsonLogicQualityEngine(
             var logicRule = JsonSerializer.Deserialize<Rule>(normalized.ToJsonString());
             if (logicRule is null)
             {
-                return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, "Failed to parse JsonLogic assertion rule.", source: ValidationSources.Rule, ruleId: ruleId)];
+                return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, WorkflowMessages.JsonLogicParseFailed, source: ValidationSources.Rule, ruleId: ruleId)];
             }
 
             return [];
         }
         catch (Exception ex)
         {
-            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, $"Invalid JsonLogic assertion syntax: {ex.Message}", source: ValidationSources.Rule, ruleId: ruleId)];
+            return [new ValidationMessage(typeof(JsonLogicQualityEngine), ruleId, WorkflowMessages.InvalidJsonLogicSyntax(ex.Message), source: ValidationSources.Rule, ruleId: ruleId)];
         }
     }
 
@@ -96,7 +97,7 @@ public sealed class JsonLogicQualityEngine(
         }
         catch (Exception ex)
         {
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, $"Rule '{rule.Id}' evaluation failed: {ex.Message}");
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed, WorkflowMessages.RuleEvaluationFailed(rule.Id, ex.Message));
         }
     }
 
@@ -278,7 +279,7 @@ public sealed class JsonLogicQualityEngine(
     {
         if (depth > MaxAstDepth)
         {
-            throw new InvalidOperationException($"JsonLogic rule exceeds maximum nesting depth of {MaxAstDepth}.");
+            throw new InvalidOperationException(WorkflowMessages.JsonLogicMaxDepthExceeded(MaxAstDepth));
         }
 
         if (node is JsonObject obj)
@@ -328,7 +329,7 @@ public sealed class JsonLogicQualityEngine(
     {
         if (depth > MaxAstDepth)
         {
-            throw new InvalidOperationException($"JsonLogic rule exceeds maximum nesting depth of {MaxAstDepth}.");
+            throw new InvalidOperationException(WorkflowMessages.JsonLogicMaxDepthExceeded(MaxAstDepth));
         }
 
         if (node is JsonObject obj)

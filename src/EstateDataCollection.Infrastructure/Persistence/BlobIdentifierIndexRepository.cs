@@ -8,6 +8,7 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Submissions;
 using EstateDataCollection.Common.Extensions;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Options;
@@ -93,7 +94,7 @@ public sealed class BlobIdentifierIndexRepository(
                 }
             }
 
-            return Error.Failure(ErrorCodes.StorageUploadFailed, new { Message = $"Concurrent update conflict on identifier index '{blobName}'." });
+            return Error.Failure(ErrorCodes.StorageUploadFailed, new { Message = DomainMessages.ConcurrentIdentifierIndexConflict(blobName) });
         }
         catch (Exception ex)
         {

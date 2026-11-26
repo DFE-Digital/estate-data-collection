@@ -1,9 +1,10 @@
-using EstateDataCollection.Common.Results;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
+using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.Validators;
 
-public sealed partial class ContractConsistencyAnalyzer
+public sealed partial class ContractConsistencyAnalyser
 {
     private static void ValidateEnumLiteral(
         string varPath,
@@ -27,14 +28,12 @@ public sealed partial class ContractConsistencyAnalyzer
         }
 
         var caseMatch = enumVals.FirstOrDefault(e => string.Equals(e, literalValue, StringComparison.OrdinalIgnoreCase));
-        var hint = caseMatch is not null
-            ? $" Did you mean '{caseMatch}'?"
-            : string.Empty;
+        var allowedValuesJoined = string.Join(", ", enumVals.Select(v => $"'{v}'"));
 
         addFinding(
             RuleSeverity.Error,
             ToJsonPointer(res.CanonicalPath ?? scope),
-            $"Rule '{ruleId}' compares field '{varPath}' against enum literal '{literalValue}', which is not in the JSON Schema enum [{string.Join(", ", enumVals.Select(v => $"'{v}'"))}].{hint}",
+            ConsistencyAnalyserMessages.EnumLiteralMismatch(ruleId, varPath, literalValue, allowedValuesJoined, caseMatch),
             ruleId,
             new Dictionary<string, object?>
             {
@@ -74,10 +73,19 @@ public sealed partial class ContractConsistencyAnalyzer
 
                     if (isInverted)
                     {
+                        var directionWord = group.Key.Direction == BoundDirection.Upper ? "maximum" : "minimum";
                         addFinding(
                             RuleSeverity.Warning,
                             lowerSeverity.PropertyPath,
-                            $"Threshold/severity inversion on '{lowerSeverity.FieldName}': {higherSeverity.Severity} rule '{higherSeverity.RuleId}' enforces a stricter {(group.Key.Direction == BoundDirection.Upper ? "maximum" : "minimum")} ({higherSeverity.Threshold}) than {lowerSeverity.Severity} rule '{lowerSeverity.RuleId}' ({lowerSeverity.Threshold}), making the {lowerSeverity.Severity} rule unreachable.",
+                            ConsistencyAnalyserMessages.ThresholdSeverityInversion(
+                                lowerSeverity.FieldName,
+                                higherSeverity.Severity,
+                                higherSeverity.RuleId,
+                                directionWord,
+                                higherSeverity.Threshold,
+                                lowerSeverity.Severity,
+                                lowerSeverity.RuleId,
+                                lowerSeverity.Threshold),
                             lowerSeverity.RuleId,
                             new Dictionary<string, object?>
                             {
@@ -108,7 +116,7 @@ public sealed partial class ContractConsistencyAnalyzer
                 addFinding(
                     RuleSeverity.Warning,
                     bound.PropertyPath,
-                    $"Rule '{bound.RuleId}' requires '{bound.FieldName}' >= {bound.Threshold}, which conflicts with JSON Schema maximum ({schemaMax}).",
+                    ConsistencyAnalyserMessages.SchemaMinimumConflict(bound.RuleId, bound.FieldName, bound.Threshold, schemaMax),
                     bound.RuleId,
                     new Dictionary<string, object?> { ["check"] = "schema_bound_conflict" });
             }
@@ -117,14 +125,14 @@ public sealed partial class ContractConsistencyAnalyzer
                 addFinding(
                     RuleSeverity.Warning,
                     bound.PropertyPath,
-                    $"Rule '{bound.RuleId}' requires '{bound.FieldName}' <= {bound.Threshold}, which conflicts with JSON Schema minimum ({schemaMin}).",
+                    ConsistencyAnalyserMessages.SchemaMaximumConflict(bound.RuleId, bound.FieldName, bound.Threshold, schemaMin),
                     bound.RuleId,
                     new Dictionary<string, object?> { ["check"] = "schema_bound_conflict" });
             }
         }
     }
 
-    private static void AnalyzeRequiredVsOptionalConflicts(
+    private static void AnalyseRequiredVsOptionalConflicts(
         SchemaAstNode? rootAst,
         Dictionary<string, string> unconditionalRequiredRules,
         List<(string CanonicalFieldKey, string FieldName, string RuleId, string PropertyPath)> conditionalOptionalRules,
@@ -147,7 +155,7 @@ public sealed partial class ContractConsistencyAnalyzer
                 addFinding(
                     RuleSeverity.Warning,
                     propPath,
-                    $"Field '{fieldName}' is unconditionally marked 'required' in JSON Schema, conflicting with conditional-optional exemption in rule '{ruleId}'.",
+                    ConsistencyAnalyserMessages.RequiredInSchemaVsConditionalOptional(fieldName, ruleId),
                     ruleId,
                     new Dictionary<string, object?> { ["check"] = "required_vs_conditional_optional", ["field"] = fieldName });
             }
@@ -157,7 +165,7 @@ public sealed partial class ContractConsistencyAnalyzer
                 addFinding(
                     RuleSeverity.Warning,
                     propPath,
-                    $"Field '{fieldName}' is unconditionally required by rule '{reqRuleId}', conflicting with conditional-optional exemption in rule '{ruleId}'.",
+                    ConsistencyAnalyserMessages.RequiredByRuleVsConditionalOptional(fieldName, reqRuleId, ruleId),
                     ruleId,
                     new Dictionary<string, object?>
                     {

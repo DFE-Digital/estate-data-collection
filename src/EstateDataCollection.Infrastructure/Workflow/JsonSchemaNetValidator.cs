@@ -2,12 +2,13 @@ using System.Text.Json;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Schema;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using Json.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace EstateDataCollection.Infrastructure.Validation;
+namespace EstateDataCollection.Infrastructure.Workflow;
 
 public class JsonSchemaNetValidator(
     JsonSchemaNetValidatorInstrumentation? instrumentation = null,
@@ -16,9 +17,9 @@ public class JsonSchemaNetValidator(
 {
     public WorkflowEngineDescriptor Descriptor { get; } = new(
         EngineId: "json-schema",
-        DisplayName: "JsonSchema.Net Validator",
+        DisplayName: WorkflowMessages.JsonSchemaNetDisplayName,
         Kind: ValidationEngineKinds.StructuralSchema,
-        Description: $"Validates payload structure against compiled JSON Schema (Draft 2020-12 / Draft-07) with closed-schema enforcement (format validation={(options?.Value.RequireFormatValidation ?? true)}).");
+        Description: WorkflowMessages.JsonSchemaNetDescription(options?.Value.RequireFormatValidation ?? true));
 
     private readonly JsonSchemaNetValidatorInstrumentation _instrumentation =
         instrumentation ?? new JsonSchemaNetValidatorInstrumentation(NullLogger<JsonSchemaNetValidator>.Instance);

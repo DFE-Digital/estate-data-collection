@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,7 +25,7 @@ public class FinaliseSubmissionUseCase(
             SubmissionProcessCatalog.GetSession,
             () => infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken),
             loaded => new ProcessStepDetails(
-                Summary: loaded.IsFinalised ? "Session already finalised" : "Draft session loaded"));
+                Summary: loaded.IsFinalised ? SubmissionMessages.SessionAlreadyFinalised : SubmissionMessages.DraftSessionLoaded));
 
         if (session.IsFailure)
         {
@@ -70,7 +71,7 @@ public class FinaliseSubmissionUseCase(
                 {
                     evaluation.Value.Schema.Metadata.Name,
                     evaluation.Value.Schema.Metadata.Version,
-                    Message = $"Schema '{evaluation.Value.Schema.Metadata.Name}' v{evaluation.Value.Schema.Metadata.Version} is retired and no longer accepts finalisation."
+                    Message = SubmissionMessages.SchemaRetiredNoFinalisation(evaluation.Value.Schema.Metadata.Name, evaluation.Value.Schema.Metadata.Version)
                 });
         }
 
@@ -80,7 +81,7 @@ public class FinaliseSubmissionUseCase(
             _instrumentation.ValidationFailed(request.SubmissionId, validationErrors.Count);
             SubmissionExecutionScope.Current?.SetAuditContext(
                 validationErrors: validationErrors,
-                message: $"Finalisation rejected with {validationErrors.Count} validation error(s)");
+                message: SubmissionMessages.FinalisationRejectedSummary(validationErrors.Count));
 
             return Error.Validation(ErrorCodes.SchemaContractViolation, errors: validationErrors);
         }
@@ -91,7 +92,7 @@ public class FinaliseSubmissionUseCase(
             var reason = identifierEval.ValidationError?.Message
                          ?? identifierEval.FailureError?.Description
                          ?? identifierEval.FailureError?.Code
-                         ?? "Identifier invalid";
+                         ?? SubmissionMessages.IdentifierInvalidFallback;
             _instrumentation.InvalidIdentifier(request.SubmissionId, reason);
             if (identifierEval.ValidationError is not null)
             {
@@ -115,7 +116,7 @@ public class FinaliseSubmissionUseCase(
                 session.Value.SchemaName,
                 session.Value.SchemaVersion,
                 cancellationToken),
-            _ => new ProcessStepDetails(Summary: "Promoted merged draft payload to processed container"));
+            _ => new ProcessStepDetails(Summary: SubmissionMessages.PromotedMergedDraftSummary));
 
         if (promotion.IsFailure)
         {
@@ -126,7 +127,7 @@ public class FinaliseSubmissionUseCase(
         SubmissionExecutionScope.Current?.SetAuditOutcome(
             outcomeStatus: "Succeeded",
             httpStatus: 200,
-            message: "Submission finalised and promoted to processed storage",
+            message: SubmissionMessages.SubmissionFinalisedAuditMessage,
             identifier: auditIdentifier,
             details: new Dictionary<string, string>
             {

@@ -1,3 +1,4 @@
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 
@@ -22,41 +23,41 @@ public static class SubmissionNextStepsBuilder
         if (isFinalised)
         {
             var finalisedText = finalisedAtUtc.HasValue
-                ? $"Submission finalised at {finalisedAtUtc.Value.ToUniversalTime():yyyy-MM-dd HH:mm:ss} UTC and promoted for downstream processing."
-                : "Submission has been finalised and promoted for downstream processing.";
+                ? SubmissionMessages.FinalisedAtUtc(finalisedAtUtc.Value)
+                : SubmissionMessages.FinalisedWithoutTimestamp;
 
             return new Guidance(
                 Summary: finalisedText,
                 NextSteps:
                 [
-                    "No further action is required. This submission is locked and cannot be modified."
+                    SubmissionMessages.FinalisedNoFurtherAction
                 ]);
         }
 
         if (!hasDraftPayload)
         {
             return new Guidance(
-                Summary: "Draft session is active, but no payload sections have been uploaded yet.",
+                Summary: SubmissionMessages.DraftActiveNoPayload,
                 NextSteps:
                 [
-                    $"Upload an initial JSON draft payload via PUT {updateUrl}.",
-                    $"Run GET {checkUrl} after uploading to preview merged validation readiness."
+                    SubmissionMessages.UploadInitialDraftStep(updateUrl),
+                    SubmissionMessages.RunCheckAfterUploadStep(checkUrl)
                 ]);
         }
 
         var mergedPrefix = draftCount > 1
-            ? $"Merged {draftCount} timestamped draft submissions; "
+            ? SubmissionMessages.MergedDraftsPrefix(draftCount)
             : draftCount == 1
-                ? "Evaluated 1 draft submission; "
-                : "Evaluated draft submission; ";
+                ? SubmissionMessages.SingleDraftPrefix
+                : SubmissionMessages.GenericDraftPrefix;
 
         if (pendingErrors.Count == 0)
         {
             return new Guidance(
-                Summary: $"{mergedPrefix}all schema, quality rule, and identifier checks passed.",
+                Summary: SubmissionMessages.AllChecksPassedSummary(mergedPrefix),
                 NextSteps:
                 [
-                    $"Submission is ready to finalise. Call POST {finaliseUrl} to validate and promote the merged payload."
+                    SubmissionMessages.ReadyToFinaliseStep(finaliseUrl)
                 ]);
         }
 
@@ -67,19 +68,19 @@ public static class SubmissionNextStepsBuilder
         {
             var rulePrefix = !string.IsNullOrWhiteSpace(err.RuleId) ? $"[{err.RuleId}] " : string.Empty;
             var path = string.IsNullOrWhiteSpace(err.PropertyPath) ? "$" : err.PropertyPath;
-            steps.Add($"Resolve {rulePrefix}{path}: {err.Message}");
+            steps.Add(SubmissionMessages.ResolveIssueStep(rulePrefix, path, err.Message));
         }
 
         if (pendingErrors.Count > maxListedIssues)
         {
-            steps.Add($"Resolve the remaining {pendingErrors.Count - maxListedIssues} issue(s) listed in pendingErrors.");
+            steps.Add(SubmissionMessages.ResolveRemainingIssuesStep(pendingErrors.Count - maxListedIssues));
         }
 
-        steps.Add($"Upload an updated or partial JSON patch via PUT {updateUrl} (timestamped drafts are merged automatically).");
-        steps.Add($"Re-check readiness via GET {checkUrl} before calling POST {finaliseUrl}.");
+        steps.Add(SubmissionMessages.UploadUpdatedPatchStep(updateUrl));
+        steps.Add(SubmissionMessages.ReCheckBeforeFinaliseStep(checkUrl, finaliseUrl));
 
         return new Guidance(
-            Summary: $"{mergedPrefix}{pendingErrors.Count} pending issue(s) must be resolved before finalising.",
+            Summary: SubmissionMessages.PendingIssuesSummary(mergedPrefix, pendingErrors.Count),
             NextSteps: steps);
     }
 }

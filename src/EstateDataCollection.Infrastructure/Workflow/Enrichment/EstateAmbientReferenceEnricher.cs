@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 
-namespace EstateDataCollection.Infrastructure.Validation.Enrichment;
+namespace EstateDataCollection.Infrastructure.Workflow.Enrichment;
 
 /// <summary>
 /// Populates payload-wide estate lookup collections (valid site, block, and evidence identifiers)

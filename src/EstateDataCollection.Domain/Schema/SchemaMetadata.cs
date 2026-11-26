@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
+using EstateDataCollection.Common.Messages;
 
 namespace EstateDataCollection.Domain.Schema;
 
@@ -308,7 +309,7 @@ public class SchemaMetadata
     {
         if (State != SchemaLifecycleState.Unvalidated)
         {
-            throw new InvalidOperationException($"Only Unvalidated schemas can be signed off. Current state: '{State}'.");
+            throw new InvalidOperationException(DomainMessages.OnlyUnvalidatedCanBeSignedOff(State));
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(signedOffBy);
@@ -394,7 +395,7 @@ public class SchemaMetadata
         {
             var reason = validation.Error.ValidationErrors.FirstOrDefault()?.Message
                          ?? validation.Error.Description
-                         ?? "Invalid identifier configuration.";
+                         ?? DomainMessages.InvalidIdentifierConfigFallback;
             throw new ArgumentException(reason, nameof(identifierConfig));
         }
 
@@ -413,7 +414,7 @@ public class SchemaMetadata
         {
             var reason = validation.Error.ValidationErrors.FirstOrDefault()?.Message
                          ?? validation.Error.Description
-                         ?? "Invalid validation policy configuration.";
+                         ?? DomainMessages.InvalidValidationPolicyFallback;
             throw new ArgumentException(reason, nameof(validationPolicy));
         }
 
@@ -424,12 +425,12 @@ public class SchemaMetadata
     {
         if (State is SchemaLifecycleState.Invalid or SchemaLifecycleState.Unvalidated or SchemaLifecycleState.Deleted)
         {
-            throw new InvalidOperationException($"Schema in state '{State}' cannot be scheduled or activated.");
+            throw new InvalidOperationException(DomainMessages.SchemaStateCannotBeScheduledOrActivated(State));
         }
 
         if (effectiveToUtc.HasValue && effectiveToUtc.Value <= effectiveFromUtc)
         {
-            throw new ArgumentException("EffectiveToUtc must be later than EffectiveFromUtc.", nameof(effectiveToUtc));
+            throw new ArgumentException(DomainMessages.EffectiveToBeforeEffectiveFrom, nameof(effectiveToUtc));
         }
 
         EffectiveFromUtc = effectiveFromUtc;
@@ -443,7 +444,7 @@ public class SchemaMetadata
     {
         if (State is SchemaLifecycleState.Invalid or SchemaLifecycleState.Unvalidated or SchemaLifecycleState.Deleted)
         {
-            throw new InvalidOperationException($"Schema in state '{State}' cannot be deprecated.");
+            throw new InvalidOperationException(DomainMessages.SchemaStateCannotBeDeprecated(State));
         }
 
         State = SchemaLifecycleState.Deprecated;
@@ -453,7 +454,7 @@ public class SchemaMetadata
     {
         if (State is SchemaLifecycleState.Invalid or SchemaLifecycleState.Deleted)
         {
-            throw new InvalidOperationException($"Schema in state '{State}' cannot be retired.");
+            throw new InvalidOperationException(DomainMessages.SchemaStateCannotBeRetired(State));
         }
 
         State = SchemaLifecycleState.Retired;

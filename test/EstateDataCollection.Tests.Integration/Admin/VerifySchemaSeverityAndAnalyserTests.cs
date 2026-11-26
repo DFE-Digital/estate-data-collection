@@ -13,7 +13,7 @@ using Xunit;
 namespace EstateDataCollection.Tests.Integration.Admin;
 
 [Collection("AzuriteCollection")]
-public sealed class VerifySchemaSeverityAndAnalyzerTests(AzuriteFixture fixture)
+public sealed class VerifySchemaSeverityAndAnalyserTests(AzuriteFixture fixture)
     : IDisposable
 {
     private readonly IntegrationEndpointHarness<PostVerifySchemaEndpoint> _harness = new(fixture);
@@ -34,7 +34,7 @@ public sealed class VerifySchemaSeverityAndAnalyzerTests(AzuriteFixture fixture)
     private const string ValidFixtureJson = """{"urn": 100001, "quantity": 60}""";
 
     [Fact]
-    public async Task VerifySchema_With_MultiSeverity_And_AnalyzerFindings_Should_Return_200_Diagnostic_Report()
+    public async Task VerifySchema_With_MultiSeverity_And_AnalyserFindings_Should_Return_200_Diagnostic_Report()
     {
         // Arrange
         const string rulesJson = """
@@ -90,7 +90,7 @@ public sealed class VerifySchemaSeverityAndAnalyzerTests(AzuriteFixture fixture)
         report.IsSuccessful.Should().BeFalse();
         report.Issues.Should().ContainKey(RuleSeverity.Error);
         report.Issues.Should().ContainKey(RuleSeverity.Warning);
-        report.AnalyzerFindings.Should().Contain(f => f.RuleId == "R-BAD-CASING" && f.Severity == RuleSeverity.Error);
-        report.AnalyzerFindings.Should().Contain(f => f.RuleId == "R-WARN-LOOSE" && f.Severity == RuleSeverity.Warning);
+        report.AnalyserFindings.Should().Contain(f => f.RuleId == "R-BAD-CASING" && f.Severity == RuleSeverity.Error);
+        report.AnalyserFindings.Should().Contain(f => f.RuleId == "R-WARN-LOOSE" && f.Severity == RuleSeverity.Warning);
     }
 }

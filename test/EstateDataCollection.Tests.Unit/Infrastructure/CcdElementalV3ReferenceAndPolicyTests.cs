@@ -6,7 +6,7 @@ using EstateDataCollection.Application.Validators.Workflow;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Infrastructure.Registry;
-using EstateDataCollection.Infrastructure.Validation;
+using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Builders.Contracts;
 using EstateDataCollection.Tests.Common.Builders.Payloads;

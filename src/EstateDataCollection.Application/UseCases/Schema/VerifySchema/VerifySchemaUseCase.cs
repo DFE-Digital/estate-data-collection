@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Extensions;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -82,7 +83,7 @@ public class VerifySchemaUseCase(
                 string.Join("; ", report.Errors));
 
             return new VerifySchemaResult(
-                Message: $"Schema verification found {errors.Count} error(s)",
+                Message: SchemaValidationMessages.SchemaVerificationFoundErrors(errors.Count),
                 ResolvedIdentifierConfig: report.ResolvedIdentifierConfig,
                 InvalidFixtureOutcomes: report.InvalidFixtureOutcomes,
                 Warnings: report.WarningMessages,
@@ -91,12 +92,12 @@ public class VerifySchemaUseCase(
                 Issues: report.Issues,
                 SyntaxErrors: report.SyntaxErrors.Select(e => e.Message).ToArray(),
                 FixtureErrors: report.FixtureErrors.Select(e => e.Message).ToArray(),
-                AnalyzerFindings: report.AnalyzerFindings);
+                AnalyserFindings: report.AnalyserFindings);
         }
 
         _instrumentation.SchemaVerificationSucceeded();
         return new VerifySchemaResult(
-            Message: "Schema verified successfully",
+            Message: SchemaValidationMessages.SchemaVerifiedSuccessfully,
             ResolvedIdentifierConfig: report.ResolvedIdentifierConfig,
             InvalidFixtureOutcomes: report.InvalidFixtureOutcomes,
             Warnings: report.WarningMessages,
@@ -105,7 +106,7 @@ public class VerifySchemaUseCase(
             Issues: report.Issues,
             SyntaxErrors: [],
             FixtureErrors: [],
-            AnalyzerFindings: report.AnalyzerFindings);
+            AnalyserFindings: report.AnalyserFindings);
     }
 
     private static VerifySchemaResult BuildErrorReportResult(Error error, string defaultPath)
@@ -113,7 +114,7 @@ public class VerifySchemaUseCase(
         var normalised = SchemaCandidatePersistence.NormaliseError(error, defaultPath);
 
         return new VerifySchemaResult(
-            Message: $"Schema verification found {normalised.Messages.Count} error(s)",
+            Message: SchemaValidationMessages.SchemaVerificationFoundErrors(normalised.Messages.Count),
             Warnings: [],
             IsSuccessful: false,
             Issues: normalised.Issues,

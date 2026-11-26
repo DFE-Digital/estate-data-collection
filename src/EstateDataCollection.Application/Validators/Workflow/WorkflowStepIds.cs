@@ -7,5 +7,5 @@ public static class WorkflowStepIds
     public const string CrossSubmissionEnrichment = "cross-submission-enrichment";
     public const string ReferenceDataEnrichment = "reference-data-enrichment";
     public const string QualityRules = "quality-rules";
-    public const string ContractConsistency = "contract-consistency-analyzer";
+    public const string ContractConsistency = "contract-consistency-analyser";
 }

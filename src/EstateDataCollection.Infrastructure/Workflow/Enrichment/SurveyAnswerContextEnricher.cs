@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 
-namespace EstateDataCollection.Infrastructure.Validation.Enrichment;
+namespace EstateDataCollection.Infrastructure.Workflow.Enrichment;
 
 /// <summary>
 /// Enriches individual rule target nodes with derived survey answer helper properties

@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
@@ -68,19 +69,17 @@ public sealed record DashboardViewModel(
     public NotificationBannerViewModel? ValidatedUnscheduledBannerModel =>
         ValidatedUnscheduledCount > 0
             ? NotificationBannerViewModel.Info(
-                message: $"{ValidatedUnscheduledCount} validated schema version(s) are currently unscheduled.",
-                title: "New version(s) ready to schedule",
-                detail:
-                "Contracts promoted from draft-schemas or submitted via the workbench remain in Validated state until you configure an effective window or activate them.")
+                message: AdminUiMessages.UnscheduledVersionsBannerMessage(ValidatedUnscheduledCount),
+                title: AdminUiMessages.UnscheduledVersionsBannerTitle,
+                detail: AdminUiMessages.UnscheduledVersionsBannerDetail)
             : null;
 
     public NotificationBannerViewModel? ErrorReportAttentionBannerModel =>
         ErrorReportVersionCount > 0
             ? NotificationBannerViewModel.Info(
-                message: $"{ErrorReportVersionCount} schema version(s) have a persisted .error.json diagnostic report ({InvalidVersionCount} Invalid, {UnvalidatedVersionCount} awaiting sign-off).",
-                title: "Schema diagnostics require review",
-                detail:
-                "Inspect highlighted versions to review .error.json findings, sign off Unvalidated contracts with warnings, or delete broken versions so a fix can be published to version + 1.")
+                message: AdminUiMessages.ErrorReportAttentionBannerMessage(ErrorReportVersionCount, InvalidVersionCount, UnvalidatedVersionCount),
+                title: AdminUiMessages.ErrorReportAttentionBannerTitle,
+                detail: AdminUiMessages.ErrorReportAttentionBannerDetail)
             : null;
 
     public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);

@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.UseCases.Schema.DeleteSchemaVersion;
@@ -16,7 +17,7 @@ public sealed class DeleteSchemaVersionUseCase(
         {
             return Error.Validation(
                 ErrorCodes.SchemaInvalidSchedule,
-                "SchemaName and positive Version are required.");
+                SchemaValidationMessages.SchemaNameAndPositiveVersionRequired);
         }
 
         var deleteResult = await schemaRegistry.DeleteSchemaVersionAsync(

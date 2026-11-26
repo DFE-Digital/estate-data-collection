@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
@@ -20,9 +21,9 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
     public WorkflowEngineDescriptor EngineDescriptor =>
         new(
             WorkflowStepIds.CrossSubmissionEnrichment,
-            "Cross-Submission Enrichment",
+            WorkflowMessages.CrossSubmissionDisplayName,
             ValidationEngineKinds.ContextEnrichment,
-            "Loads sibling submissions sharing the extracted establishment identifier (draft + finalised) and enforces draft-reference policies.");
+            WorkflowMessages.CrossSubmissionDescription);
 
     public async Task<Result<WorkflowStepOutcome>> ExecuteAsync(
         WorkflowContext context,
@@ -43,7 +44,7 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
                         new EnrichmentEvalSummary(
                             SiblingCount: ExtractSubmissionCount(fixtureCrossObj!),
                             DraftIds: draftIds,
-                            Summary: "Injected cross-submission ambient fixture")));
+                            Summary: WorkflowMessages.InjectedCrossSubmissionFixture)));
                 },
                 eval => new ProcessStepDetails(
                     Outcome: SubmissionProcessOutcome.Succeeded,
@@ -61,15 +62,15 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
         // 2. Skip cleanly when index repository is not configured (e.g. lightweight unit test pipelines)
         if (indexRepository is null)
         {
-            RecordSkipped(context, "Cross-submission index repository is not configured");
-            return new WorkflowStepOutcome(Succeeded: true, Summary: "Skipped (no index repository)");
+            RecordSkipped(context, WorkflowMessages.SkippedRepositoryNotConfigured);
+            return new WorkflowStepOutcome(Succeeded: true, Summary: WorkflowMessages.SkippedNoIndexRepository);
         }
 
         // 3. Skip cleanly if no establishment identifier was extracted
         if (context.ExtractedIdentifier is not { } extractedId || string.IsNullOrWhiteSpace(extractedId.Value))
         {
-            RecordSkipped(context, "No establishment identifier extracted for cross-submission lookup");
-            return new WorkflowStepOutcome(Succeeded: true, Summary: "Skipped (no identifier)");
+            RecordSkipped(context, WorkflowMessages.SkippedNoIdentifierExtracted);
+            return new WorkflowStepOutcome(Succeeded: true, Summary: WorkflowMessages.SkippedNoIdentifierShort);
         }
 
         // 4. Live identifier-index lookup across sibling submissions
@@ -78,7 +79,13 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
             async () =>
             {
                 var entriesResult = await indexRepository.GetEntriesAsync(extractedId.Type, extractedId.Value, cancellationToken);
-                if (entriesResult is null || entriesResult.IsFailure)
+                if (entriesResult is null)
+                {
+                    return Result<EnrichmentEvalSummary>.Failure(
+                        Error.Failure(ErrorCodes.StorageReadFailed, new { Message = WorkflowMessages.CrossSubmissionLookupFailed }));
+                }
+
+                if (entriesResult.IsFailure)
                 {
                     return Result<EnrichmentEvalSummary>.Failure(entriesResult.Error);
                 }
@@ -168,8 +175,8 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
                 InjectCrossSubmissionAmbient(context, crossObj);
 
                 var summary = submissionsArray.Count == 0
-                    ? $"No sibling submissions found for {extractedId.Type}={extractedId.Value}"
-                    : $"Loaded {submissionsArray.Count} sibling submission(s) for {extractedId.Type}={extractedId.Value} ({draftIds.Count} draft)";
+                    ? WorkflowMessages.NoSiblingSubmissionsFound(extractedId.Type, extractedId.Value)
+                    : WorkflowMessages.LoadedSiblingSubmissions(submissionsArray.Count, extractedId.Type, extractedId.Value, draftIds.Count);
 
                 return Result<EnrichmentEvalSummary>.Success(new EnrichmentEvalSummary(submissionsArray.Count, draftIds, summary));
             },
@@ -232,7 +239,7 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
             {
                 case CrossSubmissionDraftPolicy.BlockFinaliseOnDraftReferences:
                 {
-                    var msg = $"Cannot finalise submission while sibling draft submission(s) remain unfinalised for this establishment: {draftList}.";
+                    var msg = WorkflowMessages.BlockFinaliseOnDraftReferences(draftList);
                     var err = new ValidationError(
                         PropertyPath: pointer,
                         Message: msg,
@@ -247,7 +254,7 @@ public sealed class CrossSubmissionEnrichmentWorkflowStep(
                 }
                 case CrossSubmissionDraftPolicy.WarnOnDraftReferences:
                 {
-                    var msg = $"Cross-submission context includes unfinalised sibling draft submission(s): {draftList}.";
+                    var msg = WorkflowMessages.WarnOnDraftReferences(draftList);
                     var warn = new ValidationError(
                         PropertyPath: pointer,
                         Message: msg,

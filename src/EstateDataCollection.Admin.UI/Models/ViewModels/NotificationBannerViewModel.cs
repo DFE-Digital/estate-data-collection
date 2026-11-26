@@ -1,3 +1,5 @@
+using EstateDataCollection.Common.Messages;
+
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
 public sealed record NotificationBannerViewModel(
@@ -27,7 +29,7 @@ public sealed record NotificationBannerViewModel(
         var role = isSuccess ? "alert" : "region";
         var headingText = !string.IsNullOrWhiteSpace(title)
             ? title
-            : (isSuccess ? "Success" : "Important");
+            : (isSuccess ? AdminUiMessages.BannerHeadingSuccess : AdminUiMessages.BannerHeadingImportant);
 
         return new NotificationBannerViewModel(
             CssClass: cssClass,

@@ -1,9 +1,10 @@
-using EstateDataCollection.Common.Results;
 using System.Text.Json.Nodes;
+using EstateDataCollection.Common.Messages;
+using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.Validators;
 
-public sealed partial class ContractConsistencyAnalyzer
+public sealed partial class ContractConsistencyAnalyser
 {
     private static SchemaAstNode? TryBuildSchemaAst(string rawSchemaJson)
     {
@@ -346,19 +347,16 @@ public sealed partial class ContractConsistencyAnalyzer
             addFinding(
                 RuleSeverity.Error,
                 ToJsonPointer(exprToken),
-                $"Rule '{ruleId}' references '{exprToken}', which has mismatched casing against JSON Schema. Did you mean '{lookup.SuggestedPath}'?",
+                ConsistencyAnalyserMessages.FieldCasingMismatch(ruleId, exprToken, lookup.SuggestedPath),
                 ruleId,
                 new Dictionary<string, object?> { ["check"] = "field_casing", ["suggestion"] = lookup.SuggestedPath });
         }
         else if (lookup.Status == AstLookupStatus.Missing)
         {
-            var hint = lookup.SuggestedPath is not null
-                ? $" Did you mean '{lookup.SuggestedPath}'?"
-                : string.Empty;
             addFinding(
                 RuleSeverity.Error,
                 ToJsonPointer(exprToken),
-                $"Rule '{ruleId}' references field '{exprToken}', which does not exist in JSON Schema.{hint}",
+                ConsistencyAnalyserMessages.FieldMissingInSchema(ruleId, exprToken, lookup.SuggestedPath),
                 ruleId,
                 new Dictionary<string, object?> { ["check"] = "missing_field", ["suggestion"] = lookup.SuggestedPath });
         }

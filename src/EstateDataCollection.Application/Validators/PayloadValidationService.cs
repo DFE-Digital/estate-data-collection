@@ -15,14 +15,14 @@ public sealed class PayloadValidationService(
     IOptions<ValidationOptions>? options = null,
     ProcessExecutionInstrumentation? processInstrumentation = null,
     IWorkflowRunner? workflowRunner = null,
-    IContractConsistencyAnalyzer? consistencyAnalyzer = null
+    IContractConsistencyAnalyser? consistencyAnalyser = null
 ) : IPayloadValidationService
 {
     private readonly ValidationOptions _options = options?.Value ?? new ValidationOptions();
     private readonly IWorkflowRunner _workflowRunner =
         workflowRunner ?? WorkflowRunner.CreateDefault(schemaValidator, logicValidator, processInstrumentation);
     private readonly WorkflowEngineDescriptor _consistencyDescriptor =
-        consistencyAnalyzer?.Descriptor ?? ContractConsistencyAnalyzer.EngineDescriptor;
+        consistencyAnalyser?.Descriptor ?? ContractConsistencyAnalyser.EngineDescriptor;
 
     public IReadOnlyList<WorkflowEngineDescriptor> GetRegisteredEngines()
     {

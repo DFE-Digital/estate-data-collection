@@ -5,6 +5,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
@@ -31,7 +32,7 @@ public sealed class PostWorkbenchVerifyEndpoint(
         InstrumentInvoked(EndpointName, "verify");
 
         var form = await ReadFormSafeAsync(http, cancellationToken);
-        var meta = CreatePageMeta(http, "Contract Workbench", activeNav: "workbench");
+        var meta = CreatePageMeta(http, AdminUiMessages.WorkbenchTitle, activeNav: "workbench");
 
         var parseResult = WorkbenchFormParser.Parse(form, requireSchemaIdentity: false);
         if (parseResult.IsFailure)

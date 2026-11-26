@@ -1,5 +1,6 @@
 using System.Globalization;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Domain.Schema;
@@ -20,22 +21,27 @@ public sealed record SchemaDetailViewModel(
 
     public string SchemaName => Detail?.SchemaName ?? string.Empty;
 
-    public string VersionDisplay => Detail is null ? string.Empty : $"v{Detail.Version}";
+    public string VersionDisplay => Detail is null 
+        ? string.Empty 
+        : $"v{Detail.Version}";
 
-    public string NextVersionDisplay => Detail is null ? string.Empty : $"v{Detail.Version + 1}";
+    public string NextVersionDisplay => Detail is null 
+        ? string.Empty 
+        : $"v{Detail.Version + 1}";
 
-    public string BackToSchemaUrl => Detail is null ? AppRoutes.AdminUi.Dashboard : AppRoutes.AdminUi.SchemaVersions(Detail.SchemaName);
+    public string BackToSchemaUrl => Detail is null 
+        ? AppRoutes.AdminUi.Dashboard 
+        : AppRoutes.AdminUi.SchemaVersions(Detail.SchemaName);
 
-    public bool IsRetired => Detail is not null && string.Equals(Detail.State.Name, "Retired", StringComparison.OrdinalIgnoreCase);
+    public bool IsRetired => Detail is not null && Detail.State.Key == (int)SchemaLifecycleState.Retired;
 
-    public bool IsInvalid => Detail is not null && string.Equals(Detail.State.Name, "Invalid", StringComparison.OrdinalIgnoreCase);
+    public bool IsInvalid => Detail is not null &&  Detail.State.Key == (int)SchemaLifecycleState.Invalid;
 
-    public bool IsUnvalidated => Detail is not null && string.Equals(Detail.State.Name, "Unvalidated", StringComparison.OrdinalIgnoreCase);
+    public bool IsUnvalidated => Detail is not null &&  Detail.State.Key == (int)SchemaLifecycleState.Unvalidated;
 
     public bool IsDeleted =>
         Detail is not null &&
-        (string.Equals(Detail.State.Name, "Deleted", StringComparison.OrdinalIgnoreCase) ||
-         Detail.DeletedAtUtc.HasValue);
+        (Detail.State.Key == (int)SchemaLifecycleState.Deleted || Detail.DeletedAtUtc.HasValue);
 
     public bool CanModifyLifecycle => Detail is not null && !IsRetired && !IsDeleted && !IsInvalid && !IsUnvalidated;
 
@@ -76,16 +82,18 @@ public sealed record SchemaDetailViewModel(
 
     public int StoredTestsCount => ValidFixturesCount + InvalidFixturesCount;
 
-    public LifecycleTagViewModel? StateTag => Detail is null ? null : LifecycleTagViewModel.From(Detail.State.Name);
+    public LifecycleTagViewModel? StateTag => Detail is not null 
+        ? LifecycleTagViewModel.From(Detail.State.Name) 
+        : null;
 
     public string AcceptsTrafficDisplay =>
         Detail?.CanAcceptTraffic == true
-            ? "Yes (public submissions permitted)"
-            : "No";
+            ? AdminUiMessages.AcceptsTrafficYes
+            : AdminUiMessages.AcceptsTrafficNo;
 
-    public string EffectiveFromDisplay => Detail?.EffectiveFromUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Unscheduled";
+    public string EffectiveFromDisplay => Detail?.EffectiveFromUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? AdminUiMessages.UnscheduledLabel;
 
-    public string EffectiveToDisplay => Detail?.EffectiveToUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Open-ended";
+    public string EffectiveToDisplay => Detail?.EffectiveToUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? AdminUiMessages.OpenEndedLabel;
 
     public bool HasIdentifierConfig => Detail?.IdentifierConfig is not null;
 
@@ -101,9 +109,9 @@ public sealed record SchemaDetailViewModel(
         {
             return Detail?.IdentifierConfig?.Required switch
             {
-                true => "Yes",
-                false => "No",
-                null => "Default"
+                true => AdminUiMessages.IdentifierRequiredYes,
+                false => AdminUiMessages.IdentifierRequiredNo,
+                null => AdminUiMessages.IdentifierRequiredDefault
             };
         }
     }
@@ -112,11 +120,11 @@ public sealed record SchemaDetailViewModel(
 
     public string FailOnMinimumSeverityDisplay => EffectivePolicy.FailOnMinimumSeverity.ToString();
 
-    public string WorkflowPipelineKeyDisplay => EffectivePolicy.WorkflowPipelineKey ?? "Default";
+    public string WorkflowPipelineKeyDisplay => EffectivePolicy.WorkflowPipelineKey ?? AdminUiMessages.DefaultLabel;
 
     public string CrossSubmissionDraftPolicyDisplay => EffectivePolicy.CrossSubmissionDraftPolicy.ToString();
 
-    public string NumericToleranceOverrideDisplay => EffectivePolicy.NumericToleranceOverride?.ToString(CultureInfo.InvariantCulture) ?? "None";
+    public string NumericToleranceOverrideDisplay => EffectivePolicy.NumericToleranceOverride?.ToString(CultureInfo.InvariantCulture) ?? AdminUiMessages.NoneLabel;
 
     public bool HasSignedOff => !string.IsNullOrWhiteSpace(Detail?.SignedOffBy);
 
@@ -157,8 +165,8 @@ public sealed record SchemaDetailViewModel(
 
     public string ErrorReportHeading =>
         HasErrorReportErrors
-            ? "Schema Error Report (.error.json) — Validation Failed"
-            : "Schema Diagnostic Report (.error.json) — Warnings Recorded";
+            ? AdminUiMessages.ErrorReportHeadingFailed
+            : AdminUiMessages.ErrorReportHeadingWarnings;
 
     public string ErrorReportTagText
     {
@@ -166,10 +174,10 @@ public sealed record SchemaDetailViewModel(
         {
             if (IsInvalid)
             {
-                return "Invalid (.error.json)";
+                return AdminUiMessages.ErrorReportTagInvalid;
             }
 
-            return HasErrorReportErrors ? "Errors (.error.json)" : "Warnings (.error.json)";
+            return HasErrorReportErrors ? AdminUiMessages.ErrorReportTagErrors : AdminUiMessages.ErrorReportTagWarnings;
         }
     }
 
@@ -197,16 +205,14 @@ public sealed record SchemaDetailViewModel(
 
     public IReadOnlyList<SeverityIssueGroupViewModel> ErrorReportIssueGroups
     {
-        get { return _errorReportIssueGroups ??= SeverityIssueGroupViewModel.FromDictionary(Detail?.ErrorReport?.Issues); }
+        get { return field ??= SeverityIssueGroupViewModel.FromDictionary(Detail?.ErrorReport?.Issues); }
     }
-
-    private IReadOnlyList<SeverityIssueGroupViewModel>? _errorReportIssueGroups;
 
     public bool HasErrorReportIssues => ErrorReportIssueGroups.Count > 0;
 
     public bool HasLastTestRun => Detail?.LastTestRunAtUtc.HasValue == true;
 
-    public string LastTestRunTagText => Detail?.LastTestRunPassed == true ? "Passed" : "Failed";
+    public string LastTestRunTagText => Detail?.LastTestRunPassed == true ? AdminUiMessages.TagPassed : AdminUiMessages.TagFailed;
 
     public string LastTestRunTagCssClass =>
         Detail?.LastTestRunPassed == true
@@ -224,23 +230,19 @@ public sealed record SchemaDetailViewModel(
 
     public FieldsViewerViewModel FieldsViewer
     {
-        get { return _fieldsViewer ??= FieldsViewerViewModel.From(Detail?.Fields); }
+        get { return field ??= FieldsViewerViewModel.From(Detail?.Fields); }
     }
-
-    private FieldsViewerViewModel? _fieldsViewer;
 
     public QualityRulesViewerViewModel QualityRulesViewer
     {
-        get { return _qualityRulesViewer ??= QualityRulesViewerViewModel.From(Detail?.QualityRules); }
+        get { return field ??= QualityRulesViewerViewModel.From(Detail?.QualityRules); }
     }
-
-    private QualityRulesViewerViewModel? _qualityRulesViewer;
 
     public ValidationEngineDiagnosticsViewModel EngineDiagnostics
     {
         get
         {
-            return _engineDiagnostics ??= ValidationEngineDiagnosticsViewModel.FromDetail(
+            return field ??= ValidationEngineDiagnosticsViewModel.FromDetail(
                 Detail?.LastTestRunEngineTraces,
                 Detail?.RegisteredEngines,
                 Detail?.QualityRules,
@@ -248,34 +250,38 @@ public sealed record SchemaDetailViewModel(
         }
     }
 
-    private ValidationEngineDiagnosticsViewModel? _engineDiagnostics;
-
     public bool HasRawJsonSchema => !string.IsNullOrWhiteSpace(Detail?.RawJsonSchema);
 
     public string RawJsonSchema => Detail?.RawJsonSchema ?? string.Empty;
+    
+    public static class TabIds
+    {
+        public const string Fields = "schema-fields";
+        public const string QualityRules = "schema-quality-rules";
+        public const string ValidationEngines = "schema-validation-engines";
+        public const string RawJson = "schema-raw-json";
+    }
 
     public GovUkTabsViewModel Tabs
     {
         get
         {
-            return _tabs ??= GovUkTabsViewModel.Create(
+            return field ??= GovUkTabsViewModel.Create(
                 "schema-detail-tabs",
                 [
-                    ("schema-fields", $"Fields ({FieldsViewer.TopLevelFieldCount})", true),
-                    ("schema-quality-rules", $"Quality rules ({QualityRulesViewer.RuleCount})", true),
-                    ("schema-validation-engines", "Validation engines", EngineDiagnostics.HasContent),
-                    ("schema-raw-json", "Raw JSON Schema", HasRawJsonSchema)
+                    (TabIds.Fields, AdminUiMessages.SchemaFieldsTabLabel(FieldsViewer.TopLevelFieldCount), true),
+                    (TabIds.QualityRules, AdminUiMessages.SchemaQualityRulesTabLabel(QualityRulesViewer.RuleCount), true),
+                    (TabIds.ValidationEngines, AdminUiMessages.SchemaValidationEnginesTabLabel, EngineDiagnostics.HasContent),
+                    (TabIds.RawJson, AdminUiMessages.SchemaRawJsonTabLabel, HasRawJsonSchema)
                 ]);
         }
     }
 
-    private GovUkTabsViewModel? _tabs;
+    public GovUkTabItemViewModel? FieldsTab => Tabs.Find(TabIds.Fields);
 
-    public GovUkTabItemViewModel? FieldsTab => Tabs.Find("schema-fields");
+    public GovUkTabItemViewModel? QualityRulesTab => Tabs.Find(TabIds.QualityRules);
 
-    public GovUkTabItemViewModel? QualityRulesTab => Tabs.Find("schema-quality-rules");
+    public GovUkTabItemViewModel? ValidationEnginesTab => Tabs.Find(TabIds.ValidationEngines);
 
-    public GovUkTabItemViewModel? ValidationEnginesTab => Tabs.Find("schema-validation-engines");
-
-    public GovUkTabItemViewModel? RawJsonSchemaTab => Tabs.Find("schema-raw-json");
+    public GovUkTabItemViewModel? RawJsonSchemaTab => Tabs.Find(TabIds.RawJson);
 }

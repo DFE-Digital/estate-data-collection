@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Extensions;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,7 +24,7 @@ public class SubmitSchemaUseCase(
         {
             return Error.Validation(
                 ErrorCodes.SchemaInvalidSchedule,
-                "SchemaName and positive Version are required.");
+                SchemaValidationMessages.SchemaNameAndPositiveVersionRequired);
         }
 
         _instrumentation.SubmittingSchema(request.SchemaName, request.Version);

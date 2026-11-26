@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 
@@ -174,7 +175,7 @@ public sealed partial class SchemaVerificationService
         var ptr = alignment.EffectiveConfig?.JsonPointer
                   ?? alignment.ResolvedPaths.FirstOrDefault()
                   ?? string.Empty;
-        return $"Type '{effectiveType}' at '{ptr}' (required: {alignment.IsRequiredInSchema})";
+        return SchemaValidationMessages.IdentifierSummaryLabel(effectiveType, ptr, alignment.IsRequiredInSchema);
     }
 
     private static IReadOnlyList<ValidationEngineTrace> BuildEngineTraces(
@@ -199,7 +200,7 @@ public sealed partial class SchemaVerificationService
                 ItemsEvaluated: 0,
                 ViolationCount: 0,
                 DurationMs: 0,
-                Summary: "No JSON Schema provided"));
+                Summary: SchemaValidationMessages.NoJsonSchemaProvided));
         }
         else
         {
@@ -210,10 +211,10 @@ public sealed partial class SchemaVerificationService
                     : nameof(SubmissionProcessOutcome.Succeeded);
 
             var schemaSummary = schemaState.HasFailure
-                ? schemaState.FirstIssue ?? "Malformed JSON Schema"
+                ? schemaState.FirstIssue ?? SchemaValidationMessages.MalformedJsonSchema
                 : schemaState.ViolationCount > 0
-                    ? schemaState.FirstIssue ?? $"{schemaState.ViolationCount} schema error(s)"
-                    : BuildFixtureSummary("Schema valid", validFixtureCount, invalidFixtureCount, schemaState.InvalidTriggers);
+                    ? schemaState.FirstIssue ?? SchemaValidationMessages.SchemaErrorsCount(schemaState.ViolationCount)
+                    : BuildFixtureSummary(SchemaValidationMessages.SchemaValidPrefix, validFixtureCount, invalidFixtureCount, schemaState.InvalidTriggers);
 
             traces.Add(new ValidationEngineTrace(
                 schemaState.Descriptor,
@@ -235,8 +236,8 @@ public sealed partial class SchemaVerificationService
                     ViolationCount: 0,
                     DurationMs: ruleState.TotalDurationMs,
                     Summary: hasRules
-                        ? $"No quality rules targeting '{ruleState.Descriptor.EngineId}'"
-                        : "No quality rules configured"));
+                        ? SchemaValidationMessages.NoQualityRulesTargetingEngine(ruleState.Descriptor.EngineId)
+                        : SchemaValidationMessages.NoQualityRulesConfigured));
                 continue;
             }
 
@@ -247,11 +248,11 @@ public sealed partial class SchemaVerificationService
                     : nameof(SubmissionProcessOutcome.Succeeded);
 
             var ruleSummary = ruleState.HasFailure
-                ? ruleState.FirstIssue ?? "Quality rule engine evaluation failed"
+                ? ruleState.FirstIssue ?? SchemaValidationMessages.QualityRuleEngineEvalFailed
                 : ruleState.ViolationCount > 0
-                    ? ruleState.FirstIssue ?? $"{ruleState.RuleCount} rule(s); {ruleState.ViolationCount} violation(s)"
+                    ? ruleState.FirstIssue ?? SchemaValidationMessages.RuleCountViolations(ruleState.RuleCount, ruleState.ViolationCount)
                     : BuildFixtureSummary(
-                        $"{ruleState.RuleCount} rule(s) verified",
+                        SchemaValidationMessages.RuleCountVerified(ruleState.RuleCount),
                         validFixtureCount,
                         invalidFixtureCount,
                         ruleState.InvalidTriggers);
@@ -274,8 +275,8 @@ public sealed partial class SchemaVerificationService
                 ViolationCount: 0,
                 DurationMs: identifierState.TotalDurationMs,
                 Summary: hasSchema
-                    ? "Identifier extraction disabled by schema"
-                    : "No JSON Schema provided for identifier alignment"));
+                    ? SchemaValidationMessages.IdentifierExtractionDisabled
+                    : SchemaValidationMessages.NoJsonSchemaForIdentifierAlignment));
         }
         else
         {
@@ -284,9 +285,9 @@ public sealed partial class SchemaVerificationService
                 : nameof(SubmissionProcessOutcome.Succeeded);
 
             var idSummary = identifierState.ViolationCount > 0
-                ? identifierState.FirstIssue ?? $"{identifierState.ViolationCount} identifier error(s)"
+                ? identifierState.FirstIssue ?? SchemaValidationMessages.IdentifierErrorsCount(identifierState.ViolationCount)
                 : BuildFixtureSummary(
-                    identifierLabel ?? "Identifier config aligned",
+                    identifierLabel ?? SchemaValidationMessages.IdentifierConfigAlignedFallback,
                     validFixtureCount,
                     invalidFixtureCount,
                     identifierState.InvalidTriggers);
@@ -309,8 +310,8 @@ public sealed partial class SchemaVerificationService
                 ViolationCount: 0,
                 DurationMs: consistencyState.TotalDurationMs,
                 Summary: hasRules
-                    ? "Rules did not parse cleanly for consistency analysis"
-                    : "No quality rules configured"));
+                    ? SchemaValidationMessages.RulesDidNotParseForConsistency
+                    : SchemaValidationMessages.NoQualityRulesConfigured));
         }
         else
         {
@@ -319,10 +320,10 @@ public sealed partial class SchemaVerificationService
                 : nameof(SubmissionProcessOutcome.Succeeded);
 
             var consistencySummary = consistencyState.ViolationCount > 0
-                ? consistencyState.FirstIssue ?? $"{consistencyState.ViolationCount} contract consistency error(s)"
+                ? consistencyState.FirstIssue ?? SchemaValidationMessages.ConsistencyErrorsCount(consistencyState.ViolationCount)
                 : consistencyState.WarningCount > 0
-                    ? $"Checked {consistencyState.ItemsEvaluated} rule(s); {consistencyState.WarningCount} warning(s)"
-                    : $"Checked {consistencyState.ItemsEvaluated} rule(s); consistent with JSON Schema and DAG";
+                    ? SchemaValidationMessages.ConsistencyCheckedWithWarnings(consistencyState.ItemsEvaluated, consistencyState.WarningCount)
+                    : SchemaValidationMessages.ConsistencyCheckedClean(consistencyState.ItemsEvaluated);
 
             traces.Add(new ValidationEngineTrace(
                 consistencyState.Descriptor,
@@ -340,13 +341,8 @@ public sealed partial class SchemaVerificationService
         string prefix,
         int validFixtureCount,
         int invalidFixtureCount,
-        int invalidTriggers)
-    {
-        var baseSummary = $"{prefix}; checked {validFixtureCount} valid and {invalidFixtureCount} invalid fixture(s)";
-        return invalidTriggers > 0
-            ? $"{baseSummary} (triggered {invalidTriggers} invalid fixture(s))"
-            : baseSummary;
-    }
+        int invalidTriggers) =>
+        SchemaValidationMessages.FixtureCheckSummary(prefix, validFixtureCount, invalidFixtureCount, invalidTriggers);
 
     private sealed class EngineRunState(WorkflowEngineDescriptor descriptor)
     {

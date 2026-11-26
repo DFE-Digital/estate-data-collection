@@ -12,10 +12,11 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Extensions;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using Microsoft.Extensions.Options;
 
-namespace EstateDataCollection.Infrastructure.Validation.Engines;
+namespace EstateDataCollection.Infrastructure.Workflow.Engines;
 
 public sealed class CelQualityEngine : IQualityRuleEngine
 {
@@ -39,9 +40,9 @@ public sealed class CelQualityEngine : IQualityRuleEngine
 
         Descriptor = new WorkflowEngineDescriptor(
             EngineId: "cel",
-            DisplayName: "CEL Quality Engine",
+            DisplayName: WorkflowMessages.CelDisplayName,
             Kind: ValidationEngineKinds.QualityRule,
-            Description: $"Evaluates Common Expression Language (CEL) quality rules with RFC3339 timestamps, comprehensions, ancestor context, automatic float epsilon tolerance, compiled program caching, and {(_options.CelMaxIterations > 0 ? _options.CelMaxIterations : 10_000)} max iterations.");
+            Description: WorkflowMessages.CelDescription(_options.CelMaxIterations > 0 ? _options.CelMaxIterations : 10_000));
     }
 
     public string EngineName => "cel";
@@ -53,7 +54,7 @@ public sealed class CelQualityEngine : IQualityRuleEngine
         var exprText = ExtractExpressionString(rule.EffectiveAssertion);
         if (string.IsNullOrWhiteSpace(exprText))
         {
-            return [new ValidationMessage(typeof(CelQualityEngine), ruleId, "CEL 'implementation' must be a non-empty expression string.", source: ValidationSources.Rule, ruleId: ruleId)];
+            return [new ValidationMessage(typeof(CelQualityEngine), ruleId, WorkflowMessages.CelImplementationRequired, source: ValidationSources.Rule, ruleId: ruleId)];
         }
 
         try
@@ -64,7 +65,7 @@ public sealed class CelQualityEngine : IQualityRuleEngine
         }
         catch (Exception ex)
         {
-            return [new ValidationMessage(typeof(CelQualityEngine), ruleId, $"Invalid CEL expression syntax: {ex.Message}", source: ValidationSources.Rule, ruleId: ruleId)];
+            return [new ValidationMessage(typeof(CelQualityEngine), ruleId, WorkflowMessages.InvalidCelSyntax(ex.Message), source: ValidationSources.Rule, ruleId: ruleId)];
         }
     }
 
@@ -73,7 +74,7 @@ public sealed class CelQualityEngine : IQualityRuleEngine
         var exprText = ExtractExpressionString(rule.EffectiveAssertion);
         if (string.IsNullOrWhiteSpace(exprText))
         {
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed.GetName(), $"Rule '{rule.Id}' CEL expression is empty.");
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed.GetName(), WorkflowMessages.CelExpressionEmpty(rule.Id));
         }
 
         try
@@ -98,7 +99,7 @@ public sealed class CelQualityEngine : IQualityRuleEngine
 
             if (result is ErrorValue errVal)
             {
-                return Error.Validation(ErrorCodes.SchemaVerificationFailed.GetName(), $"Rule '{rule.Id}' CEL evaluation error: {errVal}");
+                return Error.Validation(ErrorCodes.SchemaVerificationFailed.GetName(), WorkflowMessages.CelEvaluationError(rule.Id, errVal));
             }
 
             var native = result.ToNative();
@@ -109,11 +110,11 @@ public sealed class CelQualityEngine : IQualityRuleEngine
 
             return Error.Validation(
                 ErrorCodes.SchemaVerificationFailed.GetName(),
-                $"Rule '{rule.Id}' CEL expression must evaluate to a boolean, but returned '{result.Type.Name}'.");
+                WorkflowMessages.CelMustReturnBool(rule.Id, result.Type.Name));
         }
         catch (Exception ex)
         {
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed.GetName(), $"Rule '{rule.Id}' CEL evaluation failed: {ex.Message}");
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed.GetName(), WorkflowMessages.CelEvaluationFailed(rule.Id, ex.Message));
         }
     }
 

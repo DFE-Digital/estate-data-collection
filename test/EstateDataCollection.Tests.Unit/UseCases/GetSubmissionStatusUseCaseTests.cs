@@ -7,7 +7,7 @@ using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Schema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
-using EstateDataCollection.Infrastructure.Validation;
+using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;

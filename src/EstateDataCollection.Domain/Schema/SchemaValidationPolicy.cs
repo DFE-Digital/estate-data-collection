@@ -1,3 +1,4 @@
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Domain.Schema;
@@ -46,21 +47,21 @@ public sealed record SchemaValidationPolicy
         {
             return Error.Validation(
                 ErrorCodes.SchemaVerificationFailed,
-                errors: [new ValidationError("validationPolicy.failOnMinimumSeverity", $"Unsupported FailOnMinimumSeverity value '{FailOnMinimumSeverity}'.")]);
+                errors: [new ValidationError("validationPolicy.failOnMinimumSeverity", DomainMessages.UnsupportedFailOnMinimumSeverity(FailOnMinimumSeverity))]);
         }
 
         if (!Enum.IsDefined(CrossSubmissionDraftPolicy))
         {
             return Error.Validation(
                 ErrorCodes.SchemaVerificationFailed,
-                errors: [new ValidationError("validationPolicy.crossSubmissionDraftPolicy", $"Unsupported CrossSubmissionDraftPolicy value '{CrossSubmissionDraftPolicy}'.")]);
+                errors: [new ValidationError("validationPolicy.crossSubmissionDraftPolicy", DomainMessages.UnsupportedCrossSubmissionDraftPolicy(CrossSubmissionDraftPolicy))]);
         }
 
         if (NumericToleranceOverride.HasValue && NumericToleranceOverride.Value < 0m)
         {
             return Error.Validation(
                 ErrorCodes.SchemaVerificationFailed,
-                errors: [new ValidationError("validationPolicy.numericToleranceOverride", "NumericToleranceOverride must be non-negative.")]);
+                errors: [new ValidationError("validationPolicy.numericToleranceOverride", DomainMessages.NumericToleranceMustBeNonNegative)]);
         }
 
         return Result.Success();

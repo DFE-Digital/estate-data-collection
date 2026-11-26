@@ -5,6 +5,7 @@ using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
@@ -78,7 +79,7 @@ public sealed partial class BlobSchemaRegistry
                 normalisedPath,
                 pathSchemaName,
                 pathVersion,
-                [metaLoadResult.Error.Description ?? "Malformed draft .meta.json companion file."],
+                [metaLoadResult.Error.Description ?? SchemaValidationMessages.MalformedDraftMetaJsonFallback],
                 cancellationToken);
             return metaLoadResult.Error;
         }
@@ -231,7 +232,7 @@ public sealed partial class BlobSchemaRegistry
             {
                 return Error.Validation(
                     ErrorCodes.SchemaInvalidIdentifierConfig,
-                    new { Message = $"Draft metadata file '{metaBlobPath}' must be a JSON object." });
+                    new { Message = SchemaValidationMessages.DraftMetaMustBeJsonObject(metaBlobPath) });
             }
 
             JsonNode? configNode = null;
@@ -264,7 +265,7 @@ public sealed partial class BlobSchemaRegistry
         {
             return Error.Validation(
                 ErrorCodes.SchemaInvalidIdentifierConfig,
-                new { Message = $"Draft metadata file '{metaBlobPath}' is malformed JSON: {ex.Message}" });
+                new { Message = SchemaValidationMessages.DraftMetaMalformedJson(metaBlobPath, ex.Message) });
         }
     }
 }

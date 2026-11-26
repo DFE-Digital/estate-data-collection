@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
@@ -17,15 +18,15 @@ public sealed class SignOffSchemaUseCase(
         {
             return Error.Validation(
                 ErrorCodes.SchemaSignOffInvalidState,
-                "SchemaName and positive Version are required.");
+                SchemaValidationMessages.SchemaNameAndPositiveVersionRequired);
         }
 
         if (string.IsNullOrWhiteSpace(request.SignedOffBy))
         {
             return Error.Validation(
                 ErrorCodes.SchemaSignOffInvalidState,
-                "signedOffBy is required to sign off an Unvalidated schema.",
-                [new ValidationError("signedOffBy", "Signed-off-by identity is required.", Severity: RuleSeverity.Error)]);
+                SchemaValidationMessages.SignedOffByRequired,
+                [new ValidationError("signedOffBy", SchemaValidationMessages.SignedOffByIdentityRequired, Severity: RuleSeverity.Error)]);
         }
 
         var existingResult = await schemaRegistry.GetExplicitSchemaAsync(
@@ -43,8 +44,8 @@ public sealed class SignOffSchemaUseCase(
         {
             return Error.Validation(
                 ErrorCodes.SchemaSignOffInvalidState,
-                $"Only Unvalidated schemas can be signed off. Current state: '{metadata.State}'.",
-                [new ValidationError("state", $"Schema '{metadata.Name}' v{metadata.Version} is in '{metadata.State}' state.", Severity: RuleSeverity.Error)]);
+                DomainMessages.OnlyUnvalidatedCanBeSignedOff(metadata.State),
+                [new ValidationError("state", SchemaValidationMessages.SchemaVersionInState(metadata.Name, metadata.Version, metadata.State), Severity: RuleSeverity.Error)]);
         }
 
         metadata.SignOff(request.SignedOffBy);

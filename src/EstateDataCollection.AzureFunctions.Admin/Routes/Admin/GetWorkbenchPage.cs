@@ -2,6 +2,7 @@ using EstateDataCollection.Admin.UI.Models.ViewModels;
 using EstateDataCollection.Admin.UI.Pages;
 using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -24,7 +25,7 @@ public sealed class GetWorkbenchPage(
     {
         InstrumentInvoked(EndpointName, "workbench");
 
-        var meta = CreatePageMeta(http, "Contract Workbench", activeNav: "workbench");
+        var meta = CreatePageMeta(http, AdminUiMessages.WorkbenchTitle, activeNav: "workbench");
         var model = new WorkbenchViewModel(meta);
 
         return await RenderPageAsync<WorkbenchPage, WorkbenchViewModel>(EndpointName, model);

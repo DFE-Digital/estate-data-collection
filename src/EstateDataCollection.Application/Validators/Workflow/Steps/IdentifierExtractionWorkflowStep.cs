@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 
@@ -27,10 +28,10 @@ public sealed class IdentifierExtractionWorkflowStep : IWorkflowStep
                 ItemsEvaluated: 0,
                 ViolationCount: 0,
                 DurationMs: 0,
-                Summary: "Skipped during draft update per ValidationOptions"));
+                Summary: WorkflowMessages.SkippedDuringDraftUpdateDetailed));
 
             return Task.FromResult(Result<WorkflowStepOutcome>.Success(
-                new WorkflowStepOutcome(Succeeded: true, Summary: "Skipped during draft update")));
+                new WorkflowStepOutcome(Succeeded: true, Summary: WorkflowMessages.SkippedDuringDraftUpdateShort)));
         }
 
         var idStart = Stopwatch.GetTimestamp();
@@ -57,7 +58,7 @@ public sealed class IdentifierExtractionWorkflowStep : IWorkflowStep
 
                 var idLabel = eval.Identifier is { } id
                     ? $"{id.Type}={id.Value}"
-                    : "Not required by schema";
+                    : WorkflowMessages.IdentifierNotRequiredBySchema;
 
                 return new ProcessStepDetails(
                     Outcome: SubmissionProcessOutcome.Succeeded,
@@ -75,7 +76,7 @@ public sealed class IdentifierExtractionWorkflowStep : IWorkflowStep
                 ItemsEvaluated: 0,
                 ViolationCount: 0,
                 DurationMs: idDurationMs,
-                Summary: "Identifier extraction disabled by schema"));
+                Summary: WorkflowMessages.IdentifierDisabledBySchema));
         }
         else
         {
@@ -83,7 +84,7 @@ public sealed class IdentifierExtractionWorkflowStep : IWorkflowStep
                 ? identifierEval.ValidationError.Message
                 : identifierEval.Identifier is { } id
                     ? $"{id.Type}={id.Value}"
-                    : "Not required by schema";
+                    : WorkflowMessages.IdentifierNotRequiredBySchema;
 
             context.EngineTraces.Add(new ValidationEngineTrace(
                 Descriptor: EngineDescriptor,

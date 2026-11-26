@@ -1,3 +1,5 @@
+using EstateDataCollection.Common.Messages;
+
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
 public sealed record LifecycleTagViewModel(
@@ -6,18 +8,15 @@ public sealed record LifecycleTagViewModel(
 {
     public static LifecycleTagViewModel From(string? stateName)
     {
-        var normalized = (stateName ?? "Unknown").Trim();
+        var normalized = (stateName ?? AdminUiMessages.LifecycleStateUndetermined).Trim();
         var modifier = normalized.ToLowerInvariant() switch
         {
             "active" => "govuk-tag--green",
             "scheduled" => "govuk-tag--blue",
             "validated" => "govuk-tag--purple",
-            "unvalidated" => "govuk-tag--yellow",
-            "deprecated" => "govuk-tag--yellow",
-            "invalid" => "govuk-tag--red",
-            "retired" => "govuk-tag--red",
-            "deleted" => "govuk-tag--grey",
-            "draft" => "govuk-tag--grey",
+            "unvalidated" or "deprecated" => "govuk-tag--yellow",
+            "invalid" or "retired" => "govuk-tag--red",
+            "deleted" or "draft" => "govuk-tag--grey",
             _ => "govuk-tag--grey"
         };
 

@@ -4,9 +4,10 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
-namespace EstateDataCollection.Infrastructure.Validation.Engines;
+namespace EstateDataCollection.Infrastructure.Workflow.Engines;
 
 /// <summary>
 /// Built-in O(N) composite uniqueness engine (<c>engine: "unique"</c> or <c>type: "unique"</c>).
@@ -17,9 +18,9 @@ public sealed class UniqueCombinationQualityEngine : IBatchQualityRuleEngine
 {
     public static readonly WorkflowEngineDescriptor EngineDescriptor = new(
         EngineId: "unique",
-        DisplayName: "Unique Combination Engine",
+        DisplayName: WorkflowMessages.UniqueDisplayName,
         Kind: ValidationEngineKinds.QualityRule,
-        Description: "Evaluates O(N) composite uniqueness constraints across arrays with ancestor field support.");
+        Description: WorkflowMessages.UniqueDescription);
 
     public string EngineName => EngineDescriptor.EngineId;
 
@@ -35,7 +36,7 @@ public sealed class UniqueCombinationQualityEngine : IBatchQualityRuleEngine
                 new ValidationMessage(
                     typeof(UniqueCombinationQualityEngine),
                     ruleId,
-                    "Unique rule requires at least one field in 'fields' or 'implementation.fields'.",
+                    WorkflowMessages.UniqueRuleRequiresField,
                     source: ValidationSources.Rule,
                     ruleId: ruleId)
             ];
@@ -51,7 +52,7 @@ public sealed class UniqueCombinationQualityEngine : IBatchQualityRuleEngine
         {
             return Error.Validation(
                 ErrorCodes.SchemaVerificationFailed,
-                $"Unique rule '{rule.Id}' does not specify any fields.");
+                WorkflowMessages.UniqueRuleMissingFields(rule.Id));
         }
 
         if (enrichedContextNode is JsonArray arr)
@@ -82,7 +83,7 @@ public sealed class UniqueCombinationQualityEngine : IBatchQualityRuleEngine
         {
             return Error.Validation(
                 ErrorCodes.SchemaVerificationFailed,
-                $"Unique rule '{rule.Id}' does not specify any fields.");
+                WorkflowMessages.UniqueRuleMissingFields(rule.Id));
         }
 
         if (targets.Count <= 1)

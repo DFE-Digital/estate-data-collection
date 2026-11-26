@@ -9,6 +9,7 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Common.Extensions;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
@@ -70,7 +71,7 @@ public class BlobSubmissionInfrastructure(
 
             if (session is null)
             {
-                return Error.Failure(ErrorCodes.StorageSerialisationError, new { Message = "Failed to deserialise session metadata." });
+                return Error.Failure(ErrorCodes.StorageSerialisationError, new { Message = DomainMessages.SessionMetadataDeserialisationFailed });
             }
 
             _instrumentation.SessionRetrieved(submissionId);

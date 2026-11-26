@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Domain.Submission;
@@ -52,7 +53,7 @@ public static class DraftPayloadMerger
             {
                 return Error.Validation(
                     ErrorCodes.JsonMalformed,
-                    new { Message = $"Draft payload is not valid JSON: {ex.Message}" });
+                    new { Message = DomainMessages.DraftPayloadMalformed(ex.Message) });
             }
         }
 
@@ -75,7 +76,7 @@ public static class DraftPayloadMerger
             {
                 return Error.Validation(
                     ErrorCodes.JsonMalformed,
-                    new { Message = $"Draft payload #{i + 1} is not valid JSON: {ex.Message}" });
+                    new { Message = DomainMessages.IndexedDraftPayloadMalformed(i + 1, ex.Message) });
             }
 
             merged = merged is null ? next : ApplyMergePatch(merged, next);

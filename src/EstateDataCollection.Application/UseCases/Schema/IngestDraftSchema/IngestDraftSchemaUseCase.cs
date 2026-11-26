@@ -4,6 +4,7 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Extensions;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,7 +27,7 @@ public sealed partial class IngestDraftSchemaUseCase(
     {
         if (string.IsNullOrWhiteSpace(request.BlobPath))
         {
-            return Error.Failure(ErrorCodes.PayloadEmpty, "Draft blob path cannot be empty.");
+            return Error.Failure(ErrorCodes.PayloadEmpty, SchemaValidationMessages.DraftBlobPathEmpty);
         }
 
         _instrumentation.IngestingDraftBlob(request.BlobPath);

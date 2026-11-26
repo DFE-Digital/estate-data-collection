@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 
@@ -17,9 +18,9 @@ public sealed class JsonSchemaWorkflowStep(
     public WorkflowEngineDescriptor EngineDescriptor =>
         schemaValidator.Descriptor ?? new WorkflowEngineDescriptor(
             "json-schema",
-            "JSON Schema Validator",
+            WorkflowMessages.JsonSchemaDisplayName,
             ValidationEngineKinds.StructuralSchema,
-            "Structural JSON Schema validator.");
+            WorkflowMessages.JsonSchemaDescription);
 
     public async Task<Result<WorkflowStepOutcome>> ExecuteAsync(
         WorkflowContext context,
@@ -35,7 +36,7 @@ public sealed class JsonSchemaWorkflowStep(
                 return new ProcessStepDetails(
                     Outcome: count == 0 ? SubmissionProcessOutcome.Succeeded : SubmissionProcessOutcome.ValidationErrorsFound,
                     ItemCount: count,
-                    Summary: count == 0 ? "Schema structure valid" : $"{count} schema error(s)",
+                    Summary: count == 0 ? WorkflowMessages.SchemaStructureValid : WorkflowMessages.SchemaErrorCount(count),
                     Errors: MapAuditIssues(val.Errors));
             });
         var schemaDurationMs = (long)Stopwatch.GetElapsedTime(schemaStart).TotalMilliseconds;
@@ -54,7 +55,7 @@ public sealed class JsonSchemaWorkflowStep(
             ItemsEvaluated: 1,
             ViolationCount: schemaErrorCount,
             DurationMs: schemaDurationMs,
-            Summary: schemaErrorCount == 0 ? "Schema structure valid" : $"{schemaErrorCount} schema error(s)"));
+            Summary: schemaErrorCount == 0 ? WorkflowMessages.SchemaStructureValid : WorkflowMessages.SchemaErrorCount(schemaErrorCount)));
 
         if (schemaResult.Value.Errors is { Count: > 0 } schemaErrors)
         {
@@ -65,7 +66,7 @@ public sealed class JsonSchemaWorkflowStep(
 
         return new WorkflowStepOutcome(
             Succeeded: schemaErrorCount == 0,
-            Summary: schemaErrorCount == 0 ? "Schema structure valid" : $"{schemaErrorCount} schema error(s)");
+            Summary: schemaErrorCount == 0 ? WorkflowMessages.SchemaStructureValid : WorkflowMessages.SchemaErrorCount(schemaErrorCount));
     }
 
     private static IReadOnlyList<SubmissionAuditValidationIssue>? MapAuditIssues(IReadOnlyList<ValidationError>? validationErrors)

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Domain.Schema;
@@ -84,8 +85,8 @@ public sealed record SchemaTestsViewModel(
         {
             return _engineDiagnostics ??= ValidationEngineDiagnosticsViewModel.FromTraces(
                 LatestItem?.EngineTraces ?? Detail?.LastTestRunEngineTraces,
-                heading: "Validation Engine Diagnostics",
-                subtitle: "Per-engine execution metrics and outcomes from the latest regression test run.");
+                heading: AdminUiMessages.EngineDiagnosticsDefaultHeading,
+                subtitle: AdminUiMessages.EngineDiagnosticsDefaultSubtitle);
         }
     }
 
@@ -104,7 +105,7 @@ public sealed record SchemaTestsViewModel(
     public string LatestRunEvaluationSummary =>
         LatestItem is null
             ? string.Empty
-            : $"Evaluated {LatestItem.ValidFixtureCount} valid fixture(s), {LatestItem.InvalidFixtureCount} invalid fixture(s), and {LatestItem.BusinessRuleCount} business rule(s).";
+            : AdminUiMessages.EvaluatedFixturesSummary(LatestItem.ValidFixtureCount, LatestItem.InvalidFixtureCount, LatestItem.BusinessRuleCount);
 
     public int SoftWarningCount => SoftWarnings.Count;
 
@@ -164,7 +165,7 @@ public sealed record SchemaTestsViewModel(
         {
             return _validFixtures ??= ValidFixtureRawList
                 .Select((raw, index) => new ValidFixtureCardViewModel(
-                    Title: $"Valid Fixture #{index + 1}",
+                    Title: AdminUiMessages.ValidFixtureTitle(index + 1),
                     FormattedJson: FormatJson(raw)))
                 .ToList();
         }
@@ -196,11 +197,11 @@ public sealed record SchemaTestsViewModel(
             return _tabs ??= GovUkTabsViewModel.Create(
                 "schema-tests-tabs",
                 [
-                    ("test-valid-fixtures", $"Valid fixtures ({ValidFixturesCount})", true),
-                    ("test-invalid-fixtures", $"Invalid fixtures ({InvalidFixturesCount})", true),
-                    ("test-engine-diagnostics", "Engine diagnostics", EngineDiagnostics.HasContent),
-                    ("edit-schema-tests", "Add / update tests", true),
-                    ("test-quality-rules", $"Quality rules ({BusinessRuleCount})", true)
+                    ("test-valid-fixtures", AdminUiMessages.ValidFixturesTabLabel(ValidFixturesCount), true),
+                    ("test-invalid-fixtures", AdminUiMessages.InvalidFixturesTabLabel(InvalidFixturesCount), true),
+                    ("test-engine-diagnostics", AdminUiMessages.EngineDiagnosticsTabLabel, EngineDiagnostics.HasContent),
+                    ("edit-schema-tests", AdminUiMessages.EditSchemaTestsTabLabel, true),
+                    ("test-quality-rules", AdminUiMessages.QualityRulesTabLabel(BusinessRuleCount), true)
                 ],
                 preferredSelectedId: preferredTabId);
         }
@@ -290,24 +291,24 @@ public sealed record SchemaTestsViewModel(
                 if (!outcome.FailedAsExpected)
                 {
                     statusTagText = outcome.TriggeredErrors.Count == 0
-                        ? "Passed unexpectedly"
-                        : "Expectation mismatch";
+                        ? AdminUiMessages.FixtureStatusPassedUnexpectedly
+                        : AdminUiMessages.FixtureStatusExpectationMismatch;
                     statusTagCssClass = "govuk-tag govuk-tag--red";
                 }
                 else if (expectedList.Count > 0)
                 {
-                    statusTagText = "Matched expected error(s)";
+                    statusTagText = AdminUiMessages.FixtureStatusMatchedExpectedErrors;
                     statusTagCssClass = "govuk-tag govuk-tag--green";
                 }
                 else
                 {
-                    statusTagText = "Failed \u2014 unknown if expected";
+                    statusTagText = AdminUiMessages.FixtureStatusFailedUnknownIfExpected;
                     statusTagCssClass = "govuk-tag govuk-tag--yellow";
                 }
             }
             else
             {
-                statusTagText = "Pending evaluation";
+                statusTagText = AdminUiMessages.FixtureStatusPendingEvaluation;
                 statusTagCssClass = "govuk-tag govuk-tag--grey";
             }
 
@@ -318,17 +319,17 @@ public sealed record SchemaTestsViewModel(
                     string tagCssClass;
                     if (outcome is null)
                     {
-                        tagText = "Configured";
+                        tagText = AdminUiMessages.AssertionConfigured;
                         tagCssClass = "govuk-tag govuk-tag--grey govuk-!-margin-right-1";
                     }
                     else if (unmatchedSet.Any(u => string.Equals(u, expectedErr, StringComparison.OrdinalIgnoreCase)))
                     {
-                        tagText = "Missing";
+                        tagText = AdminUiMessages.AssertionMissing;
                         tagCssClass = "govuk-tag govuk-tag--red govuk-!-margin-right-1";
                     }
                     else
                     {
-                        tagText = "Matched";
+                        tagText = AdminUiMessages.AssertionMatched;
                         tagCssClass = "govuk-tag govuk-tag--green govuk-!-margin-right-1";
                     }
 
@@ -344,7 +345,7 @@ public sealed record SchemaTestsViewModel(
             var triggeredErrors = outcome?.TriggeredErrors ?? [];
 
             cards.Add(new InvalidFixtureCardViewModel(
-                Title: $"Invalid Fixture #{i + 1}",
+                Title: AdminUiMessages.InvalidFixtureTitle(i + 1),
                 HasDescription: hasDescription,
                 Description: hasDescription ? description : null,
                 StatusTagText: statusTagText,

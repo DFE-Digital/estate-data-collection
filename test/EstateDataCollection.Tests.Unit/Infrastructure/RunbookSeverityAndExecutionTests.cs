@@ -2,7 +2,7 @@ using System.Text.Json;
 using AwesomeAssertions;
 using EstateDataCollection.Application.Validators.Logic;
 using EstateDataCollection.Common.Results;
-using EstateDataCollection.Infrastructure.Validation;
+using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Extensions;
 using Xunit;
 

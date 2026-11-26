@@ -9,11 +9,11 @@ public sealed record ContractConsistencyReport(
     IReadOnlyList<ValidationMessage> Errors,
     IReadOnlyList<ValidationMessage> Warnings);
 
-public interface IContractConsistencyAnalyzer : IApplication
+public interface IContractConsistencyAnalyser : IApplication
 {
     WorkflowEngineDescriptor Descriptor { get; }
 
-    ContractConsistencyReport Analyze(
+    ContractConsistencyReport Analyse(
         string? rawSchemaJson,
         IReadOnlyList<BusinessRule>? rules);
 }

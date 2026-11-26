@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.SignOffSchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
@@ -52,7 +53,7 @@ public sealed class PatchSignOffSchemaEndpoint(
             return new SignOffSchemaRequest(schemaName, version, string.Empty);
         }
 
-        var dtoResult = DeserialiseJson<SignOffSchemaBodyDto>(rawBody, "Invalid sign-off request JSON body.");
+        var dtoResult = DeserialiseJson<SignOffSchemaBodyDto>(rawBody, ErrorMessages.InvalidSignOffRequestBody);
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;

@@ -44,7 +44,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
             "identifier-extractor",
             "cross-submission-enrichment",
             "reference-data-enrichment",
-            "contract-consistency-analyzer"
+            "contract-consistency-analyser"
         ]);
     }
 
@@ -121,7 +121,7 @@ public sealed class VerifySchemaEndpointTests(AzuriteFixture fixture)
         data.IsSuccessful.Should().BeTrue();
         data.EngineTraces.Should().NotBeNull();
         data.EngineTraces!.Select(t => t.Descriptor.EngineId).Should().BeEquivalentTo(
-            ["json-schema", "jsonlogic", "cel", "unique", "identifier-extractor", "contract-consistency-analyzer"]);
+            ["json-schema", "jsonlogic", "cel", "unique", "identifier-extractor", "contract-consistency-analyser"]);
     }
 
     [Fact]

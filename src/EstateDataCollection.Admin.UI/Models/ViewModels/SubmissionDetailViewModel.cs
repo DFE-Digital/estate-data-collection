@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionDetail;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Domain.Submission;
@@ -50,10 +51,10 @@ public sealed record SubmissionDetailViewModel(
 
     public string LifecycleTagText =>
         IsFinalised
-            ? "Finalised"
+            ? AdminUiMessages.SubmissionFinalisedText
             : Detail?.DraftItems.Count > 0 || !string.IsNullOrWhiteSpace(Detail?.MergedDraftPayloadJson)
-                ? "Draft (payload saved)"
-                : "Draft (awaiting payload)";
+                ? AdminUiMessages.SubmissionDraftPayloadSavedText
+                : AdminUiMessages.SubmissionDraftAwaitingPayloadText;
 
     public string LifecycleTagCssClass =>
         IsFinalised
@@ -66,10 +67,10 @@ public sealed record SubmissionDetailViewModel(
 
     public string ReadinessTagText =>
         IsFinalised
-            ? "Locked (Finalised)"
+            ? AdminUiMessages.SubmissionReadinessLocked
             : IsReadyToFinalise
-                ? "Ready to finalise"
-                : "Not ready (pending issues)";
+                ? AdminUiMessages.SubmissionReadinessReady
+                : AdminUiMessages.SubmissionReadinessNotReady;
 
     public string ReadinessTagCssClass =>
         IsFinalised
@@ -105,7 +106,7 @@ public sealed record SubmissionDetailViewModel(
                     : Detail.ResolvedIdentifierValue;
             }
 
-            return "Unassigned";
+            return AdminUiMessages.IdentifierUnassigned;
         }
     }
 
@@ -299,9 +300,9 @@ public sealed record SubmissionDetailViewModel(
             return _tabs ??= GovUkTabsViewModel.Create(
                 "submission-detail-tabs",
                 [
-                    ("submission-audit-trail", $"Audit trail ({AuditCount})", true),
-                    ("submission-payload-session", "Payload & session", true),
-                    ("submission-draft-uploads", $"Draft uploads ({DraftCount})", true)
+                    ("submission-audit-trail", AdminUiMessages.SubmissionAuditTrailTabLabel(AuditCount), true),
+                    ("submission-payload-session", AdminUiMessages.SubmissionPayloadSessionTabLabel, true),
+                    ("submission-draft-uploads", AdminUiMessages.SubmissionDraftUploadsTabLabel(DraftCount), true)
                 ]);
         }
     }

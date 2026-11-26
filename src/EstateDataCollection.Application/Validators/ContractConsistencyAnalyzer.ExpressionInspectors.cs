@@ -7,7 +7,7 @@ using EstateDataCollection.Application.Validators.Logic;
 
 namespace EstateDataCollection.Application.Validators;
 
-public sealed partial class ContractConsistencyAnalyzer
+public sealed partial class ContractConsistencyAnalyser
 {
     #region JsonLogic Analysis
 

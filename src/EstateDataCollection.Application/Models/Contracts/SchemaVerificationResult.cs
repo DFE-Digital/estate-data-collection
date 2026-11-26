@@ -11,7 +11,7 @@ public sealed record SchemaVerificationResult(
     IReadOnlyList<InvalidFixtureOutcome>? InvalidFixtureOutcomes = null,
     IReadOnlyList<ValidationMessage>? Warnings = null,
     IReadOnlyList<ValidationEngineTrace>? EngineTraces = null,
-    IReadOnlyList<ValidationError>? AnalyzerFindings = null,
+    IReadOnlyList<ValidationError>? AnalyserFindings = null,
     IReadOnlyList<ValidationError>? AdditionalIssues = null
 )
 {
@@ -22,7 +22,7 @@ public sealed record SchemaVerificationResult(
         get
         {
             return Warnings is { Count: > 0 } ||
-                   (AnalyzerFindings?.Any(f => f.Severity == RuleSeverity.Warning) == true);
+                   (AnalyserFindings?.Any(f => f.Severity == RuleSeverity.Warning) == true);
         }
     }
 
@@ -85,9 +85,9 @@ public sealed record SchemaVerificationResult(
     private IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> BuildIssues()
     {
         var list = new List<ValidationError>();
-        if (AnalyzerFindings is { Count: > 0 })
+        if (AnalyserFindings is { Count: > 0 })
         {
-            list.AddRange(AnalyzerFindings);
+            list.AddRange(AnalyserFindings);
         }
 
         if (AdditionalIssues is { Count: > 0 })

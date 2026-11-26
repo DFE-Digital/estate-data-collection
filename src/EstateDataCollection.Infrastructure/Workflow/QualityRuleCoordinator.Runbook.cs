@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Domain.Submission;
 
-namespace EstateDataCollection.Infrastructure.Validation;
+namespace EstateDataCollection.Infrastructure.Workflow;
 
 public partial class QualityRuleCoordinator
 {
@@ -163,7 +164,7 @@ public partial class QualityRuleCoordinator
             EngineId: engineName,
             DisplayName: engineName,
             Kind: ValidationEngineKinds.QualityRule,
-            Description: $"Unregistered or unsupported quality rule engine '{engineName}'.");
+            Description: WorkflowMessages.UnregisteredRuleEngineDescription(engineName));
     }
 
     private bool TryResolveEngine(string engineName, out IQualityRuleEngine? engine, out string? errorMessage)
@@ -174,14 +175,14 @@ public partial class QualityRuleCoordinator
         if (!_enabledEngines.Contains(engineName))
         {
             var supported = string.Join(", ", _enabledEngines.OrderBy(x => x));
-            errorMessage = $"Quality rule engine '{engineName}' is not enabled or supported. Supported engines: {supported}.";
+            errorMessage = WorkflowMessages.EngineNotEnabledOrSupported(engineName, supported);
             return false;
         }
 
         if (!_engines.TryGetValue(engineName, out engine))
         {
             var registered = string.Join(", ", _engines.Keys.OrderBy(x => x));
-            errorMessage = $"Quality rule engine '{engineName}' is not registered. Registered engines: {registered}.";
+            errorMessage = WorkflowMessages.EngineNotRegistered(engineName, registered);
             return false;
         }
 
@@ -215,7 +216,7 @@ public partial class QualityRuleCoordinator
                     ItemsEvaluated: totalSkipped,
                     ViolationCount: 0,
                     DurationMs: durationMs,
-                    Summary: LastErrorSummary ?? $"Skipped {totalSkipped} rule(s)");
+                    Summary: LastErrorSummary ?? WorkflowMessages.SkippedRulesCount(totalSkipped));
             }
 
             string outcome;
@@ -232,14 +233,14 @@ public partial class QualityRuleCoordinator
                 outcome = nameof(SubmissionProcessOutcome.Succeeded);
             }
 
-            var skipSuffix = totalSkipped > 0 ? $"; {totalSkipped} skipped" : string.Empty;
-            var infoSuffix = AdvisoryInfoCount > 0 ? $"; {AdvisoryInfoCount} info notice(s)" : string.Empty;
+            var skipSuffix = totalSkipped > 0 ? WorkflowMessages.SkippedSuffix(totalSkipped) : string.Empty;
+            var infoSuffix = AdvisoryInfoCount > 0 ? WorkflowMessages.AdvisoryInfoSuffix(AdvisoryInfoCount) : string.Empty;
 
             var summary = ViolationCount == 0
-                ? $"Evaluated {RulesEvaluatedCount} rule(s) with 0 violations{skipSuffix}{infoSuffix}"
+                ? WorkflowMessages.EvaluatedRulesZeroViolations(RulesEvaluatedCount, skipSuffix, infoSuffix)
                 : LastErrorSummary is not null && HasFailure
                     ? LastErrorSummary
-                    : $"Evaluated {RulesEvaluatedCount} rule(s); {ViolationCount} violation(s){skipSuffix}{infoSuffix}";
+                    : WorkflowMessages.EvaluatedRulesWithViolations(RulesEvaluatedCount, ViolationCount, skipSuffix, infoSuffix);
 
             return new ValidationEngineTrace(
                 Descriptor,

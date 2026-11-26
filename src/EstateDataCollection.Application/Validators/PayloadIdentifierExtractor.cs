@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Models.Options;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
@@ -16,9 +17,9 @@ public static class PayloadIdentifierExtractor
 {
     public static readonly WorkflowEngineDescriptor Descriptor = new(
         EngineId: "identifier-extractor",
-        DisplayName: "Submission Identifier Extractor",
+        DisplayName: SchemaValidationMessages.IdentifierExtractorDisplayName,
         Kind: ValidationEngineKinds.IdentifierExtraction,
-        Description: "Extracts and validates configured establishment identifiers against schema requiredness and storage key safety constraints.");
+        Description: SchemaValidationMessages.IdentifierExtractorDescription);
 
     public sealed record ExtractionEvaluation(
         bool IsEnabled,
@@ -65,7 +66,7 @@ public static class PayloadIdentifierExtractor
         var inspection = SubmissionIdentifier.InspectPayload(rawPayloadJson, searchPaths, identifierType);
         if (inspection.IsFailure)
         {
-            var errMsg = inspection.Error.Description ?? $"Failed to extract identifier '{identifierType}'.";
+            var errMsg = inspection.Error.Description ?? SchemaValidationMessages.IdentifierExtractionFailed(identifierType);
             var fallbackPtr = FormatPointer(searchPaths.FirstOrDefault(), options.DefaultIdentifierPointerFallback);
             return new ExtractionEvaluation(
                 IsEnabled: true,
@@ -102,7 +103,7 @@ public static class PayloadIdentifierExtractor
         }
 
         var message = outcome.ErrorMessage
-                      ?? $"Required identifier '{identifierType}' was missing or null at '{pointer}'.";
+                      ?? SchemaValidationMessages.RequiredIdentifierMissingAtPath(identifierType, pointer);
 
         var error = Error.Validation(ErrorCodes.PayloadInvalidIdentifier, new { Message = message });
 

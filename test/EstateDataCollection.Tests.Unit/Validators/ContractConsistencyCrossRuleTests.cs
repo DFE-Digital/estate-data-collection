@@ -8,7 +8,7 @@ namespace EstateDataCollection.Tests.Unit.Validators;
 
 public sealed class ContractConsistencyCrossRuleTests
 {
-    private readonly ContractConsistencyAnalyzer _sut = new();
+    private readonly ContractConsistencyAnalyser _sut = new();
 
     [Fact]
     public void Analyze_Should_Flag_DependsOn_Missing_Rule_Later_Stage_And_Cycles()
@@ -49,7 +49,7 @@ public sealed class ContractConsistencyCrossRuleTests
         ];
 
         // Act
-        var report = _sut.Analyze(ContractConsistencyPathAndEnumTests.SampleSchemaJson, rules);
+        var report = _sut.Analyse(ContractConsistencyPathAndEnumTests.SampleSchemaJson, rules);
 
         // Assert
         report.Findings.Should().Contain(f =>
@@ -98,7 +98,7 @@ public sealed class ContractConsistencyCrossRuleTests
         ];
 
         // Act
-        var report = _sut.Analyze(ContractConsistencyPathAndEnumTests.SampleSchemaJson, rules);
+        var report = _sut.Analyse(ContractConsistencyPathAndEnumTests.SampleSchemaJson, rules);
 
         // Assert
         report.Errors.Should().BeEmpty();
@@ -146,7 +146,7 @@ public sealed class ContractConsistencyCrossRuleTests
         ];
 
         // Act
-        var report = _sut.Analyze(ContractConsistencyPathAndEnumTests.SampleSchemaJson, rules);
+        var report = _sut.Analyse(ContractConsistencyPathAndEnumTests.SampleSchemaJson, rules);
 
         // Assert
         report.Findings.Should().Contain(f =>

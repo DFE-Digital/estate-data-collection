@@ -4,6 +4,7 @@ using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common.Extensions;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Options;
@@ -35,8 +36,8 @@ public sealed class SubmissionEvaluationService(
             items => new ProcessStepDetails(
                 ItemCount: items.Count,
                 Summary: items.Count == 0
-                    ? "No timestamped draft chunks listed"
-                    : $"Loaded {items.Count} draft chunk(s)"),
+                    ? SubmissionMessages.NoTimestampedDraftChunks
+                    : SubmissionMessages.LoadedDraftChunks(items.Count)),
             err => new ProcessStepDetails(
                 SubmissionProcessOutcome.Missing,
                 ItemCount: 0,
@@ -70,7 +71,7 @@ public sealed class SubmissionEvaluationService(
                 () => DraftPayloadMerger.Merge(inventory.Items),
                 _ => new ProcessStepDetails(
                     ItemCount: inventory.Count,
-                    Summary: $"Merged {inventory.Count} timestamped draft submission(s)"),
+                    Summary: SubmissionMessages.MergedTimestampedDrafts(inventory.Count)),
                 err => new ProcessStepDetails(
                     SubmissionProcessOutcome.Failed,
                     ItemCount: inventory.Count,
@@ -82,9 +83,9 @@ public sealed class SubmissionEvaluationService(
             () => infrastructure.GetDraftPayloadAsync(submissionId, cancellationToken),
             payload => new ProcessStepDetails(
                 ItemCount: Math.Max(1, inventory.Count),
-                Summary: $"Loaded {payload.Length} char draft JSON"),
+                Summary: SubmissionMessages.LoadedDraftJson(payload.Length)),
             err => IsMissingDraftError(err)
-                ? new ProcessStepDetails(SubmissionProcessOutcome.Missing, Summary: "No draft payload uploaded yet")
+                ? new ProcessStepDetails(SubmissionProcessOutcome.Missing, Summary: SubmissionMessages.NoDraftPayloadUploadedShort)
                 : new ProcessStepDetails(SubmissionProcessOutcome.Failed, Summary: err.Description ?? err.Code));
     }
 
@@ -131,7 +132,7 @@ public sealed class SubmissionEvaluationService(
             () => DraftPayloadMerger.MergeJsonPayloads(payloadsToMerge),
             _ => new ProcessStepDetails(
                 ItemCount: payloadsToMerge.Count,
-                Summary: $"Merged incoming patch with {existingDrafts.Count} prior draft chunk(s)"),
+                Summary: SubmissionMessages.MergedIncomingPatch(existingDrafts.Count)),
             err => new ProcessStepDetails(
                 SubmissionProcessOutcome.Failed,
                 ItemCount: payloadsToMerge.Count,
@@ -260,7 +261,7 @@ public sealed class SubmissionEvaluationService(
                                 eval.ValidationError.Severity)
                         ])
                     : new ProcessStepDetails(
-                        Summary: eval.Identifier is { } id ? $"{id.Type}={id.Value}" : "Not required by schema"));
+                        Summary: eval.Identifier is { } id ? $"{id.Type}={id.Value}" : WorkflowMessages.IdentifierNotRequiredBySchema));
         }
 
         return PayloadIdentifierExtractor.Evaluate(rawPayloadJson, schema, _options);

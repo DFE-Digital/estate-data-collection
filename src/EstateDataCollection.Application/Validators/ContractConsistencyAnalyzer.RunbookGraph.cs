@@ -1,11 +1,12 @@
-using EstateDataCollection.Common.Results;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
+using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.Validators;
 
-public sealed partial class ContractConsistencyAnalyzer
+public sealed partial class ContractConsistencyAnalyser
 {
-    private static void AnalyzeRunbookGraph(
+    private static void AnalyseRunbookGraph(
         IReadOnlyList<BusinessRule> rules,
         Action<RuleSeverity, string, string, string?, IReadOnlyDictionary<string, object?>?> addFinding)
     {
@@ -39,7 +40,7 @@ public sealed partial class ContractConsistencyAnalyzer
                     addFinding(
                         RuleSeverity.Error,
                         ToJsonPointer(rule.Path),
-                        $"Rule '{ruleId}' dependsOn '{depId}', which does not exist in the quality rules contract.",
+                        ConsistencyAnalyserMessages.MissingDependency(ruleId, depId),
                         ruleId,
                         new Dictionary<string, object?> { ["check"] = "missing_dependency", ["dependsOn"] = depId });
                     continue;
@@ -50,7 +51,7 @@ public sealed partial class ContractConsistencyAnalyzer
                     addFinding(
                         RuleSeverity.Error,
                         ToJsonPointer(rule.Path),
-                        $"Rule '{ruleId}' (Stage {rule.Stage}) cannot depend on '{depId}' in a later Stage ({depRule.Stage}).",
+                        ConsistencyAnalyserMessages.LaterStageDependency(ruleId, rule.Stage, depId, depRule.Stage),
                         ruleId,
                         new Dictionary<string, object?> { ["check"] = "later_stage_dependency", ["dependsOn"] = depId });
                 }
@@ -111,7 +112,7 @@ public sealed partial class ContractConsistencyAnalyzer
                     addFinding(
                         RuleSeverity.Error,
                         ToJsonPointer(rule.Path),
-                        $"Circular dependency cycle detected in 'dependsOn': {cycleText}.",
+                        ConsistencyAnalyserMessages.CircularDependencyCycle(cycleText),
                         currentId,
                         new Dictionary<string, object?> { ["check"] = "dependency_cycle", ["cycle"] = cycleText });
                 }

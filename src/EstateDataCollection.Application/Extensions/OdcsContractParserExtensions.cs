@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Inputs;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.Extensions;
@@ -32,7 +33,7 @@ public static class OdcsContractParserExtensions
             {
                 return Error.Validation(
                     ErrorCodes.SchemaVerificationFailed,
-                    errors: [new ValidationError("schema", parsed.Error.Description ?? "Invalid ODCS YAML.")]);
+                    errors: [new ValidationError("schema", parsed.Error.Description ?? SchemaValidationMessages.InvalidOdcsYamlFallback)]);
             }
 
             return Result<ResolvedContractInputs>.Success(new ResolvedContractInputs(
@@ -51,7 +52,7 @@ public static class OdcsContractParserExtensions
             {
                 return Error.Validation(
                     ErrorCodes.SchemaVerificationFailed,
-                    errors: [new ValidationError("schema", parsed.Error.Description ?? "Invalid ODCS YAML.")]);
+                    errors: [new ValidationError("schema", parsed.Error.Description ?? SchemaValidationMessages.InvalidOdcsYamlFallback)]);
             }
 
             return Result<ResolvedContractInputs>.Success(new ResolvedContractInputs(

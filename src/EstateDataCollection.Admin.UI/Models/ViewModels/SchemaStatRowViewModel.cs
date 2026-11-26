@@ -1,5 +1,6 @@
 using System.Globalization;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatistics;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
@@ -46,6 +47,6 @@ public sealed record SchemaStatRowViewModel(
             FinalisationRateDisplay: stat.TotalSubmissions > 0 ? $"{stat.FinalisationRatePercent}%" : "—",
             LastActivityDisplay: stat.LastActivityAtUtc.HasValue
                 ? stat.LastActivityAtUtc.Value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)
-                : "No submissions yet");
+                : AdminUiMessages.NoSubmissionsYet);
     }
 }

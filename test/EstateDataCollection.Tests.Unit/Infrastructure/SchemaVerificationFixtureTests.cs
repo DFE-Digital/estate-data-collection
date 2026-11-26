@@ -2,7 +2,7 @@ using AwesomeAssertions;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Infrastructure.Registry;
-using EstateDataCollection.Infrastructure.Validation;
+using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Builders.Contracts;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;

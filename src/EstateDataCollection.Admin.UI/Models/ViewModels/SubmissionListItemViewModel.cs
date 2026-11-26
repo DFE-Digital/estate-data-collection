@@ -1,4 +1,5 @@
 using System.Globalization;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Domain.Submission;
 
@@ -28,9 +29,9 @@ public sealed record SubmissionListItemViewModel(
     {
         var (stateText, stateCss) = summary.LifecycleState switch
         {
-            "Finalised" => ("Finalised", "govuk-tag govuk-tag--green"),
-            "Draft" => ("Draft (payload saved)", "govuk-tag govuk-tag--blue"),
-            "AwaitingPayload" => ("Draft (awaiting payload)", "govuk-tag govuk-tag--grey"),
+            "Finalised" => (AdminUiMessages.SubmissionFinalisedText, "govuk-tag govuk-tag--green"),
+            "Draft" => (AdminUiMessages.SubmissionDraftPayloadSavedText, "govuk-tag govuk-tag--blue"),
+            "AwaitingPayload" => (AdminUiMessages.SubmissionDraftAwaitingPayloadText, "govuk-tag govuk-tag--grey"),
             _ => (summary.LifecycleState, "govuk-tag govuk-tag--grey")
         };
 
@@ -39,13 +40,13 @@ public sealed record SubmissionListItemViewModel(
             ? (!string.IsNullOrWhiteSpace(summary.IdentifierType)
                 ? $"{summary.IdentifierType}: {summary.IdentifierValue}"
                 : summary.IdentifierValue!)
-            : "Unassigned";
+            : AdminUiMessages.IdentifierUnassigned;
 
         var hasAudit = !string.IsNullOrWhiteSpace(summary.LastAuditOutcome);
         var auditSummary = hasAudit
             ? $"{summary.LastAuditAction}: {summary.LastAuditOutcome}" +
               (summary.LastAuditHttpStatus.HasValue ? $" ({summary.LastAuditHttpStatus.Value})" : string.Empty)
-            : "None";
+            : AdminUiMessages.NoneLabel;
 
         var auditCss = (summary.LastAuditOutcome ?? string.Empty).ToLowerInvariant() switch
         {

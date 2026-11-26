@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
@@ -52,7 +53,7 @@ public sealed class PatchScheduleSchemaEndpoint(
             return Error.Failure(ErrorCodes.PayloadEmpty);
         }
 
-        var dtoResult = DeserialiseJson<ScheduleSchemaBodyDto>(rawBody, "Invalid schedule request JSON body.");
+        var dtoResult = DeserialiseJson<ScheduleSchemaBodyDto>(rawBody, ErrorMessages.InvalidScheduleRequestBody);
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;

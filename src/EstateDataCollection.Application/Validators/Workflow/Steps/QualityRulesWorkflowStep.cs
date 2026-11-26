@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 
@@ -16,9 +17,9 @@ public sealed class QualityRulesWorkflowStep(
     public WorkflowEngineDescriptor EngineDescriptor =>
         new(
             WorkflowStepIds.QualityRules,
-            "Quality Rules Coordinator",
+            WorkflowMessages.QualityRulesCoordinatorDisplayName,
             ValidationEngineKinds.QualityRule,
-            "Coordinates ordered quality rule execution across registered engines.");
+            WorkflowMessages.QualityRulesCoordinatorDescription);
 
     public async Task<Result<WorkflowStepOutcome>> ExecuteAsync(
         WorkflowContext context,
@@ -26,7 +27,7 @@ public sealed class QualityRulesWorkflowStep(
     {
         if (context.Schema.Rules is not { Count: > 0 } rules)
         {
-            return new WorkflowStepOutcome(Succeeded: true, Summary: "No quality rules configured");
+            return new WorkflowStepOutcome(Succeeded: true, Summary: WorkflowMessages.NoQualityRulesConfigured);
         }
 
         var distinctEngines = rules
@@ -38,7 +39,7 @@ public sealed class QualityRulesWorkflowStep(
         var shouldRunRules = !context.IsDraftUpdate || context.Options.RunQualityRulesOnDraftUpdate;
         if (!shouldRunRules)
         {
-            const string skippedDraftSummary = "Skipped during draft update per ValidationOptions";
+            const string skippedDraftSummary = WorkflowMessages.SkippedDuringDraftUpdateDetailed;
             RecordSkippedInternal(context, rules, distinctEngines, engineList, skippedDraftSummary);
             return new WorkflowStepOutcome(Succeeded: true, Summary: skippedDraftSummary);
         }
@@ -66,10 +67,10 @@ public sealed class QualityRulesWorkflowStep(
                         : SubmissionProcessOutcome.ValidationErrorsFound,
                     ItemCount: rules.Count,
                     Summary: totalIssueCount == 0
-                        ? $"Evaluated {rules.Count} quality rule(s) with 0 failures"
+                        ? WorkflowMessages.EvaluatedQualityRulesZeroFailures(rules.Count)
                         : blockingRuleIssues.Count == 0
-                            ? $"Evaluated {rules.Count} quality rule(s); {totalIssueCount} advisory/warning issue(s)"
-                            : $"Evaluated {rules.Count} quality rule(s); {blockingRuleIssues.Count} blocking violation(s)",
+                            ? WorkflowMessages.EvaluatedQualityRulesAdvisory(rules.Count, totalIssueCount)
+                            : WorkflowMessages.EvaluatedQualityRulesBlocking(rules.Count, blockingRuleIssues.Count),
                     Errors: MapAuditIssues(val.Errors));
             },
             err => new ProcessStepDetails(
@@ -162,7 +163,7 @@ public sealed class QualityRulesWorkflowStep(
             EngineId: engineId,
             DisplayName: engineId,
             Kind: ValidationEngineKinds.QualityRule,
-            Description: $"Quality rule engine '{engineId}'.");
+            Description: WorkflowMessages.QualityRuleEngineDescription(engineId));
     }
 
     private static IReadOnlyList<SubmissionAuditValidationIssue>? MapAuditIssues(IReadOnlyList<ValidationError>? validationErrors)

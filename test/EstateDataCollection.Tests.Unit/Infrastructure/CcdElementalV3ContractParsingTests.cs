@@ -5,7 +5,7 @@ using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Infrastructure.Registry;
-using EstateDataCollection.Infrastructure.Validation;
+using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Builders.Contracts;
 using EstateDataCollection.Tests.Common.Builders.Payloads;
 using EstateDataCollection.Tests.Common.Extensions;
@@ -17,13 +17,13 @@ namespace EstateDataCollection.Tests.Unit.Infrastructure;
 public sealed class CcdElementalV3ContractParsingTests
 {
     [Fact]
-    public void OdcsContractParser_And_ConsistencyAnalyzer_Should_Validate_All_57_CcdElementalV3_Rules()
+    public void OdcsContractParser_And_ConsistencyAnalyser_Should_Validate_All_57_CcdElementalV3_Rules()
     {
         // Arrange
         var yaml = CcdElementalV3ContractBuilder.DefaultOdcsYaml;
         var parser = new OdcsContractParser();
         var coordinator = new QualityRuleCoordinator();
-        var analyzer = new ContractConsistencyAnalyzer();
+        var analyser = new ContractConsistencyAnalyser();
         var expectedIds = Enumerable.Range(1, 57)
             .Select(i => $"CCD-ELEM-V3-{i:D3}")
             .ToArray();
@@ -31,7 +31,7 @@ public sealed class CcdElementalV3ContractParsingTests
         // Act
         var parsed = parser.Parse(yaml).ShouldSucceed();
         var syntaxErrors = coordinator.ValidateRulesSyntax(parsed.GeneratedRulesJson!, out _).ShouldSucceed();
-        var consistency = analyzer.Analyze(parsed.GeneratedSchemaJson, parsed.ExtractedRules);
+        var consistency = analyser.Analyse(parsed.GeneratedSchemaJson, parsed.ExtractedRules);
 
         // Assert
         parsed.Name.Should().Be("ccd-elemental-v3");
@@ -73,7 +73,7 @@ public sealed class CcdElementalV3ContractParsingTests
             new QualityRuleCoordinator(),
             new OdcsContractParser(),
             Options.Create(new ValidationOptions()),
-            consistencyAnalyzer: new ContractConsistencyAnalyzer());
+            consistencyAnalyser: new ContractConsistencyAnalyser());
 
         // Act
         var result = (await verifier.VerifyCandidateSchemaAsync(
@@ -90,7 +90,7 @@ public sealed class CcdElementalV3ContractParsingTests
         result.IsSuccessful.Should().BeTrue();
         result.Errors.Should().BeEmpty();
         result.HasWarnings.Should().BeFalse();
-        result.AnalyzerFindings.Should().BeEmpty();
+        result.AnalyserFindings.Should().BeEmpty();
         result.Issues[RuleSeverity.Info].Should().Contain(e => e.RuleId == "CCD-ELEM-V3-038");
         result.InvalidFixtureOutcomes.Should().HaveCount(2);
         result.InvalidFixtureOutcomes!.Should().OnlyContain(o => o.FailedAsExpected);

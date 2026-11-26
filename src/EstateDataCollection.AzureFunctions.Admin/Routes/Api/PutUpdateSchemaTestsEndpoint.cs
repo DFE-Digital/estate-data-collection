@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
@@ -56,7 +57,7 @@ public sealed class PutUpdateSchemaTestsEndpoint(
             return Error.Failure(ErrorCodes.PayloadEmpty);
         }
 
-        var dtoResult = DeserialiseJson<UpdateSchemaTestsBodyDto>(rawBody, "Invalid update schema tests request JSON body.");
+        var dtoResult = DeserialiseJson<UpdateSchemaTestsBodyDto>(rawBody, ErrorMessages.InvalidUpdateSchemaTestsRequestBody);
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;

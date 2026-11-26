@@ -6,6 +6,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -45,7 +46,7 @@ public sealed class PostRunAllSchemaTestsEndpoint(
                 IncludeRetired: true),
             cancellationToken);
 
-        var meta = CreatePageMeta(http, "Schema Contracts & Lifecycle", activeNav: "schemas");
+        var meta = CreatePageMeta(http, AdminUiMessages.DashboardTitle, activeNav: "schemas");
 
         if (runResult.IsFailure)
         {
@@ -62,7 +63,7 @@ public sealed class PostRunAllSchemaTestsEndpoint(
 
         var run = runResult.Value;
         string? banner = run.FailedCount == 0
-            ? $"All {run.PassedCount} schema(s) passed regression tests on build {run.AppVersion}."
+            ? AdminUiMessages.NoticeAllSchemaTestsPassed(run.PassedCount, run.AppVersion)
             : null;
 
         var model = new DashboardViewModel(

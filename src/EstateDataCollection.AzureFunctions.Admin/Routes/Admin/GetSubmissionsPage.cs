@@ -5,6 +5,7 @@ using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissions;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -52,7 +53,7 @@ public sealed class GetSubmissionsPage(
             new GetSubmissionsRequest(schemaName, schemaVersion, status, query),
             cancellationToken);
 
-        var meta = CreatePageMeta(http, "Submissions", activeNav: "submissions");
+        var meta = CreatePageMeta(http, AdminUiMessages.SubmissionsTitle, activeNav: "submissions");
 
         if (result.IsFailure)
         {

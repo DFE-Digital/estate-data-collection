@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.IngestDraftSchema;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Web.Events;
 using Microsoft.Azure.Functions.Worker;
@@ -38,7 +39,7 @@ public sealed class IngestDraftSchemaEvent(
     private static Result<IngestDraftSchemaRequest> Bind(string? blobPath)
     {
         return string.IsNullOrWhiteSpace(blobPath)
-            ? Error.Failure(ErrorCodes.PayloadEmpty, "Draft blob path cannot be empty.")
+            ? Error.Failure(ErrorCodes.PayloadEmpty, SchemaValidationMessages.DraftBlobPathEmpty)
             : new IngestDraftSchemaRequest(BlobPath: blobPath);
     }
 }

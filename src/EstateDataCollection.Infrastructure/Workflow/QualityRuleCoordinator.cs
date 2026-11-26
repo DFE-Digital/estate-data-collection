@@ -6,15 +6,15 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
-using EstateDataCollection.Domain.Submission;
-using EstateDataCollection.Infrastructure.Validation.Engines;
-using EstateDataCollection.Infrastructure.Validation.Enrichment;
+using EstateDataCollection.Infrastructure.Workflow.Engines;
+using EstateDataCollection.Infrastructure.Workflow.Enrichment;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace EstateDataCollection.Infrastructure.Validation;
+namespace EstateDataCollection.Infrastructure.Workflow;
 
 public partial class QualityRuleCoordinator : IBusinessLogicValidator
 {
@@ -92,7 +92,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
         if (string.IsNullOrWhiteSpace(rawRulesJson))
         {
             return Result<IReadOnlyList<ValidationMessage>>.Success([
-                new ValidationMessage(typeof(QualityRuleCoordinator), null, "Rules JSON was empty or null.", source: ValidationSources.Rule)
+                new ValidationMessage(typeof(QualityRuleCoordinator), null, WorkflowMessages.RulesJsonEmptyOrNull, source: ValidationSources.Rule)
             ]);
         }
 
@@ -103,7 +103,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
             if (deserialized is null || deserialized.Count == 0)
             {
                 return Result<IReadOnlyList<ValidationMessage>>.Success([
-                    new ValidationMessage(typeof(QualityRuleCoordinator), null, "Rules JSON must contain at least one business rule.", source: ValidationSources.Rule)
+                    new ValidationMessage(typeof(QualityRuleCoordinator), null, WorkflowMessages.RulesJsonMustContainRule, source: ValidationSources.Rule)
                 ]);
             }
             rules = deserialized;
@@ -111,7 +111,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
         catch (Exception ex)
         {
             return Result<IReadOnlyList<ValidationMessage>>.Success([
-                new ValidationMessage(typeof(QualityRuleCoordinator), null, $"Malformed Rules JSON syntax: {ex.Message}", source: ValidationSources.Rule)
+                new ValidationMessage(typeof(QualityRuleCoordinator), null, WorkflowMessages.MalformedRulesJsonSyntax(ex.Message), source: ValidationSources.Rule)
             ]);
         }
 
@@ -124,17 +124,17 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
 
             if (string.IsNullOrWhiteSpace(rule.Id))
             {
-                syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, "'id' is required.", source: ValidationSources.Rule, ruleId: ruleId));
+                syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, WorkflowMessages.RuleIdRequired, source: ValidationSources.Rule, ruleId: ruleId));
             }
 
             if (string.IsNullOrWhiteSpace(rule.Description))
             {
-                syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, "'description' is required.", source: ValidationSources.Rule, ruleId: ruleId));
+                syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, WorkflowMessages.RuleDescriptionRequired, source: ValidationSources.Rule, ruleId: ruleId));
             }
 
             if (string.IsNullOrWhiteSpace(rule.Path))
             {
-                syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, "'path' target is required.", source: ValidationSources.Rule, ruleId: ruleId));
+                syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, WorkflowMessages.RulePathRequired, source: ValidationSources.Rule, ruleId: ruleId));
             }
 
             // ODCS rules use 'description' + 'implementation', whereas standalone rules use 'message' + 'assert'.
@@ -144,7 +144,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
                 rule.Fields is not { Count: > 0 } &&
                 rule.Severity != RuleSeverity.Info)
             {
-                syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, "'message' is required.", source: ValidationSources.Rule, ruleId: ruleId));
+                syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, WorkflowMessages.RuleMessageRequired, source: ValidationSources.Rule, ruleId: ruleId));
             }
 
             var engineName = rule.ResolveEngine(_options.DefaultEngine);
@@ -166,7 +166,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
             {
                 if (rule.Severity != RuleSeverity.Info)
                 {
-                    syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, "'assert' (or 'implementation') logic condition is required.", source: ValidationSources.Rule, ruleId: ruleId));
+                    syntaxErrors.Add(new ValidationMessage(typeof(QualityRuleCoordinator), ruleId, WorkflowMessages.RuleAssertionRequired, source: ValidationSources.Rule, ruleId: ruleId));
                 }
             }
             else
@@ -265,7 +265,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
                         var path = string.IsNullOrWhiteSpace(rule.Path) ? "/" : $"/{rule.Path.Replace('.', '/')}";
                         violations.Add(new ValidationError(
                             PropertyPath: path,
-                            Message: $"Rule '{rule.Id}': {engineError}",
+                            Message: WorkflowMessages.RuleErrorPrefixed(rule.Id, engineError),
                             RuleId: rule.Id,
                             Severity: rule.Severity,
                             Action: rule.EffectiveAction,
@@ -279,7 +279,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
                     {
                         _instrumentation.EngineSkipped(rule.Id, engineName);
                         unknownAcc.SkippedUnknownCount++;
-                        unknownAcc.LastErrorSummary ??= $"Engine '{engineName}' skipped per UnknownEngineBehavior.Skip";
+                        unknownAcc.LastErrorSummary ??= WorkflowMessages.UnknownEngineSkippedSummary(engineName);
                     }
                     continue;
                 }
@@ -353,7 +353,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
 
                     if (haltedAfterStage.HasValue && rule.Stage > haltedAfterStage.Value)
                     {
-                        const string haltReason = "Skipped because an earlier stage halted on a Critical/StopOnFailure violation";
+                        var haltReason = WorkflowMessages.RunbookHaltedEarlierStage;
                         acc.SkippedRunbookCount++;
                         acc.LastErrorSummary ??= haltReason;
                         _instrumentation.RuleSkippedByRunbook(rule.Id, haltReason);
@@ -362,7 +362,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
 
                     if (HasFailedDependency(rule, failedRuleIds, out var failedDependencyId))
                     {
-                        var depReason = $"Skipped because upstream dependency '{failedDependencyId}' failed";
+                        var depReason = WorkflowMessages.RunbookUpstreamDependencyFailed(failedDependencyId);
                         acc.SkippedRunbookCount++;
                         acc.LastErrorSummary ??= depReason;
                         _instrumentation.RuleSkippedByRunbook(rule.Id, depReason);
@@ -395,7 +395,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
 
                         if (batchOutcome.IsFailure)
                         {
-                            var errMsg = batchOutcome.Error.Description ?? $"Rule '{rule.Id}' evaluation failed.";
+                            var errMsg = batchOutcome.Error.Description ?? WorkflowMessages.RuleEvaluationFailedFallback(rule.Id);
                             var fallbackPath = batchItems.Count > 0 ? batchItems[0].TargetPath : (rule.Path ?? "/");
                             violations.Add(new ValidationError(
                                 PropertyPath: fallbackPath,
@@ -461,7 +461,7 @@ public partial class QualityRuleCoordinator : IBusinessLogicValidator
 
                             if (evalOutcome.IsFailure)
                             {
-                                var errMsg = evalOutcome.Error.Description ?? $"Rule '{rule.Id}' evaluation failed.";
+                                var errMsg = evalOutcome.Error.Description ?? WorkflowMessages.RuleEvaluationFailedFallback(rule.Id);
                                 violations.Add(new ValidationError(
                                     PropertyPath: targetPath,
                                     Message: errMsg,

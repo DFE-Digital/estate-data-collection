@@ -2,6 +2,7 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -36,25 +37,25 @@ public sealed class ScheduleSchemaUseCase(
         var metadata = existing.Value.Metadata;
         if (metadata.IsDeleted)
         {
-            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, "Schema version has been deleted.");
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, SchemaValidationMessages.SchemaDeletedLogReason);
             return Error.Validation(ErrorCodes.SchemaDeleted, new { request.SchemaName, request.Version });
         }
 
         if (metadata.State == SchemaLifecycleState.Invalid)
         {
-            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, "Schema is Invalid and cannot be scheduled.");
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, SchemaValidationMessages.SchemaInvalidLogReason);
             return Error.Validation(ErrorCodes.SchemaInvalid, new { request.SchemaName, request.Version, metadata.ErrorSummary });
         }
 
         if (metadata.State == SchemaLifecycleState.Unvalidated)
         {
-            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, "Schema is Unvalidated and must be signed off before scheduling.");
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, SchemaValidationMessages.SchemaUnvalidatedLogReason);
             return Error.Validation(ErrorCodes.SchemaUnvalidated, new { request.SchemaName, request.Version, metadata.ErrorSummary });
         }
 
         if (metadata.IsRetired)
         {
-            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, "Schema is already retired.");
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, SchemaValidationMessages.SchemaRetiredLogReason);
             return Error.Validation(ErrorCodes.SchemaRetired, new { request.SchemaName, request.Version });
         }
 
@@ -132,7 +133,7 @@ public sealed class ScheduleSchemaUseCase(
                 }
                 else
                 {
-                    var msg = $"Unsupported LifecycleAction '{request.LifecycleAction}'. Allowed values: Schedule, Activate, Deprecate, Retire.";
+                    var msg = SchemaValidationMessages.UnsupportedLifecycleAction(request.LifecycleAction);
                     _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, msg);
                     return Error.Validation(ErrorCodes.SchemaInvalidSchedule, msg);
                 }
@@ -143,7 +144,7 @@ public sealed class ScheduleSchemaUseCase(
             }
             else if (request.IdentifierConfig is null && request.ValidationPolicy is null)
             {
-                var msg = "Either EffectiveFromUtc, LifecycleAction, IdentifierConfig, or ValidationPolicy must be provided.";
+                var msg = SchemaValidationMessages.ScheduleRequiresInputField;
                 _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, msg);
                 return Error.Validation(ErrorCodes.SchemaInvalidSchedule, msg);
             }

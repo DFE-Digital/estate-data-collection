@@ -14,5 +14,5 @@ public sealed record VerifySchemaResult(
     IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? Issues = null,
     IReadOnlyList<string>? SyntaxErrors = null,
     IReadOnlyList<string>? FixtureErrors = null,
-    IReadOnlyList<ValidationError>? AnalyzerFindings = null
+    IReadOnlyList<ValidationError>? AnalyserFindings = null
 );

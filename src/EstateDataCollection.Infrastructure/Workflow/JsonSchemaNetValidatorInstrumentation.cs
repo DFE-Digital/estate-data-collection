@@ -1,7 +1,7 @@
 using EstateDataCollection.Common.Markers;
 using Microsoft.Extensions.Logging;
 
-namespace EstateDataCollection.Infrastructure.Validation;
+namespace EstateDataCollection.Infrastructure.Workflow;
 
 public sealed partial class JsonSchemaNetValidatorInstrumentation(
     ILogger<JsonSchemaNetValidator> logger

@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 
@@ -24,9 +25,9 @@ public sealed record ScheduleSchemaViewModel(
 
     public string BackToDetailsUrl => AppRoutes.AdminUi.SchemaDetail(SchemaName, Version);
 
-    public string BackToDetailsText => $"Back to {SchemaName} V{Version}";
+    public string BackToDetailsText => AdminUiMessages.BackToSchemaDetails(SchemaName, Version);
 
-    public string HeadingText => $"Manage {SchemaName}, V{Version}";
+    public string HeadingText => AdminUiMessages.ManageSchemaHeading(SchemaName, Version);
 
     public string FormActionUrl => AppRoutes.AdminUi.SchemaSchedule(SchemaName, Version);
 

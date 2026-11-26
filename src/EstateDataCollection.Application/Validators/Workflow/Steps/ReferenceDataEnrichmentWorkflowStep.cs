@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 
@@ -18,9 +19,9 @@ public sealed class ReferenceDataEnrichmentWorkflowStep(
     public WorkflowEngineDescriptor EngineDescriptor =>
         new(
             WorkflowStepIds.ReferenceDataEnrichment,
-            "Reference Data Enrichment",
+            WorkflowMessages.ReferenceDataDisplayName,
             ValidationEngineKinds.ContextEnrichment,
-            "Loads versioned reference datasets from blob storage, local paths, or verify fixtures into ambient.reference.");
+            WorkflowMessages.ReferenceDataDescription);
 
     public async Task<Result<WorkflowStepOutcome>> ExecuteAsync(
         WorkflowContext context,
@@ -29,8 +30,8 @@ public sealed class ReferenceDataEnrichmentWorkflowStep(
         var hasFixtures = TryExtractFixtureReferenceData(context.AmbientFixtures, out var fixtureDatasets);
         if (referenceDataProvider is null && !hasFixtures)
         {
-            RecordSkipped(context, "Reference data provider is not configured");
-            return new WorkflowStepOutcome(Succeeded: true, Summary: "Skipped (no reference data provider)");
+            RecordSkipped(context, WorkflowMessages.SkippedProviderNotConfigured);
+            return new WorkflowStepOutcome(Succeeded: true, Summary: WorkflowMessages.SkippedNoReferenceProvider);
         }
 
         var swStart = Stopwatch.GetTimestamp();
@@ -75,8 +76,8 @@ public sealed class ReferenceDataEnrichmentWorkflowStep(
                 Outcome: SubmissionProcessOutcome.Succeeded,
                 ItemCount: count,
                 Summary: count == 0
-                    ? "No reference datasets registered for schema"
-                    : $"Loaded {count} reference dataset key(s) into ambient.reference"),
+                    ? WorkflowMessages.NoReferenceDatasetsRegistered
+                    : WorkflowMessages.LoadedReferenceDatasetsIntoAmbient(count)),
             err => new ProcessStepDetails(
                 Outcome: SubmissionProcessOutcome.Failed,
                 Summary: err.Description ?? err.Code,
@@ -104,10 +105,10 @@ public sealed class ReferenceDataEnrichmentWorkflowStep(
             ViolationCount: 0,
             DurationMs: elapsedMs,
             Summary: count == 0
-                ? "No reference datasets registered for schema"
-                : $"Loaded {count} reference dataset key(s) into ambient.reference"));
+                ? WorkflowMessages.NoReferenceDatasetsRegistered
+                : WorkflowMessages.LoadedReferenceDatasetsIntoAmbient(count)));
 
-        return new WorkflowStepOutcome(Succeeded: true, Summary: $"Loaded {count} reference dataset key(s)");
+        return new WorkflowStepOutcome(Succeeded: true, Summary: WorkflowMessages.LoadedReferenceDatasetsShort(count));
     }
 
     public void RecordSkipped(WorkflowContext context, string reason)

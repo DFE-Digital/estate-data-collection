@@ -108,10 +108,10 @@ public sealed class WorkbenchUiIntegrationTests(AzuriteFixture fixture)
     }
 
     [Fact]
-    public async Task PostWorkbenchVerify_MultiSeverityAndAnalyzerFindings_Should_Return_422_With_Severity_Summary()
+    public async Task PostWorkbenchVerify_MultiSeverityAndAnalyserFindings_Should_Return_422_With_Severity_Summary()
     {
         // Arrange
-        const string analyzerSchema = """
+        const string analyserSchema = """
         {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
@@ -122,7 +122,7 @@ public sealed class WorkbenchUiIntegrationTests(AzuriteFixture fixture)
           }
         }
         """;
-        const string analyzerRules = """
+        const string analyserRules = """
         [
           {
             "id": "R-BAD-CASING",
@@ -146,8 +146,8 @@ public sealed class WorkbenchUiIntegrationTests(AzuriteFixture fixture)
         var request = await HttpRequestBuilder.FromFormAsync(new Dictionary<string, string?>
         {
             ["inputMode"] = "json",
-            ["schemaJson"] = analyzerSchema,
-            ["rulesJson"] = analyzerRules,
+            ["schemaJson"] = analyserSchema,
+            ["rulesJson"] = analyserRules,
             ["validFixtureJson"] = """{"urn":100001,"quantity":10}"""
         });
 
@@ -158,7 +158,7 @@ public sealed class WorkbenchUiIntegrationTests(AzuriteFixture fixture)
         var html = result.Should().BeOfType<ContentResult>().Subject;
         html.StatusCode.Should().Be(StatusCodes.Status422UnprocessableEntity);
         html.Content.Should().Contain("id=\"verify-issues-by-severity\"");
-        html.Content.Should().Contain("id=\"verify-analyzer-findings\"");
+        html.Content.Should().Contain("id=\"verify-analyser-findings\"");
         html.Content.Should().Contain("R-BAD-CASING");
         html.Content.Should().Contain("R-WARN-LOOSE");
         html.Content.Should().Contain("Warning");

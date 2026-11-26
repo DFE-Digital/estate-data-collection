@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
@@ -23,9 +24,8 @@ public sealed record WorkbenchVerifyViewModel(
             ? null
             : NotificationBannerViewModel.Success(
                 message: Result.Message,
-                title: "Verification passed",
-                detail:
-                "Contract syntax, identifier alignment, quality rules, and any provided sample fixtures passed dry-run verification.");
+                title: AdminUiMessages.VerificationPassedTitle,
+                detail: AdminUiMessages.VerificationPassedDetail);
 
     public bool HasWarnings => Result?.Warnings is { Count: > 0 };
 
@@ -51,26 +51,22 @@ public sealed record WorkbenchVerifyViewModel(
 
     public IReadOnlyList<SeverityIssueGroupViewModel> IssueGroups
     {
-        get { return _issueGroups ??= SeverityIssueGroupViewModel.FromDictionary(Result?.Issues); }
+        get { return field ??= SeverityIssueGroupViewModel.FromDictionary(Result?.Issues); }
     }
-
-    private IReadOnlyList<SeverityIssueGroupViewModel>? _issueGroups;
 
     public bool HasIssueGroups => IssueGroups.Count > 0;
 
-    public IReadOnlyList<ValidationErrorItemViewModel> AnalyzerFindings
+    public IReadOnlyList<ValidationErrorItemViewModel> AnalyserFindings
     {
         get
         {
-            return _analyzerFindings ??= (Result?.AnalyzerFindings ?? [])
+            return field ??= (Result?.AnalyserFindings ?? [])
                 .Select(SeverityIssueGroupViewModel.ToItem)
                 .ToList();
         }
     }
 
-    private IReadOnlyList<ValidationErrorItemViewModel>? _analyzerFindings;
-
-    public bool HasAnalyzerFindings => AnalyzerFindings.Count > 0;
+    public bool HasAnalyserFindings => AnalyserFindings.Count > 0;
 
     public IReadOnlyList<string> SyntaxErrors => Result?.SyntaxErrors ?? [];
 
@@ -84,23 +80,19 @@ public sealed record WorkbenchVerifyViewModel(
 
     public IReadOnlyList<VerifyInvalidOutcomeViewModel> InvalidFixtureOutcomes
     {
-        get { return _invalidFixtureOutcomes ??= BuildInvalidFixtureOutcomes(); }
+        get { return field ??= BuildInvalidFixtureOutcomes(); }
     }
-
-    private IReadOnlyList<VerifyInvalidOutcomeViewModel>? _invalidFixtureOutcomes;
 
     public ValidationEngineDiagnosticsViewModel EngineDiagnostics
     {
         get
         {
-            return _engineDiagnostics ??= ValidationEngineDiagnosticsViewModel.FromTraces(
+            return field ??= ValidationEngineDiagnosticsViewModel.FromTraces(
                 Result?.EngineTraces,
-                heading: "Validation Engine Diagnostics",
-                subtitle: "Per-engine execution outcomes across schema syntax, quality rules, identifier extraction, and golden fixtures.");
+                heading: AdminUiMessages.EngineDiagnosticsDefaultHeading,
+                subtitle: AdminUiMessages.VerifyEngineDiagnosticsSubtitle);
         }
     }
-
-    private ValidationEngineDiagnosticsViewModel? _engineDiagnostics;
 
     public bool HasResolvedIdentifierConfig => Result?.ResolvedIdentifierConfig is not null;
 
@@ -118,22 +110,20 @@ public sealed record WorkbenchVerifyViewModel(
     {
         get
         {
-            return _tabs ??= GovUkTabsViewModel.Create(
+            return field ??= GovUkTabsViewModel.Create(
                 "workbench-verify-tabs",
                 [
-                    ("verify-summary", "Summary & fixtures", true),
-                    ("verify-engine-diagnostics", "Engine diagnostics", EngineDiagnostics.HasContent)
+                    ("verify-summary", AdminUiMessages.VerifySummaryTabLabel, true),
+                    ("verify-engine-diagnostics", AdminUiMessages.VerifyEngineDiagnosticsTabLabel, EngineDiagnostics.HasContent)
                 ]);
         }
     }
-
-    private GovUkTabsViewModel? _tabs;
 
     public bool ShowTabs => Tabs.Tabs.Count > 1;
 
     public bool HasSummaryDetails =>
         HasIssueGroups ||
-        HasAnalyzerFindings ||
+        HasAnalyserFindings ||
         HasSyntaxErrors ||
         HasFixtureErrors ||
         HasInvalidFixtureOutcomes ||
@@ -158,12 +148,12 @@ public sealed record WorkbenchVerifyViewModel(
             {
                 var hasExpected = o.ExpectedErrors is { Count: > 0 };
                 return new VerifyInvalidOutcomeViewModel(
-                    Title: $"Invalid Fixture #{o.Index + 1}",
+                    Title: AdminUiMessages.InvalidFixtureTitle(o.Index + 1),
                     HasDescription: !string.IsNullOrWhiteSpace(o.Description),
                     Description: o.Description,
                     StatusTagText: hasExpected
-                        ? "Matched expected error(s)"
-                        : "Failed \u2014 unknown if expected",
+                        ? AdminUiMessages.FixtureStatusMatchedExpectedErrors
+                        : AdminUiMessages.FixtureStatusFailedUnknownIfExpected,
                     StatusTagCssClass: hasExpected
                         ? "govuk-tag govuk-tag--green"
                         : "govuk-tag govuk-tag--yellow",

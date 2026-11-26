@@ -10,7 +10,7 @@ namespace EstateDataCollection.Tests.Unit.Validators;
 
 public sealed class ContractConsistencyPathAndEnumTests
 {
-    private readonly ContractConsistencyAnalyzer _sut = new();
+    private readonly ContractConsistencyAnalyser _sut = new();
 
     internal const string SampleSchemaJson = """
     {
@@ -75,7 +75,7 @@ public sealed class ContractConsistencyPathAndEnumTests
         ];
 
         // Act
-        var report = _sut.Analyze(SampleSchemaJson, rules);
+        var report = _sut.Analyse(SampleSchemaJson, rules);
 
         // Assert
         report.Errors.Should().NotBeEmpty();
@@ -110,7 +110,7 @@ public sealed class ContractConsistencyPathAndEnumTests
         ];
 
         // Act
-        var report = _sut.Analyze(SampleSchemaJson, rules);
+        var report = _sut.Analyse(SampleSchemaJson, rules);
 
         // Assert
         report.Findings.Should().Contain(f =>
@@ -144,7 +144,7 @@ public sealed class ContractConsistencyPathAndEnumTests
         ];
 
         // Act
-        var report = _sut.Analyze(SampleSchemaJson, rules);
+        var report = _sut.Analyse(SampleSchemaJson, rules);
 
         // Assert
         report.Findings.Should().Contain(f =>
@@ -190,7 +190,7 @@ public sealed class ContractConsistencyPathAndEnumTests
         ];
 
         // Act
-        var report = _sut.Analyze(SampleSchemaJson, rules);
+        var report = _sut.Analyse(SampleSchemaJson, rules);
 
         // Assert
         report.Findings.Should().Contain(f => f.RuleId == "R-CEL-METHOD-BAD" && f.Severity == RuleSeverity.Error);

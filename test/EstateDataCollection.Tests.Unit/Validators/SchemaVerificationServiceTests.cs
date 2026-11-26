@@ -8,7 +8,7 @@ using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 using EstateDataCollection.Infrastructure.Registry;
-using EstateDataCollection.Infrastructure.Validation;
+using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Builders.Contracts;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;
@@ -46,7 +46,7 @@ public sealed class SchemaVerificationServiceTests
         result.Warnings.Should().ContainSingle(w => w.Message.Contains("unknown if expected"));
         result.EngineTraces.Should().NotBeNull();
         result.EngineTraces!.Select(t => t.Descriptor.EngineId).Should().BeEquivalentTo(
-            ["json-schema", "jsonlogic", "cel", "unique", "identifier-extractor", "contract-consistency-analyzer"]);
+            ["json-schema", "jsonlogic", "cel", "unique", "identifier-extractor", "contract-consistency-analyser"]);
         result.EngineTraces.Single(t => t.Descriptor.EngineId == "json-schema").Outcome
             .Should().Be(nameof(SubmissionProcessOutcome.Succeeded));
         result.EngineTraces.Single(t => t.Descriptor.EngineId == "jsonlogic").Outcome

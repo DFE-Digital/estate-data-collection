@@ -1,5 +1,8 @@
+using System.Globalization;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
@@ -23,11 +26,10 @@ public sealed record SchemaSectionCardViewModel(
                     string.Equals(v.IdentifierConfig!.Type, "None", StringComparison.OrdinalIgnoreCase);
                 var hasCustomId = hasIdConfig && !isIdDisabled;
 
-                var stateName = v.State.Name;
-                var isRetired = string.Equals(stateName, "Retired", StringComparison.OrdinalIgnoreCase);
-                var isDeleted = string.Equals(stateName, "Deleted", StringComparison.OrdinalIgnoreCase) || v.DeletedAtUtc.HasValue;
-                var isInvalid = string.Equals(stateName, "Invalid", StringComparison.OrdinalIgnoreCase);
-                var isUnvalidated = string.Equals(stateName, "Unvalidated", StringComparison.OrdinalIgnoreCase);
+                var isRetired = v.State.Key == (int)SchemaLifecycleState.Retired;
+                var isDeleted = v.State.Key == (int)SchemaLifecycleState.Deleted;
+                var isInvalid = v.State.Key == (int)SchemaLifecycleState.Invalid;
+                var isUnvalidated = v.State.Key == (int)SchemaLifecycleState.Unvalidated;
 
                 var (testStatusTagText, testStatusTagCssClass) = ResolveTestStatus(v, isDeleted);
                 var hasTimestamp = v.LastTestRunAtUtc.HasValue;
@@ -38,7 +40,7 @@ public sealed record SchemaSectionCardViewModel(
                 var errorTagText = isInvalid
                     ? ".error.json"
                     : v.HasErrorReport
-                        ? "Warnings (.error.json)"
+                        ? AdminUiMessages.ErrorReportTagWarnings
                         : string.Empty;
                 var errorTagCss = isInvalid
                     ? "govuk-tag govuk-tag--red"
@@ -47,23 +49,23 @@ public sealed record SchemaSectionCardViewModel(
                 var hasSignedOff = !string.IsNullOrWhiteSpace(v.SignedOffBy);
                 var signedOffDisplay = hasSignedOff
                     ? (v.SignedOffAtUtc.HasValue
-                        ? $"Signed off by {v.SignedOffBy} ({v.SignedOffAtUtc.Value:yyyy-MM-dd HH:mm} UTC)"
-                        : $"Signed off by {v.SignedOffBy}")
+                        ? AdminUiMessages.SignedOffByWithTimestamp(v.SignedOffBy, v.SignedOffAtUtc.Value)
+                        : AdminUiMessages.SignedOffBy(v.SignedOffBy))
                     : string.Empty;
 
                 var deletedDisplay = v.DeletedAtUtc.HasValue
-                    ? $"Deleted {v.DeletedAtUtc.Value:yyyy-MM-dd HH:mm} UTC (push fixes to v{v.Version + 1})"
-                    : (isDeleted ? $"Deleted (push fixes to v{v.Version + 1})" : string.Empty);
+                    ? AdminUiMessages.DeletedWithTimestamp(v.DeletedAtUtc.Value, v.Version + 1)
+                    : (isDeleted ? AdminUiMessages.DeletedWithoutTimestamp(v.Version + 1) : string.Empty);
 
                 return new SchemaVersionRowViewModel(
                     Version: v.Version,
-                    StateTag: LifecycleTagViewModel.From(stateName),
+                    StateTag: LifecycleTagViewModel.From(v.State.Name),
                     TestStatusTagText: testStatusTagText,
                     TestStatusTagCssClass: testStatusTagCssClass,
                     HasTestRunTimestamp: hasTimestamp,
                     TestRunTimestampDisplay: timestampDisplay,
-                    EffectiveFromDisplay: v.EffectiveFromUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Unscheduled",
-                    EffectiveToDisplay: v.EffectiveToUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Open-ended",
+                    EffectiveFromDisplay: v.EffectiveFromUtc?.ToString("yyyy-MM-dd HH:mm") ?? AdminUiMessages.UnscheduledLabel,
+                    EffectiveToDisplay: v.EffectiveToUtc?.ToString("yyyy-MM-dd HH:mm") ?? AdminUiMessages.OpenEndedLabel,
                     HasIdentifierConfig: hasIdConfig,
                     IsIdentifierDisabled: isIdDisabled,
                     HasCustomIdentifier: hasCustomId,
@@ -100,24 +102,24 @@ public sealed record SchemaSectionCardViewModel(
     {
         if (isDeleted)
         {
-            return ("Tombstone", "govuk-tag govuk-tag--grey");
+            return (AdminUiMessages.TestStatusTombstone, "govuk-tag govuk-tag--grey");
         }
 
         if (v.LastTestRunPassed is null && !v.LastTestRunAtUtc.HasValue)
         {
-            return ("Not run", "govuk-tag govuk-tag--grey");
+            return (AdminUiMessages.TestStatusNotRun, "govuk-tag govuk-tag--grey");
         }
 
         if (v.LastTestRunPassed == false)
         {
-            return ("Failed", "govuk-tag govuk-tag--red");
+            return (AdminUiMessages.TagFailed, "govuk-tag govuk-tag--red");
         }
 
         if (v.LastTestRunWarnings is { Count: > 0 })
         {
-            return ("Passed (warnings)", "govuk-tag govuk-tag--yellow");
+            return (AdminUiMessages.TagPassedWarnings, "govuk-tag govuk-tag--yellow");
         }
 
-        return ("Passed", "govuk-tag govuk-tag--green");
+        return (AdminUiMessages.TagPassed, "govuk-tag govuk-tag--green");
     }
 }

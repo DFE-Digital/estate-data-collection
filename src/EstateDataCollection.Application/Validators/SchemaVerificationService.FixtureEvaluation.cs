@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
@@ -45,11 +46,11 @@ public sealed partial class SchemaVerificationService
                 if (!eval.IsValid)
                 {
                     schemaTrace.ViolationCount++;
-                    schemaTrace.FirstIssue ??= $"{fixtureId} rejected by schema.";
+                    schemaTrace.FirstIssue ??= SchemaValidationMessages.FixtureRejectedBySchema(fixtureId);
 
                     fixtureErrors.Add(ValidationMessage.For(
                         ValidationSources.Schema,
-                        $"{fixtureId} was expected to pass, but was rejected by the schema.",
+                        SchemaValidationMessages.FixtureExpectedToPassRejected(fixtureId),
                         identifier: fixtureId,
                         engineType: typeof(JsonSchema)));
 
@@ -60,11 +61,11 @@ public sealed partial class SchemaVerificationService
             {
                 payloadParsed = false;
                 schemaTrace.ViolationCount++;
-                schemaTrace.FirstIssue ??= $"{fixtureId} could not be parsed: {ex.Message}";
+                schemaTrace.FirstIssue ??= SchemaValidationMessages.FixtureParseFailed(fixtureId, ex.Message);
 
                 fixtureErrors.Add(ValidationMessage.For(
                     ValidationSources.Json,
-                    $"{fixtureId} could not be parsed: {ex.Message}",
+                    SchemaValidationMessages.FixtureParseFailed(fixtureId, ex.Message),
                     identifier: fixtureId,
                     engineType: typeof(JsonSchema)));
             }
@@ -97,7 +98,7 @@ public sealed partial class SchemaVerificationService
 
                 fixtureErrors.Add(ValidationMessage.For(
                     ValidationSources.Rule,
-                    $"{fixtureId} quality rule evaluation failed: {logicResult.Error.Description}",
+                    SchemaValidationMessages.FixtureQualityRuleEvalFailed(fixtureId, logicResult.Error.Description),
                     identifier: fixtureId,
                     engineType: logicValidator.GetType(),
                     metadata: new Dictionary<string, object?> { ["errorCode"] = logicResult.Error.Code }));
@@ -121,7 +122,7 @@ public sealed partial class SchemaVerificationService
                     if (ruleIds.Length > 0) metaDict["ruleIds"] = ruleIds;
                     fixtureErrors.Add(ValidationMessage.For(
                         ValidationSources.Rule,
-                        $"{fixtureId} violated quality rules: {ruleErrors}",
+                        SchemaValidationMessages.FixtureViolatedQualityRules(fixtureId, ruleErrors),
                         identifier: fixtureId,
                         ruleId: ruleIds.Length == 1 ? ruleIds[0] : null,
                         engineType: logicValidator.GetType(),
@@ -135,7 +136,7 @@ public sealed partial class SchemaVerificationService
                     {
                         warnings.Add(ValidationMessage.For(
                             ValidationSources.Rule,
-                            $"{fixtureId} warning [{nonBlocking.RuleId ?? "rule"}]: {nonBlocking.Message}",
+                            SchemaValidationMessages.FixtureRuleWarning(fixtureId, nonBlocking.RuleId, nonBlocking.Message),
                             identifier: fixtureId,
                             path: nonBlocking.PropertyPath,
                             ruleId: nonBlocking.RuleId,
@@ -182,11 +183,11 @@ public sealed partial class SchemaVerificationService
         if (idInspect.Value.Status == IdentifierExtractionStatus.Invalid)
         {
             identifierTrace.ViolationCount++;
-            identifierTrace.FirstIssue ??= $"{fixtureId} failed identifier extraction: {idInspect.Value.ErrorMessage}";
+            identifierTrace.FirstIssue ??= SchemaValidationMessages.FixtureFailedIdentifierExtraction(fixtureId, idInspect.Value.ErrorMessage);
 
             fixtureErrors.Add(ValidationMessage.For(
                 ValidationSources.Identifier,
-                $"{fixtureId} failed identifier extraction: {idInspect.Value.ErrorMessage}",
+                SchemaValidationMessages.FixtureFailedIdentifierExtraction(fixtureId, idInspect.Value.ErrorMessage),
                 identifier: fixtureId,
                 path: idInspect.Value.MatchedPath,
                 engineType: typeof(SubmissionIdentifier),
@@ -197,7 +198,7 @@ public sealed partial class SchemaVerificationService
             var expectedPath = idInspect.Value.MatchedPath
                 ?? identifierAlignment.ResolvedPaths.FirstOrDefault()
                 ?? _validationOptions.DefaultIdentifierPointerFallback;
-            var msg = $"{fixtureId} is missing required '{effectiveIdentifierType}' identifier at '{expectedPath}'.";
+            var msg = SchemaValidationMessages.FixtureMissingRequiredIdentifier(fixtureId, effectiveIdentifierType, expectedPath);
             identifierTrace.ViolationCount++;
             identifierTrace.FirstIssue ??= msg;
 
@@ -262,7 +263,7 @@ public sealed partial class SchemaVerificationService
                 {
                     fixtureErrors.Add(ValidationMessage.For(
                         ValidationSources.Json,
-                        $"{fixtureId} could not be parsed: {ex.Message}",
+                        SchemaValidationMessages.FixtureParseFailed(fixtureId, ex.Message),
                         identifier: fixtureId,
                         engineType: typeof(JsonSchema)));
                 }
@@ -270,7 +271,7 @@ public sealed partial class SchemaVerificationService
                 schemaTrace.InvalidTriggers++;
                 triggeredErrors.Add(ValidationMessage.For(
                     ValidationSources.Json,
-                    $"Could not parse payload: {ex.Message}",
+                    SchemaValidationMessages.PayloadParseFailed(ex.Message),
                     identifier: fixtureId,
                     engineType: typeof(JsonNode)));
             }
@@ -361,7 +362,7 @@ public sealed partial class SchemaVerificationService
                     identifierTrace.InvalidTriggers++;
                     triggeredErrors.Add(ValidationMessage.For(
                         ValidationSources.Identifier,
-                        idInspect.Value.ErrorMessage ?? "Invalid identifier.",
+                        idInspect.Value.ErrorMessage ?? SchemaValidationMessages.InvalidIdentifierFallback,
                         identifier: fixtureId,
                         path: idInspect.Value.MatchedPath,
                         engineType: typeof(SubmissionIdentifier),
@@ -376,7 +377,7 @@ public sealed partial class SchemaVerificationService
                         ?? _validationOptions.DefaultIdentifierPointerFallback;
                     triggeredErrors.Add(ValidationMessage.For(
                         ValidationSources.Identifier,
-                        $"Missing required '{effectiveIdentifierType}' identifier at '{expectedPath}'.",
+                        SchemaValidationMessages.MissingRequiredIdentifierAtPath(effectiveIdentifierType, expectedPath),
                         identifier: fixtureId,
                         path: expectedPath,
                         engineType: typeof(SubmissionIdentifier),
@@ -400,7 +401,7 @@ public sealed partial class SchemaVerificationService
         {
             fixtureErrors.Add(ValidationMessage.For(
                 ValidationSources.Verification,
-                $"{fixtureId} was expected to fail, but passed the schema.",
+                SchemaValidationMessages.FixtureExpectedToFailPassed(fixtureId),
                 identifier: fixtureId,
                 engineType: typeof(SchemaVerificationService)));
         }
@@ -419,10 +420,10 @@ public sealed partial class SchemaVerificationService
                 failedAsExpected = false;
                 var actualSummary = distinctTriggered.Count > 0
                     ? string.Join("; ", distinctTriggered.Select(e => e.FormatDisplay()))
-                    : "none";
+                    : SchemaValidationMessages.NoErrorsFallback;
                 fixtureErrors.Add(ValidationMessage.For(
                     ValidationSources.Verification,
-                    $"{fixtureId} did not trigger expected error(s) [{string.Join(", ", unmatchedExpected)}]. Actual triggered errors: {actualSummary}.",
+                    SchemaValidationMessages.FixtureUnmatchedExpectedErrors(fixtureId, string.Join(", ", unmatchedExpected), actualSummary),
                     identifier: fixtureId,
                     engineType: typeof(SchemaVerificationService),
                     metadata: new Dictionary<string, object?> { ["unmatchedExpectedErrors"] = unmatchedExpected.ToArray() }));
@@ -432,12 +433,12 @@ public sealed partial class SchemaVerificationService
         {
             var actualSummary = distinctTriggered.Count > 0
                 ? string.Join("; ", distinctTriggered.Select(e => e.FormatDisplay()))
-                : "validation rejected payload";
+                : SchemaValidationMessages.ValidationRejectedPayloadFallback;
             fixtureWarning =
-                $"Failed validation, but unknown if expected because no expectedErrors assertions were configured. Triggered: {actualSummary}.";
+                SchemaValidationMessages.FixtureWarningNoExpectedErrorsDetail(actualSummary);
             warnings.Add(ValidationMessage.For(
                 ValidationSources.Verification,
-                $"{fixtureId} failed validation, but unknown if expected (no expectedErrors configured). Triggered error(s): {actualSummary}.",
+                SchemaValidationMessages.FixtureWarningNoExpectedErrors(fixtureId, actualSummary),
                 identifier: fixtureId,
                 engineType: typeof(SchemaVerificationService),
                 metadata: new Dictionary<string, object?> { ["triggeredCount"] = distinctTriggered.Count }));
@@ -501,7 +502,7 @@ public sealed partial class SchemaVerificationService
         {
             target.Add(ValidationMessage.For(
                 ValidationSources.Schema,
-                "Payload rejected by JSON Schema.",
+                SchemaValidationMessages.PayloadRejectedByJsonSchemaFallback,
                 identifier: fixtureId,
                 engineType: typeof(JsonSchema)));
         }

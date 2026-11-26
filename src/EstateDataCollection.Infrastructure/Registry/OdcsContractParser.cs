@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using YamlDotNet.Serialization;
@@ -67,7 +68,7 @@ public sealed class OdcsContractParser : IOdcsContractParser
     {
         if (string.IsNullOrWhiteSpace(odcsYaml))
         {
-            return Error.Validation(ErrorCodes.PayloadEmpty, "ODCS YAML content cannot be empty.");
+            return Error.Validation(ErrorCodes.PayloadEmpty, SchemaValidationMessages.OdcsYamlCannotBeEmpty);
         }
 
         JsonNode? rootDoc;
@@ -77,7 +78,7 @@ public sealed class OdcsContractParser : IOdcsContractParser
             var yamlObject = YamlDeserializer.Deserialize(reader);
             if (yamlObject is null)
             {
-                return Error.Validation(ErrorCodes.SchemaVerificationFailed, "ODCS YAML document was empty.");
+                return Error.Validation(ErrorCodes.SchemaVerificationFailed, SchemaValidationMessages.OdcsYamlDocumentEmpty);
             }
 
             var jsonText = JsonCompatibleSerializer.Serialize(yamlObject);
@@ -85,12 +86,12 @@ public sealed class OdcsContractParser : IOdcsContractParser
         }
         catch (Exception ex)
         {
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, $"Malformed ODCS YAML syntax: {ex.Message}");
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed, SchemaValidationMessages.OdcsYamlMalformedSyntax(ex.Message));
         }
 
         if (rootDoc is not JsonObject contractObj)
         {
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, "ODCS contract root must be a YAML mapping/object.");
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed, SchemaValidationMessages.OdcsRootMustBeObject);
         }
 
         var contractId = GetString(contractObj, "id");
@@ -99,7 +100,7 @@ public sealed class OdcsContractParser : IOdcsContractParser
 
         if (contractObj["schema"] is not JsonArray schemaArray || schemaArray.Count == 0)
         {
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, "ODCS contract must contain a non-empty 'schema' array.");
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed, SchemaValidationMessages.OdcsMissingSchemaArray);
         }
 
         JsonObject? selectedSchemaObj = null;
@@ -113,7 +114,7 @@ public sealed class OdcsContractParser : IOdcsContractParser
         selectedSchemaObj ??= schemaArray.OfType<JsonObject>().FirstOrDefault();
         if (selectedSchemaObj is null)
         {
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, "Could not resolve a target schema object in the ODCS contract.");
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed, SchemaValidationMessages.OdcsTargetSchemaNotFound);
         }
 
         var validationPolicy = ExtractValidationPolicy(contractObj, selectedSchemaObj);
@@ -260,7 +261,7 @@ public sealed class OdcsContractParser : IOdcsContractParser
     {
         if (depth > MaxYamlDepth)
         {
-            throw new InvalidOperationException($"ODCS schema nesting exceeds maximum depth of {MaxYamlDepth}.");
+            throw new InvalidOperationException(SchemaValidationMessages.OdcsMaxNestingDepthExceeded(MaxYamlDepth));
         }
 
         var schemaNode = new JsonObject();

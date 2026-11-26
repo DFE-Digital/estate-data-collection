@@ -7,6 +7,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -44,7 +45,7 @@ public sealed class GetScheduleSchemaPage(
                 IncludeRetired: true),
             cancellationToken);
 
-        var meta = CreatePageMeta(http, $"Schedule {schemaName} v{version}", activeNav: "schemas");
+        var meta = CreatePageMeta(http, AdminUiMessages.ScheduleSchemaTitle(schemaName, version), activeNav: "schemas");
 
         if (detailResult.IsFailure)
         {

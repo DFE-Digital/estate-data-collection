@@ -5,6 +5,7 @@ using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -57,10 +58,10 @@ public sealed class GetSchemaDetailPage(
         var notice = http.Query["notice"].ToString();
         string? successBanner = notice switch
         {
-            "submitted" => $"Schema '{detail.SchemaName}' v{detail.Version} passed verification and was saved as Validated (unscheduled).",
-            "scheduled" => $"Lifecycle & schedule updated for '{detail.SchemaName}' v{detail.Version} (current state: {detail.State.Name}).",
-            "signedoff" => $"Schema '{detail.SchemaName}' v{detail.Version} was signed off by '{detail.SignedOffBy}' and transitioned to Validated.",
-            "deleted" => $"Schema '{detail.SchemaName}' v{detail.Version} was deleted. Metadata and error report tombstones remain reserved; any fix must be published as v{detail.Version + 1}.",
+            "submitted" => AdminUiMessages.NoticeSchemaSubmitted(detail.SchemaName, detail.Version),
+            "scheduled" => AdminUiMessages.NoticeSchemaScheduled(detail.SchemaName, detail.Version, detail.State.Name),
+            "signedoff" => AdminUiMessages.NoticeSchemaSignedOff(detail.SchemaName, detail.Version, detail.SignedOffBy),
+            "deleted" => AdminUiMessages.NoticeSchemaDeleted(detail.SchemaName, detail.Version),
             _ => null
         };
 

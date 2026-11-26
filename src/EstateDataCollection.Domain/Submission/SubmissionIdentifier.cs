@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
@@ -33,14 +34,13 @@ public readonly record struct SubmissionIdentifier
 
         if (string.IsNullOrWhiteSpace(rawValue))
         {
-            return CreateValidationError($"Identifier '{effectiveType}' cannot be empty.");
+            return CreateValidationError(DomainMessages.IdentifierCannotBeEmpty(effectiveType));
         }
 
         var trimmed = rawValue.Trim();
         if (trimmed.Contains('/') || trimmed.Contains('\\') || trimmed.Contains("..", StringComparison.Ordinal))
         {
-            return CreateValidationError(
-                $"Identifier '{effectiveType}' value '{trimmed}' contains characters not permitted for storage partitioning ('/', '\\', or '..').");
+            return CreateValidationError(DomainMessages.IdentifierUnsafePartitionChars(effectiveType, trimmed));
         }
 
         return new SubmissionIdentifier(effectiveType, trimmed);
@@ -109,7 +109,7 @@ public readonly record struct SubmissionIdentifier
                         return new IdentifierExtractionOutcome(
                             IdentifierExtractionStatus.Invalid,
                             MatchedPath: pointerPath,
-                            ErrorMessage: $"Identifier '{effectiveType}' at '{pointerPath}' cannot be empty.");
+                            ErrorMessage: DomainMessages.IdentifierAtPathCannotBeEmpty(effectiveType, pointerPath));
                     }
 
                     var createStr = Create(effectiveType, strVal);
@@ -121,7 +121,7 @@ public readonly record struct SubmissionIdentifier
                 return new IdentifierExtractionOutcome(
                     IdentifierExtractionStatus.Invalid,
                     MatchedPath: pointerPath,
-                    ErrorMessage: $"Identifier '{effectiveType}' at '{pointerPath}' must be a scalar string or number, not {element.ValueKind}.");
+                    ErrorMessage: DomainMessages.IdentifierMustBeScalar(effectiveType, pointerPath, element.ValueKind));
             }
 
             return new IdentifierExtractionOutcome(

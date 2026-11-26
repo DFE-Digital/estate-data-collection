@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 
-namespace EstateDataCollection.Infrastructure.Validation;
+namespace EstateDataCollection.Infrastructure.Workflow;
 
 /// <summary>
 /// Resolves dot/array path patterns (e.g. <c>elements[].occurrences[]</c>) within a JSON payload

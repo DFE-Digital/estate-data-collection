@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.Validators;
@@ -11,10 +12,10 @@ namespace EstateDataCollection.Application.Validators;
 /// path &amp; casing mismatches, enum/literal mismatches, runbook dependency graph errors,
 /// severity/threshold inversions, and required-vs-conditional-optional conflicts.
 /// </summary>
-public sealed partial class ContractConsistencyAnalyzer : IContractConsistencyAnalyzer
+public sealed partial class ContractConsistencyAnalyser : IContractConsistencyAnalyser
 {
     private const int MaxAstDepth = 12;
-    private const string EngineIdValue = "contract-consistency-analyzer";
+    private const string EngineIdValue = "contract-consistency-analyser";
     private const string SourceTag = "Consistency";
 
     private static readonly HashSet<string> CelReservedWords = new(StringComparer.Ordinal)
@@ -38,13 +39,13 @@ public sealed partial class ContractConsistencyAnalyzer : IContractConsistencyAn
 
     public static WorkflowEngineDescriptor EngineDescriptor { get; } = new(
         EngineId: EngineIdValue,
-        DisplayName: "Contract Consistency Analyzer",
+        DisplayName: ConsistencyAnalyserMessages.DescriptorDisplayName,
         Kind: ValidationEngineKinds.ContractConsistency,
-        Description: "Static analyzer checking rule-to-schema paths, field casing, enum literals, DependsOn DAG/stage integrity, severity threshold inversions, and required-vs-optional conflicts.");
+        Description: ConsistencyAnalyserMessages.DescriptorDescription);
 
     public WorkflowEngineDescriptor Descriptor => EngineDescriptor;
 
-    public ContractConsistencyReport Analyze(
+    public ContractConsistencyReport Analyse(
         string? rawSchemaJson,
         IReadOnlyList<BusinessRule>? rules)
     {
@@ -85,7 +86,7 @@ public sealed partial class ContractConsistencyAnalyzer : IContractConsistencyAn
                 identifier: ruleId ?? propertyPath,
                 path: string.IsNullOrWhiteSpace(propertyPath) ? "/" : propertyPath,
                 ruleId: ruleId,
-                engineType: typeof(ContractConsistencyAnalyzer),
+                engineType: typeof(ContractConsistencyAnalyser),
                 metadata: metadata);
 
             if (severity.IsAtOrAbove(RuleSeverity.Error))
@@ -99,7 +100,7 @@ public sealed partial class ContractConsistencyAnalyzer : IContractConsistencyAn
         }
 
         // 1. Runbook dependency graph checks (DAG, missing target, later stage)
-        AnalyzeRunbookGraph(rules, AddFinding);
+        AnalyseRunbookGraph(rules, AddFinding);
 
         // 2. Parse JSON Schema AST if available
         SchemaAstNode? rootAst = null;
@@ -132,20 +133,17 @@ public sealed partial class ContractConsistencyAnalyzer : IContractConsistencyAn
                     AddFinding(
                         RuleSeverity.Error,
                         ToJsonPointer(normalizedTargetPath),
-                        $"Rule '{ruleId}' path '{rule.Path}' does not match JSON Schema casing. Did you mean '{pathRes.SuggestedPath}'?",
+                        ConsistencyAnalyserMessages.RulePathCaseMismatch(ruleId, rule.Path, pathRes.SuggestedPath),
                         ruleId,
                         new Dictionary<string, object?> { ["check"] = "path_casing", ["suggestion"] = pathRes.SuggestedPath });
                     continue;
                 }
                 else if (pathRes.Status == AstLookupStatus.Missing)
                 {
-                    var hint = pathRes.SuggestedPath is not null
-                        ? $" Did you mean '{pathRes.SuggestedPath}'?"
-                        : string.Empty;
                     AddFinding(
                         RuleSeverity.Error,
                         ToJsonPointer(normalizedTargetPath),
-                        $"Rule '{ruleId}' target path '{rule.Path}' does not exist in JSON Schema.{hint}",
+                        ConsistencyAnalyserMessages.RuleTargetPathMissing(ruleId, rule.Path, pathRes.SuggestedPath),
                         ruleId,
                         new Dictionary<string, object?> { ["check"] = "missing_path", ["suggestion"] = pathRes.SuggestedPath });
                     continue;
@@ -215,7 +213,7 @@ public sealed partial class ContractConsistencyAnalyzer : IContractConsistencyAn
         // Check 4: Required vs conditional-optional conflicts (Warning)
         if (rootAst is not null || unconditionalRequiredRules.Count > 0)
         {
-            AnalyzeRequiredVsOptionalConflicts(
+            AnalyseRequiredVsOptionalConflicts(
                 rootAst,
                 unconditionalRequiredRules,
                 conditionalOptionalRules,

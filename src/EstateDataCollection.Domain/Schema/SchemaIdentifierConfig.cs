@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Domain.Schema;
@@ -45,8 +46,8 @@ public sealed record SchemaIdentifierConfig
         {
             return Error.Validation(
                 ErrorCodes.SchemaInvalidIdentifierConfig,
-                new { Message = "Identifier Type cannot be empty. Use 'None' to disable or provide an identifier type (e.g. 'URN', 'UKPRN', 'LAEstab')." },
-                [new ValidationError("identifierConfig.type", "Identifier Type cannot be empty.")]);
+                new { Message = DomainMessages.IdentifierTypeEmpty },
+                [new ValidationError("identifierConfig.type", DomainMessages.IdentifierTypeShortEmpty)]);
         }
 
         var trimmedType = Type.Trim();
@@ -57,8 +58,8 @@ public sealed record SchemaIdentifierConfig
             {
                 return Error.Validation(
                     ErrorCodes.SchemaInvalidIdentifierConfig,
-                    new { Message = "Identifier JsonPointer must be empty when identifier Type is 'None'." },
-                    [new ValidationError("identifierConfig.jsonPointer", "JsonPointer cannot be set when identifier Type is 'None'.")]);
+                    new { Message = DomainMessages.IdentifierPointerForbiddenWhenNone },
+                    [new ValidationError("identifierConfig.jsonPointer", DomainMessages.IdentifierPointerShortForbiddenWhenNone)]);
             }
 
             return Result.Success();
@@ -66,18 +67,19 @@ public sealed record SchemaIdentifierConfig
 
         if (trimmedType.Contains('/') || trimmedType.Contains('\\') || trimmedType.Contains("..") || trimmedType.Any(char.IsWhiteSpace))
         {
+            var invalidTypeMsg = DomainMessages.IdentifierTypeInvalidChars(trimmedType);
             return Error.Validation(
                 ErrorCodes.SchemaInvalidIdentifierConfig,
-                new { Message = $"Identifier Type '{trimmedType}' must not contain whitespace, slashes, or '..'." },
-                [new ValidationError("identifierConfig.type", $"Identifier Type '{trimmedType}' must not contain whitespace, slashes, or '..'.")]);
+                new { Message = invalidTypeMsg },
+                [new ValidationError("identifierConfig.type", invalidTypeMsg)]);
         }
 
         if (!string.IsNullOrWhiteSpace(JsonPointer) && !TryParsePointerSegments(JsonPointer, out _))
         {
             return Error.Validation(
                 ErrorCodes.SchemaInvalidIdentifierConfig,
-                new { Message = $"Identifier JsonPointer '{JsonPointer}' is not a valid JSON Pointer or dot-notation object path." },
-                [new ValidationError("identifierConfig.jsonPointer", $"JsonPointer '{JsonPointer}' is not a valid object property path (examples: '/establishment/id', '/school/urn').")]);
+                new { Message = DomainMessages.IdentifierPointerInvalid(JsonPointer) },
+                [new ValidationError("identifierConfig.jsonPointer", DomainMessages.IdentifierPointerInvalidWithExamples(JsonPointer))]);
         }
 
         return Result.Success();

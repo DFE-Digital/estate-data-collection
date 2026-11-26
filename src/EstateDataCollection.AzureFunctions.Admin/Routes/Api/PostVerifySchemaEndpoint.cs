@@ -16,7 +16,7 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 /// <summary>
 /// Dry-run verification endpoint for the Data Team / CI pipelines.
 /// Always returns 200 OK with a structured verification report (issues grouped by severity,
-/// contract consistency analyzer findings, valid/invalid fixture outcomes, and engine traces),
+/// contract consistency analyser findings, valid/invalid fixture outcomes, and engine traces),
 /// returning 400 Bad Request only when the HTTP request body is empty or completely unreadable.
 /// Route: POST /api/schemas/verify
 /// </summary>

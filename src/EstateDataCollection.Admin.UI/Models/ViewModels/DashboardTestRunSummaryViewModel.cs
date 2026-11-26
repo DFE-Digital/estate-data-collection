@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
@@ -25,17 +26,17 @@ public sealed record DashboardTestRunSummaryViewModel(
         string summaryTagCssClass;
         if (allPassed && warningSchemaCount == 0)
         {
-            summaryTagText = $"{run.PassedCount} / {run.TotalSchemasChecked} Passed";
+            summaryTagText = AdminUiMessages.VerifiedPassedCountSummary(run.PassedCount, run.TotalSchemasChecked);
             summaryTagCssClass = "govuk-tag govuk-tag--green";
         }
         else if (allPassed)
         {
-            summaryTagText = $"{run.PassedCount} / {run.TotalSchemasChecked} Passed (warnings)";
+            summaryTagText = AdminUiMessages.VerifiedPassedWarningsCountSummary(run.PassedCount, run.TotalSchemasChecked);
             summaryTagCssClass = "govuk-tag govuk-tag--yellow";
         }
         else
         {
-            summaryTagText = $"{run.FailedCount} Failed ({run.PassedCount} Passed)";
+            summaryTagText = AdminUiMessages.VerifiedFailedCountSummary(run.FailedCount, run.PassedCount);
             summaryTagCssClass = "govuk-tag govuk-tag--red";
         }
 
@@ -47,17 +48,17 @@ public sealed record DashboardTestRunSummaryViewModel(
                 string resultTagCssClass;
                 if (item.Passed && !hasWarnings)
                 {
-                    resultTagText = "Passed";
+                    resultTagText = AdminUiMessages.TagPassed;
                     resultTagCssClass = "govuk-tag govuk-tag--green";
                 }
                 else if (item.Passed)
                 {
-                    resultTagText = "Passed (warnings)";
+                    resultTagText = AdminUiMessages.TagPassedWarnings;
                     resultTagCssClass = "govuk-tag govuk-tag--yellow";
                 }
                 else
                 {
-                    resultTagText = "Failed";
+                    resultTagText = AdminUiMessages.TagFailed;
                     resultTagCssClass = "govuk-tag govuk-tag--red";
                 }
 
@@ -77,7 +78,7 @@ public sealed record DashboardTestRunSummaryViewModel(
                     SchemaDisplayName: $"{item.SchemaName} v{item.Version}",
                     TestsUrl: AppRoutes.AdminUi.SchemaTests(item.SchemaName, item.Version),
                     StateTag: LifecycleTagViewModel.From(item.State),
-                    CountsSummary: $"{item.ValidFixtureCount} valid, {item.InvalidFixtureCount} invalid, {item.BusinessRuleCount} rule(s)",
+                    CountsSummary: AdminUiMessages.TestRunCountsSummary(item.ValidFixtureCount, item.InvalidFixtureCount, item.BusinessRuleCount),
                     ResultTagText: resultTagText,
                     ResultTagCssClass: resultTagCssClass,
                     HasDetailsText: detailsText is not null,

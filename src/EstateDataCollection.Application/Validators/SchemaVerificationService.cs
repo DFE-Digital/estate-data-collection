@@ -6,6 +6,7 @@ using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using Json.Schema;
@@ -20,7 +21,7 @@ public sealed partial class SchemaVerificationService(
     IOptions<ValidationOptions>? validationOptions = null,
     SchemaVerificationServiceInstrumentation? instrumentation = null,
     ISchemaValidator? schemaValidator = null,
-    IContractConsistencyAnalyzer? consistencyAnalyzer = null
+    IContractConsistencyAnalyser? consistencyAnalyser = null
 ) : ISchemaVerificationService
 {
     private static readonly JsonSerializerOptions RuleJsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -32,12 +33,12 @@ public sealed partial class SchemaVerificationService(
     private readonly WorkflowEngineDescriptor _schemaEngineDescriptor =
         schemaValidator?.Descriptor ?? new WorkflowEngineDescriptor(
             EngineId: "json-schema",
-            DisplayName: "JSON Schema Validator",
+            DisplayName: SchemaValidationMessages.SchemaValidatorFallbackDisplayName,
             Kind: ValidationEngineKinds.StructuralSchema,
-            Description: "Structural JSON Schema validator.");
+            Description: SchemaValidationMessages.SchemaValidatorFallbackDescription);
 
-    private readonly IContractConsistencyAnalyzer _consistencyAnalyzer =
-        consistencyAnalyzer ?? new ContractConsistencyAnalyzer();
+    private readonly IContractConsistencyAnalyser _consistencyAnalyser =
+        consistencyAnalyser ?? new ContractConsistencyAnalyser();
 
     public async Task<Result<SchemaVerificationResult>> VerifyCandidateSchemaAsync(
         string? rawSchemaJson,
@@ -52,9 +53,9 @@ public sealed partial class SchemaVerificationService(
         var syntaxErrors = new List<ValidationMessage>();
         var fixtureErrors = new List<ValidationMessage>();
         var warnings = new List<ValidationMessage>();
-        var analyzerFindings = new List<ValidationError>();
+        var analyserFindings = new List<ValidationError>();
         var additionalIssues = new List<ValidationError>();
-        var consistencyTrace = new EngineRunState(_consistencyAnalyzer.Descriptor);
+        var consistencyTrace = new EngineRunState(_consistencyAnalyser.Descriptor);
 
         var registeredRuleEngines = logicValidator.GetRegisteredEngines() ?? [];
         var schemaTrace = new EngineRunState(_schemaEngineDescriptor);
@@ -74,7 +75,7 @@ public sealed partial class SchemaVerificationService(
                     EngineId: engineId,
                     DisplayName: engineId,
                     Kind: ValidationEngineKinds.QualityRule,
-                    Description: $"Quality rule engine '{engineId}'.");
+                    Description: WorkflowMessages.QualityRuleEngineDescription(engineId));
                 state = new EngineRunState(descriptor);
                 ruleTraces[engineId] = state;
             }
@@ -85,7 +86,7 @@ public sealed partial class SchemaVerificationService(
         if (string.IsNullOrWhiteSpace(rawSchemaJson) && string.IsNullOrWhiteSpace(rawRulesJson))
         {
             return new SchemaVerificationResult(
-                [ValidationMessage.For(ValidationSources.Verification, "Either Schema JSON/YAML or Rules JSON must be provided.", identifier: "schema", engineType: typeof(SchemaVerificationService))],
+                [ValidationMessage.For(ValidationSources.Verification, SchemaValidationMessages.SchemaOrRulesRequired, identifier: "schema", engineType: typeof(SchemaVerificationService))],
                 [],
                 EngineTraces: BuildEngineTraces(
                     schemaTrace,
@@ -106,7 +107,7 @@ public sealed partial class SchemaVerificationService(
             var odcsResult = odcsParser.Parse(rawSchemaJson);
             if (odcsResult.IsFailure)
             {
-                var msg = odcsResult.Error.Description ?? "Failed to parse ODCS YAML contract.";
+                var msg = odcsResult.Error.Description ?? SchemaValidationMessages.OdcsParseFailedFallback;
                 _instrumentation.CandidateVerificationCompleted(false, 1, 0);
                 return new SchemaVerificationResult(
                     [ValidationMessage.For(ValidationSources.Odcs, msg, identifier: "odcs", engineType: odcsParser.GetType())],
@@ -190,7 +191,7 @@ public sealed partial class SchemaVerificationService(
                 candidateSchema is not null ? rawSchemaJson : null,
                 candidateRules,
                 consistencyTrace,
-                analyzerFindings,
+                analyserFindings,
                 syntaxErrors,
                 warnings);
         }
@@ -217,7 +218,7 @@ public sealed partial class SchemaVerificationService(
                     validFixtureCount: 0,
                     invalidFixtureCount: 0,
                     identifierLabel: effectiveIdentifierLabel),
-                AnalyzerFindings: analyzerFindings);
+                AnalyserFindings: analyserFindings);
         }
 
         var evalOptions = new EvaluationOptions
@@ -294,7 +295,7 @@ public sealed partial class SchemaVerificationService(
             InvalidFixtureOutcomes: invalidFixtureOutcomes,
             Warnings: warnings,
             EngineTraces: traces,
-            AnalyzerFindings: analyzerFindings,
+            AnalyserFindings: analyserFindings,
             AdditionalIssues: additionalIssues);
     }
 
@@ -314,10 +315,10 @@ public sealed partial class SchemaVerificationService(
             if (node is null)
             {
                 schemaTrace.ViolationCount++;
-                schemaTrace.FirstIssue ??= "Schema JSON was empty or null.";
+                schemaTrace.FirstIssue ??= SchemaValidationMessages.SchemaJsonEmptyOrNull;
                 syntaxErrors.Add(ValidationMessage.For(
                     ValidationSources.Schema,
-                    "Schema JSON was empty or null.",
+                    SchemaValidationMessages.SchemaJsonEmptyOrNull,
                     identifier: "schema",
                     engineType: typeof(JsonSchema)));
             }
@@ -358,7 +359,7 @@ public sealed partial class SchemaVerificationService(
 
             return
             [
-                ValidationMessage.For(ValidationSources.Schema, "Malformed JSON Schema syntax", identifier: "schema", engineType: typeof(JsonSchema)),
+                ValidationMessage.For(ValidationSources.Schema, SchemaValidationMessages.MalformedJsonSchemaSyntax, identifier: "schema", engineType: typeof(JsonSchema)),
                 ValidationMessage.For(ValidationSources.Schema, ex.Message, identifier: "schema", engineType: typeof(JsonSchema))
             ];
         }
@@ -411,18 +412,18 @@ public sealed partial class SchemaVerificationService(
         string? rawSchemaJson,
         IReadOnlyList<BusinessRule> candidateRules,
         EngineRunState consistencyTrace,
-        List<ValidationError> analyzerFindings,
+        List<ValidationError> analyserFindings,
         List<ValidationMessage> syntaxErrors,
         List<ValidationMessage> warnings)
     {
         var consistencyStart = Stopwatch.GetTimestamp();
-        var consistencyReport = _consistencyAnalyzer.Analyze(rawSchemaJson, candidateRules);
+        var consistencyReport = _consistencyAnalyser.Analyse(rawSchemaJson, candidateRules);
         consistencyTrace.ElapsedTicks += Stopwatch.GetTimestamp() - consistencyStart;
         consistencyTrace.ItemsEvaluated += candidateRules.Count;
 
         if (consistencyReport.Findings.Count > 0)
         {
-            analyzerFindings.AddRange(consistencyReport.Findings);
+            analyserFindings.AddRange(consistencyReport.Findings);
         }
 
         if (consistencyReport.Errors.Count > 0)
@@ -452,7 +453,7 @@ public sealed partial class SchemaVerificationService(
             {
                 syntaxErrors.Add(ValidationMessage.For(
                     ValidationSources.Schema,
-                    $"Meta-schema '{schemaUri}' is not in the configured AllowedMetaSchemas list.",
+                    SchemaValidationMessages.MetaSchemaNotAllowed(schemaUri),
                     identifier: "$schema",
                     path: "/$schema",
                     engineType: typeof(JsonSchema),

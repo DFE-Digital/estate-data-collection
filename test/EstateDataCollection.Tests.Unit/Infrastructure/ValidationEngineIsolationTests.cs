@@ -4,9 +4,9 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Domain.Submission;
-using EstateDataCollection.Infrastructure.Validation;
-using EstateDataCollection.Infrastructure.Validation.Engines;
-using EstateDataCollection.Infrastructure.Validation.Enrichment;
+using EstateDataCollection.Infrastructure.Workflow;
+using EstateDataCollection.Infrastructure.Workflow.Engines;
+using EstateDataCollection.Infrastructure.Workflow.Enrichment;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Builders.Contracts;
 using EstateDataCollection.Tests.Common.Extensions;
@@ -33,7 +33,7 @@ public sealed class ValidationEngineIsolationTests
         // Assert
         descriptors.Should().HaveCount(5);
         descriptors.Select(d => d.EngineId).Should().BeEquivalentTo(
-            ["json-schema", "jsonlogic", "cel", "identifier-extractor", "contract-consistency-analyzer"]);
+            ["json-schema", "jsonlogic", "cel", "identifier-extractor", "contract-consistency-analyser"]);
 
         var jsonSchemaDescriptor = descriptors.Single(d => d.EngineId == "json-schema");
         jsonSchemaDescriptor.Kind.Should().Be(ValidationEngineKinds.StructuralSchema);

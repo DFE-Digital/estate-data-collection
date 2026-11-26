@@ -1,5 +1,6 @@
 using System.Globalization;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissions;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
@@ -47,16 +48,16 @@ public sealed record SubmissionsViewModel(
         {
             return _statusOptions ??=
             [
-                new("All", "All states",
+                new("All", AdminUiMessages.FilterStatusAllStates,
                     string.Equals(SelectedStatus, "All", StringComparison.OrdinalIgnoreCase) ||
                     string.IsNullOrWhiteSpace(SelectedStatus)),
-                new("Draft", "Draft (all in-progress)",
+                new("Draft", AdminUiMessages.FilterStatusDraftAllInProgress,
                     string.Equals(SelectedStatus, "Draft", StringComparison.OrdinalIgnoreCase)),
-                new("DraftWithPayload", "Draft (payload saved)",
+                new("DraftWithPayload", AdminUiMessages.SubmissionDraftPayloadSavedText,
                     string.Equals(SelectedStatus, "DraftWithPayload", StringComparison.OrdinalIgnoreCase)),
-                new("AwaitingPayload", "Draft (awaiting payload)",
+                new("AwaitingPayload", AdminUiMessages.SubmissionDraftAwaitingPayloadText,
                     string.Equals(SelectedStatus, "AwaitingPayload", StringComparison.OrdinalIgnoreCase)),
-                new("Finalised", "Finalised (ReadyForCde)",
+                new("Finalised", AdminUiMessages.FilterStatusFinalisedReadyForCde,
                     string.Equals(SelectedStatus, "Finalised", StringComparison.OrdinalIgnoreCase))
             ];
         }
