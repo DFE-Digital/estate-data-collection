@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
@@ -61,7 +62,7 @@ public sealed class PostRunSchemaTestsEndpoint(
                 IncludeRetired: queryIncludeRetired);
         }
 
-        var dtoResult = DeserialiseJson<RunSchemaTestsBodyDto>(rawBody, "Invalid run schema tests request JSON body.");
+        var dtoResult = DeserialiseJson<RunSchemaTestsBodyDto>(rawBody, ErrorMessages.InvalidRunSchemaTestsRequestBody);
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;

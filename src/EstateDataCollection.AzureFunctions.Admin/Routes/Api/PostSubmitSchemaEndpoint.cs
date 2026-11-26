@@ -2,6 +2,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.Models.Dtos;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
@@ -64,7 +65,7 @@ public sealed class PostSubmitSchemaEndpoint(
                 IdentifierConfig: AdminRequestHelpers.GetIdentifierConfigHint(http));
         }
 
-        var dtoResult = DeserialiseJson<SubmitSchemaBodyDto>(rawBody, "Invalid submit schema request JSON body.");
+        var dtoResult = DeserialiseJson<SubmitSchemaBodyDto>(rawBody, ErrorMessages.InvalidSubmitSchemaRequestBody);
         if (dtoResult.IsFailure)
         {
             return dtoResult.Error;
@@ -82,9 +83,10 @@ public sealed class PostSubmitSchemaEndpoint(
             SchemaJson: body.SchemaJson ?? string.Empty,
             SampleValidFixtures: body.SampleValidFixtures,
             SampleInvalidFixtures: body.SampleInvalidFixtures,
-            RulesJson: body.EffectiveRulesJson,
+            RulesJson: body.RulesJson,
             OdcsYaml: body.OdcsYaml,
             FileName: body.FileName ?? AdminRequestHelpers.GetFileNameHint(http),
-            IdentifierConfig: body.IdentifierConfig ?? AdminRequestHelpers.GetIdentifierConfigHint(http));
+            IdentifierConfig: body.IdentifierConfig ?? AdminRequestHelpers.GetIdentifierConfigHint(http),
+            ValidationPolicy: body.ValidationPolicy);
     }
 }

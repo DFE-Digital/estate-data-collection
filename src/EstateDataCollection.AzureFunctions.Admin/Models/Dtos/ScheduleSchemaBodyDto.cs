@@ -6,4 +6,5 @@ public record ScheduleSchemaBodyDto(
     DateTimeOffset? EffectiveFromUtc = null,
     DateTimeOffset? EffectiveToUtc = null,
     string? LifecycleAction = null,
-    SchemaIdentifierConfig? IdentifierConfig = null);
+    SchemaIdentifierConfig? IdentifierConfig = null,
+    SchemaValidationPolicy? ValidationPolicy = null);

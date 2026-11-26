@@ -66,4 +66,16 @@ public sealed partial class BlobSchemaRegistryInstrumentation(
         Message = "Recorded draft ingestion failure diagnostic blob {ErrorBlobPath} with {ErrorCount} error(s)"
     )]
     public partial void DraftFailureRecorded(string errorBlobPath, int errorCount);
+
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Saved error diagnostic report {ErrorBlobPath} for {SchemaName} v{Version}"
+    )]
+    public partial void SchemaErrorReportSaved(string schemaName, int version, string errorBlobPath);
+
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Deleted contract blobs for {SchemaName} v{Version} and marked metadata as Deleted tombstone"
+    )]
+    public partial void SchemaVersionDeleted(string schemaName, int version);
 }

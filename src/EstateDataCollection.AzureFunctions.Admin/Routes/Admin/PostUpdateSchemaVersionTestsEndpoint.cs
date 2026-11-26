@@ -7,6 +7,7 @@ using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.Application.UseCases.Schema.UpdateSchemaTests;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
@@ -57,7 +58,7 @@ public sealed class PostUpdateSchemaVersionTestsEndpoint(
         if (validationErrors.Count > 0)
         {
             return await RenderFailureAsync(
-                Error.Validation("SchemaTests.InvalidFixtureJson", "One or more test JSON payloads are invalid.", validationErrors),
+                Error.Validation("SchemaTests.InvalidFixtureJson", AdminUiMessages.InvalidTestJsonPayloads, validationErrors),
                 StatusCodes.Status422UnprocessableEntity);
         }
 
@@ -91,7 +92,7 @@ public sealed class PostUpdateSchemaVersionTestsEndpoint(
                     IncludeRetired: true),
                 cancellationToken);
 
-            var meta = CreatePageMeta(http, $"Tests - {schemaName} v{version}", activeNav: "schemas");
+            var meta = CreatePageMeta(http, AdminUiMessages.TestsPageTitle(schemaName, version), activeNav: "schemas");
 
             var model = new SchemaTestsViewModel(
                 Page: meta,

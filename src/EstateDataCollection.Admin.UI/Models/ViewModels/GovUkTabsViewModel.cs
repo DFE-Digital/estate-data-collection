@@ -6,10 +6,7 @@ public sealed record GovUkTabsViewModel(
     string? DefaultTabId = null,
     string Title = "Contents")
 {
-    public bool HasTabs
-    {
-        get { return Tabs.Count > 0; }
-    }
+    public bool HasTabs => Tabs.Count > 0;
 
     public GovUkTabItemViewModel? Find(string id)
     {

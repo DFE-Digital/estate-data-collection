@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionDetail;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Domain.Submission;
@@ -24,134 +25,70 @@ public sealed record SubmissionDetailViewModel(
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ErrorSummaryViewModel? ErrorSummary
-    {
-        get { return ErrorSummaryViewModel.From(PageError); }
-    }
+    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);
 
-    public bool HasDetail
-    {
-        get { return Detail is not null; }
-    }
+    public bool HasDetail => Detail is not null;
 
-    public string SubmissionIdDisplay
-    {
-        get { return Detail?.Session.SubmissionId.ToString() ?? string.Empty; }
-    }
+    public string SubmissionIdDisplay => Detail?.Session.SubmissionId.ToString() ?? string.Empty;
 
-    public string SchemaName
-    {
-        get { return Detail?.Session.SchemaName ?? string.Empty; }
-    }
+    public string SchemaName => Detail?.Session.SchemaName ?? string.Empty;
 
-    public int SchemaVersion
-    {
-        get { return Detail?.Session.SchemaVersion ?? 0; }
-    }
+    public int SchemaVersion => Detail?.Session.SchemaVersion ?? 0;
 
-    public string SchemaVersionDisplay
-    {
-        get { return HasDetail ? $"{SchemaName} v{SchemaVersion}" : string.Empty; }
-    }
+    public string SchemaVersionDisplay => HasDetail ? $"{SchemaName} v{SchemaVersion}" : string.Empty;
 
-    public string SchemaDetailUrl
-    {
-        get
-        {
-            return HasDetail
-                ? AppRoutes.AdminUi.SchemaDetail(SchemaName, SchemaVersion)
-                : AppRoutes.AdminUi.Dashboard;
-        }
-    }
+    public string SchemaDetailUrl =>
+        HasDetail
+            ? AppRoutes.AdminUi.SchemaDetail(SchemaName, SchemaVersion)
+            : AppRoutes.AdminUi.Dashboard;
 
-    public string SchemaSubmissionsUrl
-    {
-        get
-        {
-            return HasDetail
-                ? AppRoutes.AdminUi.SubmissionsFiltered(SchemaName, SchemaVersion)
-                : AppRoutes.AdminUi.Submissions;
-        }
-    }
+    public string SchemaSubmissionsUrl =>
+        HasDetail
+            ? AppRoutes.AdminUi.SubmissionsFiltered(SchemaName, SchemaVersion)
+            : AppRoutes.AdminUi.Submissions;
 
-    public bool IsFinalised
-    {
-        get { return Detail?.Session.IsFinalised ?? false; }
-    }
+    public bool IsFinalised => Detail?.Session.IsFinalised ?? false;
 
-    public string LifecycleTagText
-    {
-        get
-        {
-            return IsFinalised
-                ? "Finalised"
-                : Detail?.DraftItems.Count > 0 || !string.IsNullOrWhiteSpace(Detail?.MergedDraftPayloadJson)
-                    ? "Draft (payload saved)"
-                    : "Draft (awaiting payload)";
-        }
-    }
+    public string LifecycleTagText =>
+        IsFinalised
+            ? AdminUiMessages.SubmissionFinalisedText
+            : Detail?.DraftItems.Count > 0 || !string.IsNullOrWhiteSpace(Detail?.MergedDraftPayloadJson)
+                ? AdminUiMessages.SubmissionDraftPayloadSavedText
+                : AdminUiMessages.SubmissionDraftAwaitingPayloadText;
 
-    public string LifecycleTagCssClass
-    {
-        get
-        {
-            return IsFinalised
+    public string LifecycleTagCssClass =>
+        IsFinalised
+            ? "govuk-tag govuk-tag--green"
+            : Detail?.DraftItems.Count > 0 || !string.IsNullOrWhiteSpace(Detail?.MergedDraftPayloadJson)
+                ? "govuk-tag govuk-tag--blue"
+                : "govuk-tag govuk-tag--grey";
+
+    public bool IsReadyToFinalise => Detail?.IsReadyToFinalise ?? false;
+
+    public string ReadinessTagText =>
+        IsFinalised
+            ? AdminUiMessages.SubmissionReadinessLocked
+            : IsReadyToFinalise
+                ? AdminUiMessages.SubmissionReadinessReady
+                : AdminUiMessages.SubmissionReadinessNotReady;
+
+    public string ReadinessTagCssClass =>
+        IsFinalised
+            ? "govuk-tag govuk-tag--green"
+            : IsReadyToFinalise
                 ? "govuk-tag govuk-tag--green"
-                : Detail?.DraftItems.Count > 0 || !string.IsNullOrWhiteSpace(Detail?.MergedDraftPayloadJson)
-                    ? "govuk-tag govuk-tag--blue"
-                    : "govuk-tag govuk-tag--grey";
-        }
-    }
+                : "govuk-tag govuk-tag--yellow";
 
-    public bool IsReadyToFinalise
-    {
-        get { return Detail?.IsReadyToFinalise ?? false; }
-    }
+    public string CreatedAtDisplay =>
+        Detail is not null
+            ? Detail.Session.CreatedAtUtc.ToUniversalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)
+            : "—";
 
-    public string ReadinessTagText
-    {
-        get
-        {
-            return IsFinalised
-                ? "Locked (Finalised)"
-                : IsReadyToFinalise
-                    ? "Ready to finalise"
-                    : "Not ready (pending issues)";
-        }
-    }
-
-    public string ReadinessTagCssClass
-    {
-        get
-        {
-            return IsFinalised
-                ? "govuk-tag govuk-tag--green"
-                : IsReadyToFinalise
-                    ? "govuk-tag govuk-tag--green"
-                    : "govuk-tag govuk-tag--yellow";
-        }
-    }
-
-    public string CreatedAtDisplay
-    {
-        get
-        {
-            return Detail is not null
-                ? Detail.Session.CreatedAtUtc.ToUniversalTime()
-                    .ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)
-                : "—";
-        }
-    }
-
-    public string FinalisedAtDisplay
-    {
-        get
-        {
-            return Detail?.Session.FinalisedAtUtc is { } finalisedAt
-                ? finalisedAt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)
-                : "—";
-        }
-    }
+    public string FinalisedAtDisplay =>
+        Detail?.Session.FinalisedAtUtc is { } finalisedAt
+            ? finalisedAt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)
+            : "—";
 
     public string IdentifierDisplay
     {
@@ -169,99 +106,77 @@ public sealed record SubmissionDetailViewModel(
                     : Detail.ResolvedIdentifierValue;
             }
 
-            return "Unassigned";
+            return AdminUiMessages.IdentifierUnassigned;
         }
     }
 
-    public int DraftCount
-    {
-        get { return Detail?.DraftItems.Count ?? 0; }
-    }
+    public int DraftCount => Detail?.DraftItems.Count ?? 0;
 
-    public int AuditCount
-    {
-        get { return Detail?.AuditEntries.Count ?? 0; }
-    }
+    public int AuditCount => Detail?.AuditEntries.Count ?? 0;
 
-    public string NextStepsSummary
-    {
-        get { return Detail?.NextStepsSummary ?? string.Empty; }
-    }
+    public string NextStepsSummary => Detail?.NextStepsSummary ?? string.Empty;
 
-    public IReadOnlyList<string> NextSteps
-    {
-        get { return Detail?.NextSteps ?? []; }
-    }
+    public IReadOnlyList<string> NextSteps => Detail?.NextSteps ?? [];
 
-    public bool HasNextSteps
-    {
-        get { return NextSteps.Count > 0; }
-    }
+    public bool HasNextSteps => NextSteps.Count > 0;
 
     public IReadOnlyList<ValidationErrorItemViewModel> PendingErrors
     {
         get
         {
             return _pendingErrors ??= (Detail?.PendingErrors ?? [])
-                .Select(e => new ValidationErrorItemViewModel(
-                    HasPropertyPath: !string.IsNullOrWhiteSpace(e.PropertyPath),
-                    PropertyPath: e.PropertyPath,
-                    Message: !string.IsNullOrWhiteSpace(e.RuleId) ? $"[{e.RuleId}] {e.Message}" : e.Message))
+                .Select(SeverityIssueGroupViewModel.ToItem)
                 .ToList();
         }
     }
 
     private IReadOnlyList<ValidationErrorItemViewModel>? _pendingErrors;
 
-    public bool HasPendingErrors
+    public IReadOnlyList<SeverityIssueGroupViewModel> PendingIssueGroups
     {
-        get { return PendingErrors.Count > 0; }
+        get { return _pendingIssueGroups ??= SeverityIssueGroupViewModel.FromErrors(Detail?.PendingErrors); }
     }
 
-    public bool HasMergedDraftPayload
+    private IReadOnlyList<SeverityIssueGroupViewModel>? _pendingIssueGroups;
+
+    public bool HasPendingErrors => PendingErrors.Count > 0;
+
+    public bool HasMergedDraftPayload => !string.IsNullOrWhiteSpace(Detail?.MergedDraftPayloadJson);
+
+    public string FormattedMergedDraftPayload => FormatJson(Detail?.MergedDraftPayloadJson);
+
+    public bool HasProcessedArtifact => Detail?.ProcessedArtifact is not null;
+
+    public string ProcessedBlobName => Detail?.ProcessedArtifact?.BlobName ?? string.Empty;
+
+    public string ProcessedBundlePrefix
     {
-        get { return !string.IsNullOrWhiteSpace(Detail?.MergedDraftPayloadJson); }
+        get
+        {
+            var blobName = ProcessedBlobName;
+            if (string.IsNullOrWhiteSpace(blobName))
+            {
+                return string.Empty;
+            }
+
+            const string payloadSuffix = "/payload.json";
+            return blobName.EndsWith(payloadSuffix, StringComparison.OrdinalIgnoreCase)
+                ? blobName[..(blobName.Length - "payload.json".Length)]
+                : blobName;
+        }
     }
 
-    public string FormattedMergedDraftPayload
-    {
-        get { return FormatJson(Detail?.MergedDraftPayloadJson); }
-    }
+    public bool HasProcessedBundlePrefix => !string.IsNullOrWhiteSpace(ProcessedBundlePrefix);
 
-    public bool HasProcessedArtifact
-    {
-        get { return Detail?.ProcessedArtifact is not null; }
-    }
+    public string ProcessedSha256 => Detail?.ProcessedArtifact?.Sha256Hash ?? "—";
 
-    public string ProcessedBlobName
-    {
-        get { return Detail?.ProcessedArtifact?.BlobName ?? string.Empty; }
-    }
+    public string ProcessedStatus => Detail?.ProcessedArtifact?.Status ?? "ReadyForCde";
 
-    public string ProcessedSha256
-    {
-        get { return Detail?.ProcessedArtifact?.Sha256Hash ?? "—"; }
-    }
+    public string ProcessedSizeDisplay => Detail?.ProcessedArtifact is { } art ? FormatBytes(art.SizeBytes) : "—";
 
-    public string ProcessedStatus
-    {
-        get { return Detail?.ProcessedArtifact?.Status ?? "ReadyForCde"; }
-    }
+    public string FormattedProcessedPayload => FormatJson(Detail?.ProcessedArtifact?.PayloadJson);
 
-    public string ProcessedSizeDisplay
-    {
-        get { return Detail?.ProcessedArtifact is { } art ? FormatBytes(art.SizeBytes) : "—"; }
-    }
-
-    public string FormattedProcessedPayload
-    {
-        get { return FormatJson(Detail?.ProcessedArtifact?.PayloadJson); }
-    }
-
-    public string RawSessionJson
-    {
-        get { return Detail?.RawSessionJson ?? "{}"; }
-    }
+    public string RawSessionJson => Detail?.RawSessionJson ?? "{}";
 
     public IReadOnlyList<SubmissionDraftChunkViewModel> DraftChunks
     {
@@ -286,10 +201,7 @@ public sealed record SubmissionDetailViewModel(
 
     private IReadOnlyList<SubmissionDraftChunkViewModel>? _draftChunks;
 
-    public bool HasDraftChunks
-    {
-        get { return DraftChunks.Count > 0; }
-    }
+    public bool HasDraftChunks => DraftChunks.Count > 0;
 
     public IReadOnlyList<SubmissionAuditItemViewModel> AuditItems
     {
@@ -321,12 +233,7 @@ public sealed record SubmissionDetailViewModel(
                             };
 
                             var processErrors = (p.Errors ?? [])
-                                .Select(ve => new ValidationErrorItemViewModel(
-                                    HasPropertyPath: !string.IsNullOrWhiteSpace(ve.PropertyPath),
-                                    PropertyPath: ve.PropertyPath,
-                                    Message: !string.IsNullOrWhiteSpace(ve.RuleId)
-                                        ? $"[{ve.RuleId}] {ve.Message}"
-                                        : ve.Message))
+                                .Select(SeverityIssueGroupViewModel.ToItem)
                                 .ToList();
 
                             return new AuditProcessRowViewModel(
@@ -343,13 +250,10 @@ public sealed record SubmissionDetailViewModel(
                         .ToList();
 
                     var issues = (entry.Outcome.ValidationErrors ?? [])
-                        .Select(ve => new ValidationErrorItemViewModel(
-                            HasPropertyPath: !string.IsNullOrWhiteSpace(ve.PropertyPath),
-                            PropertyPath: ve.PropertyPath,
-                            Message: !string.IsNullOrWhiteSpace(ve.RuleId)
-                                ? $"[{ve.RuleId}] {ve.Message}"
-                                : ve.Message))
+                        .Select(SeverityIssueGroupViewModel.ToItem)
                         .ToList();
+
+                    var issueGroups = SeverityIssueGroupViewModel.FromAuditIssues(entry.Outcome.ValidationErrors);
 
                     var hasId = entry.Identifier is not null &&
                                 !string.IsNullOrWhiteSpace(entry.Identifier.Value);
@@ -378,7 +282,8 @@ public sealed record SubmissionDetailViewModel(
                         HasProcesses: processes.Count > 0,
                         ValidationIssues: issues,
                         HasValidationIssues: issues.Count > 0,
-                        RawAuditJson: JsonSerializer.Serialize(entry, AuditPrettyOptions));
+                        RawAuditJson: JsonSerializer.Serialize(entry, AuditPrettyOptions),
+                        ValidationIssueGroups: issueGroups);
                 })
                 .ToList();
         }
@@ -386,10 +291,7 @@ public sealed record SubmissionDetailViewModel(
 
     private IReadOnlyList<SubmissionAuditItemViewModel>? _auditItems;
 
-    public bool HasAuditItems
-    {
-        get { return AuditItems.Count > 0; }
-    }
+    public bool HasAuditItems => AuditItems.Count > 0;
 
     public GovUkTabsViewModel Tabs
     {
@@ -398,29 +300,20 @@ public sealed record SubmissionDetailViewModel(
             return _tabs ??= GovUkTabsViewModel.Create(
                 "submission-detail-tabs",
                 [
-                    ("submission-audit-trail", $"Audit trail ({AuditCount})", true),
-                    ("submission-payload-session", "Payload & session", true),
-                    ("submission-draft-uploads", $"Draft uploads ({DraftCount})", true)
+                    ("submission-audit-trail", AdminUiMessages.SubmissionAuditTrailTabLabel(AuditCount), true),
+                    ("submission-payload-session", AdminUiMessages.SubmissionPayloadSessionTabLabel, true),
+                    ("submission-draft-uploads", AdminUiMessages.SubmissionDraftUploadsTabLabel(DraftCount), true)
                 ]);
         }
     }
 
     private GovUkTabsViewModel? _tabs;
 
-    public GovUkTabItemViewModel? AuditTrailTab
-    {
-        get { return Tabs.Find("submission-audit-trail"); }
-    }
+    public GovUkTabItemViewModel? AuditTrailTab => Tabs.Find("submission-audit-trail");
 
-    public GovUkTabItemViewModel? PayloadSessionTab
-    {
-        get { return Tabs.Find("submission-payload-session"); }
-    }
+    public GovUkTabItemViewModel? PayloadSessionTab => Tabs.Find("submission-payload-session");
 
-    public GovUkTabItemViewModel? DraftUploadsTab
-    {
-        get { return Tabs.Find("submission-draft-uploads"); }
-    }
+    public GovUkTabItemViewModel? DraftUploadsTab => Tabs.Find("submission-draft-uploads");
 
     private static string FormatJson(string? raw)
     {

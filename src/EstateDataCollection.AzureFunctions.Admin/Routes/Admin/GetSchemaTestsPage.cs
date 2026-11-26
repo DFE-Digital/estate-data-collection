@@ -5,6 +5,7 @@ using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -42,7 +43,7 @@ public sealed class GetSchemaTestsPage(
                 IncludeRetired: true),
             cancellationToken);
 
-        var meta = CreatePageMeta(http, $"Tests - {schemaName} v{version}", activeNav: "schemas");
+        var meta = CreatePageMeta(http, AdminUiMessages.TestsPageTitle(schemaName, version), activeNav: "schemas");
 
         if (result.IsFailure)
         {
@@ -63,7 +64,7 @@ public sealed class GetSchemaTestsPage(
         var notice = http.Query["notice"].ToString();
         string? successBanner = notice switch
         {
-            "updated" => $"Stored regression test payloads verified and saved for '{detail.SchemaName}' v{detail.Version}.",
+            "updated" => AdminUiMessages.NoticeSchemaTestsUpdated(detail.SchemaName, detail.Version),
             _ => null
         };
 

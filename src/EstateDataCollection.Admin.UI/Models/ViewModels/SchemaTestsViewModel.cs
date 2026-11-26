@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Domain.Schema;
@@ -21,20 +22,11 @@ public sealed record SchemaTestsViewModel(
 {
     private static readonly JsonSerializerOptions IndentedJsonOptions = new() { WriteIndented = true };
 
-    private SchemaTestSuiteItemResult? LatestItem
-    {
-        get { return LastRunResult?.Results.FirstOrDefault(); }
-    }
+    private SchemaTestSuiteItemResult? LatestItem => LastRunResult?.Results.FirstOrDefault();
 
-    private IReadOnlyList<string> ValidFixtureRawList
-    {
-        get { return Detail?.ValidFixtures ?? []; }
-    }
+    private IReadOnlyList<string> ValidFixtureRawList => Detail?.ValidFixtures ?? [];
 
-    private IReadOnlyList<string> InvalidFixtureRawList
-    {
-        get { return Detail?.InvalidFixtures ?? []; }
-    }
+    private IReadOnlyList<string> InvalidFixtureRawList => Detail?.InvalidFixtures ?? [];
 
     private IReadOnlyList<string> SoftWarnings
     {
@@ -43,80 +35,37 @@ public sealed record SchemaTestsViewModel(
 
     private IReadOnlyList<string>? _softWarnings;
 
-    public NotificationBannerViewModel? SuccessBannerModel
-    {
-        get { return NotificationBannerViewModel.Success(SuccessBanner); }
-    }
+    public NotificationBannerViewModel? SuccessBannerModel => NotificationBannerViewModel.Success(SuccessBanner);
 
-    public ErrorSummaryViewModel? ErrorSummary
-    {
-        get { return ErrorSummaryViewModel.From(PageError); }
-    }
+    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);
 
-    public string BackToDetailsUrl
-    {
-        get { return AppRoutes.AdminUi.SchemaDetail(SchemaName, Version); }
-    }
+    public string BackToDetailsUrl => AppRoutes.AdminUi.SchemaDetail(SchemaName, Version);
 
-    public bool HasDetail
-    {
-        get { return Detail is not null; }
-    }
+    public bool HasDetail => Detail is not null;
 
-    public string DetailSchemaName
-    {
-        get { return Detail?.SchemaName ?? SchemaName; }
-    }
+    public string DetailSchemaName => Detail?.SchemaName ?? SchemaName;
 
-    public string DetailVersionDisplay
-    {
-        get { return $"v{Detail?.Version ?? Version}"; }
-    }
+    public string DetailVersionDisplay => $"v{Detail?.Version ?? Version}";
 
-    public string RunTestsActionUrl
-    {
-        get
-        {
-            return Detail is null
-                ? string.Empty
-                : AppRoutes.AdminUi.SchemaTestsRun(Detail.SchemaName, Detail.Version);
-        }
-    }
+    public string RunTestsActionUrl =>
+        Detail is null
+            ? string.Empty
+            : AppRoutes.AdminUi.SchemaTestsRun(Detail.SchemaName, Detail.Version);
 
-    public string UpdateTestsActionUrl
-    {
-        get
-        {
-            return Detail is null
-                ? string.Empty
-                : AppRoutes.AdminUi.SchemaTests(Detail.SchemaName, Detail.Version);
-        }
-    }
+    public string UpdateTestsActionUrl =>
+        Detail is null
+            ? string.Empty
+            : AppRoutes.AdminUi.SchemaTests(Detail.SchemaName, Detail.Version);
 
-    public LifecycleTagViewModel? StateTag
-    {
-        get { return Detail is null ? null : LifecycleTagViewModel.From(Detail.State.Name); }
-    }
+    public LifecycleTagViewModel? StateTag => Detail is null ? null : LifecycleTagViewModel.From(Detail.State.Name);
 
-    public int ValidFixturesCount
-    {
-        get { return ValidFixtureRawList.Count; }
-    }
+    public int ValidFixturesCount => ValidFixtureRawList.Count;
 
-    public int InvalidFixturesCount
-    {
-        get { return InvalidFixtureRawList.Count; }
-    }
+    public int InvalidFixturesCount => InvalidFixtureRawList.Count;
 
-    public int BusinessRuleCount
-    {
-        get { return Detail?.QualityRules.Count ?? 0; }
-    }
+    public int BusinessRuleCount => Detail?.QualityRules.Count ?? 0;
 
-    public bool HasBusinessRules
-    {
-        get { return BusinessRuleCount > 0; }
-    }
+    public bool HasBusinessRules => BusinessRuleCount > 0;
 
     public string BusinessRuleEnginesSummary
     {
@@ -128,10 +77,7 @@ public sealed record SchemaTestsViewModel(
         }
     }
 
-    public QualityRulesViewerViewModel QualityRulesViewer
-    {
-        get { return QualityRulesViewerViewModel.From(Detail?.QualityRules); }
-    }
+    public QualityRulesViewerViewModel QualityRulesViewer => QualityRulesViewerViewModel.From(Detail?.QualityRules);
 
     public ValidationEngineDiagnosticsViewModel EngineDiagnostics
     {
@@ -139,97 +85,47 @@ public sealed record SchemaTestsViewModel(
         {
             return _engineDiagnostics ??= ValidationEngineDiagnosticsViewModel.FromTraces(
                 LatestItem?.EngineTraces ?? Detail?.LastTestRunEngineTraces,
-                heading: "Validation Engine Diagnostics",
-                subtitle: "Per-engine execution metrics and outcomes from the latest regression test run.");
+                heading: AdminUiMessages.EngineDiagnosticsDefaultHeading,
+                subtitle: AdminUiMessages.EngineDiagnosticsDefaultSubtitle);
         }
     }
 
     private ValidationEngineDiagnosticsViewModel? _engineDiagnostics;
 
-    public bool ShowLatestRunPassedBanner
-    {
-        get { return LatestItem is { Passed: true }; }
-    }
+    public bool ShowLatestRunPassedBanner => LatestItem is { Passed: true };
 
-    public bool ShowLatestRunFailedBanner
-    {
-        get { return LatestItem is { Passed: false }; }
-    }
+    public bool ShowLatestRunFailedBanner => LatestItem is { Passed: false };
 
-    public string LatestRunAppVersion
-    {
-        get { return LastRunResult?.AppVersion ?? string.Empty; }
-    }
+    public string LatestRunAppVersion => LastRunResult?.AppVersion ?? string.Empty;
 
-    public int LatestRunErrorCount
-    {
-        get { return LatestItem?.Errors.Count ?? 0; }
-    }
+    public int LatestRunErrorCount => LatestItem?.Errors.Count ?? 0;
 
-    public IReadOnlyList<string> LatestRunErrors
-    {
-        get { return LatestItem?.Errors ?? []; }
-    }
+    public IReadOnlyList<string> LatestRunErrors => LatestItem?.Errors ?? [];
 
-    public string LatestRunEvaluationSummary
-    {
-        get
-        {
-            return LatestItem is null
-                ? string.Empty
-                : $"Evaluated {LatestItem.ValidFixtureCount} valid fixture(s), {LatestItem.InvalidFixtureCount} invalid fixture(s), and {LatestItem.BusinessRuleCount} business rule(s).";
-        }
-    }
+    public string LatestRunEvaluationSummary =>
+        LatestItem is null
+            ? string.Empty
+            : AdminUiMessages.EvaluatedFixturesSummary(LatestItem.ValidFixtureCount, LatestItem.InvalidFixtureCount, LatestItem.BusinessRuleCount);
 
-    public int SoftWarningCount
-    {
-        get { return SoftWarnings.Count; }
-    }
+    public int SoftWarningCount => SoftWarnings.Count;
 
-    public bool ShowSoftWarningBanner
-    {
-        get { return SoftWarnings.Count > 0 && (LatestItem?.Passed ?? Detail?.LastTestRunPassed) == true; }
-    }
+    public bool ShowSoftWarningBanner => SoftWarnings.Count > 0 && (LatestItem?.Passed ?? Detail?.LastTestRunPassed) == true;
 
-    public bool HasLastRecordedRun
-    {
-        get { return Detail?.LastTestRunAtUtc.HasValue == true; }
-    }
+    public bool HasLastRecordedRun => Detail?.LastTestRunAtUtc.HasValue == true;
 
-    public bool NoLastRecordedRun
-    {
-        get { return !HasLastRecordedRun; }
-    }
+    public bool NoLastRecordedRun => !HasLastRecordedRun;
 
-    public bool LastRecordedRunPassed
-    {
-        get { return Detail?.LastTestRunPassed == true; }
-    }
+    public bool LastRecordedRunPassed => Detail?.LastTestRunPassed == true;
 
-    public bool LastRecordedRunFailed
-    {
-        get { return HasLastRecordedRun && Detail?.LastTestRunPassed != true; }
-    }
+    public bool LastRecordedRunFailed => HasLastRecordedRun && Detail?.LastTestRunPassed != true;
 
-    public bool ShowLastRunSoftWarningTag
-    {
-        get { return LastRecordedRunPassed && SoftWarnings.Count > 0; }
-    }
+    public bool ShowLastRunSoftWarningTag => LastRecordedRunPassed && SoftWarnings.Count > 0;
 
-    public string LastRunTimestampText
-    {
-        get { return Detail?.LastTestRunAtUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? string.Empty; }
-    }
+    public string LastRunTimestampText => Detail?.LastTestRunAtUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? string.Empty;
 
-    public bool HasLastRunAppVersion
-    {
-        get { return !string.IsNullOrWhiteSpace(Detail?.LastTestRunAppVersion); }
-    }
+    public bool HasLastRunAppVersion => !string.IsNullOrWhiteSpace(Detail?.LastTestRunAppVersion);
 
-    public string LastRunAppVersion
-    {
-        get { return Detail?.LastTestRunAppVersion ?? string.Empty; }
-    }
+    public string LastRunAppVersion => Detail?.LastTestRunAppVersion ?? string.Empty;
 
     public FixtureEditorFieldViewModel ValidFixtureField
     {
@@ -259,15 +155,9 @@ public sealed record SchemaTestsViewModel(
 
     private FixtureEditorFieldViewModel? _invalidFixtureField;
 
-    public bool HasValidFixtures
-    {
-        get { return ValidFixturesCount > 0; }
-    }
+    public bool HasValidFixtures => ValidFixturesCount > 0;
 
-    public bool NoValidFixtures
-    {
-        get { return ValidFixturesCount == 0; }
-    }
+    public bool NoValidFixtures => ValidFixturesCount == 0;
 
     public IReadOnlyList<ValidFixtureCardViewModel> ValidFixtures
     {
@@ -275,7 +165,7 @@ public sealed record SchemaTestsViewModel(
         {
             return _validFixtures ??= ValidFixtureRawList
                 .Select((raw, index) => new ValidFixtureCardViewModel(
-                    Title: $"Valid Fixture #{index + 1}",
+                    Title: AdminUiMessages.ValidFixtureTitle(index + 1),
                     FormattedJson: FormatJson(raw)))
                 .ToList();
         }
@@ -283,15 +173,9 @@ public sealed record SchemaTestsViewModel(
 
     private IReadOnlyList<ValidFixtureCardViewModel>? _validFixtures;
 
-    public bool HasInvalidFixtures
-    {
-        get { return InvalidFixturesCount > 0; }
-    }
+    public bool HasInvalidFixtures => InvalidFixturesCount > 0;
 
-    public bool NoInvalidFixtures
-    {
-        get { return InvalidFixturesCount == 0; }
-    }
+    public bool NoInvalidFixtures => InvalidFixturesCount == 0;
 
     public IReadOnlyList<InvalidFixtureCardViewModel> InvalidFixtures
     {
@@ -313,11 +197,11 @@ public sealed record SchemaTestsViewModel(
             return _tabs ??= GovUkTabsViewModel.Create(
                 "schema-tests-tabs",
                 [
-                    ("test-valid-fixtures", $"Valid fixtures ({ValidFixturesCount})", true),
-                    ("test-invalid-fixtures", $"Invalid fixtures ({InvalidFixturesCount})", true),
-                    ("test-engine-diagnostics", "Engine diagnostics", EngineDiagnostics.HasContent),
-                    ("edit-schema-tests", "Add / update tests", true),
-                    ("test-quality-rules", $"Quality rules ({BusinessRuleCount})", true)
+                    ("test-valid-fixtures", AdminUiMessages.ValidFixturesTabLabel(ValidFixturesCount), true),
+                    ("test-invalid-fixtures", AdminUiMessages.InvalidFixturesTabLabel(InvalidFixturesCount), true),
+                    ("test-engine-diagnostics", AdminUiMessages.EngineDiagnosticsTabLabel, EngineDiagnostics.HasContent),
+                    ("edit-schema-tests", AdminUiMessages.EditSchemaTestsTabLabel, true),
+                    ("test-quality-rules", AdminUiMessages.QualityRulesTabLabel(BusinessRuleCount), true)
                 ],
                 preferredSelectedId: preferredTabId);
         }
@@ -325,30 +209,15 @@ public sealed record SchemaTestsViewModel(
 
     private GovUkTabsViewModel? _tabs;
 
-    public GovUkTabItemViewModel? ValidFixturesTab
-    {
-        get { return Tabs.Find("test-valid-fixtures"); }
-    }
+    public GovUkTabItemViewModel? ValidFixturesTab => Tabs.Find("test-valid-fixtures");
 
-    public GovUkTabItemViewModel? InvalidFixturesTab
-    {
-        get { return Tabs.Find("test-invalid-fixtures"); }
-    }
+    public GovUkTabItemViewModel? InvalidFixturesTab => Tabs.Find("test-invalid-fixtures");
 
-    public GovUkTabItemViewModel? EngineDiagnosticsTab
-    {
-        get { return Tabs.Find("test-engine-diagnostics"); }
-    }
+    public GovUkTabItemViewModel? EngineDiagnosticsTab => Tabs.Find("test-engine-diagnostics");
 
-    public GovUkTabItemViewModel? EditTestsTab
-    {
-        get { return Tabs.Find("edit-schema-tests"); }
-    }
+    public GovUkTabItemViewModel? EditTestsTab => Tabs.Find("edit-schema-tests");
 
-    public GovUkTabItemViewModel? QualityRulesTab
-    {
-        get { return Tabs.Find("test-quality-rules"); }
-    }
+    public GovUkTabItemViewModel? QualityRulesTab => Tabs.Find("test-quality-rules");
 
     private IReadOnlyList<string> ResolveSoftWarnings()
     {
@@ -422,24 +291,24 @@ public sealed record SchemaTestsViewModel(
                 if (!outcome.FailedAsExpected)
                 {
                     statusTagText = outcome.TriggeredErrors.Count == 0
-                        ? "Passed unexpectedly"
-                        : "Expectation mismatch";
+                        ? AdminUiMessages.FixtureStatusPassedUnexpectedly
+                        : AdminUiMessages.FixtureStatusExpectationMismatch;
                     statusTagCssClass = "govuk-tag govuk-tag--red";
                 }
                 else if (expectedList.Count > 0)
                 {
-                    statusTagText = "Matched expected error(s)";
+                    statusTagText = AdminUiMessages.FixtureStatusMatchedExpectedErrors;
                     statusTagCssClass = "govuk-tag govuk-tag--green";
                 }
                 else
                 {
-                    statusTagText = "Failed \u2014 unknown if expected";
+                    statusTagText = AdminUiMessages.FixtureStatusFailedUnknownIfExpected;
                     statusTagCssClass = "govuk-tag govuk-tag--yellow";
                 }
             }
             else
             {
-                statusTagText = "Pending evaluation";
+                statusTagText = AdminUiMessages.FixtureStatusPendingEvaluation;
                 statusTagCssClass = "govuk-tag govuk-tag--grey";
             }
 
@@ -450,17 +319,17 @@ public sealed record SchemaTestsViewModel(
                     string tagCssClass;
                     if (outcome is null)
                     {
-                        tagText = "Configured";
+                        tagText = AdminUiMessages.AssertionConfigured;
                         tagCssClass = "govuk-tag govuk-tag--grey govuk-!-margin-right-1";
                     }
                     else if (unmatchedSet.Any(u => string.Equals(u, expectedErr, StringComparison.OrdinalIgnoreCase)))
                     {
-                        tagText = "Missing";
+                        tagText = AdminUiMessages.AssertionMissing;
                         tagCssClass = "govuk-tag govuk-tag--red govuk-!-margin-right-1";
                     }
                     else
                     {
-                        tagText = "Matched";
+                        tagText = AdminUiMessages.AssertionMatched;
                         tagCssClass = "govuk-tag govuk-tag--green govuk-!-margin-right-1";
                     }
 
@@ -476,7 +345,7 @@ public sealed record SchemaTestsViewModel(
             var triggeredErrors = outcome?.TriggeredErrors ?? [];
 
             cards.Add(new InvalidFixtureCardViewModel(
-                Title: $"Invalid Fixture #{i + 1}",
+                Title: AdminUiMessages.InvalidFixtureTitle(i + 1),
                 HasDescription: hasDescription,
                 Description: hasDescription ? description : null,
                 StatusTagText: statusTagText,

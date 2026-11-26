@@ -11,5 +11,6 @@ public sealed record SubmitSchemaRequest(
     string? RulesJson = null,
     string? OdcsYaml = null,
     string? FileName = null,
-    SchemaIdentifierConfig? IdentifierConfig = null
+    SchemaIdentifierConfig? IdentifierConfig = null,
+    SchemaValidationPolicy? ValidationPolicy = null
 );

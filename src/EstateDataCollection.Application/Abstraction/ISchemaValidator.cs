@@ -7,17 +7,12 @@ namespace EstateDataCollection.Application.Abstraction;
 
 public interface ISchemaValidator : IInfrastructure
 {
-    ValidationEngineDescriptor Descriptor
-    {
-        get
-        {
-            return new ValidationEngineDescriptor(
-                "json-schema",
-                "JSON Schema Validator",
-                ValidationEngineKinds.StructuralSchema,
-                "Structural JSON Schema validator.");
-        }
-    }
+    WorkflowEngineDescriptor Descriptor =>
+        new(
+            "json-schema",
+            "JSON Schema Validator",
+            ValidationEngineKinds.StructuralSchema,
+            "Structural JSON Schema validator.");
 
     Task<Result<SchemaValidationResult>> ValidateAsync(string payload, JsonSchema schema,
         CancellationToken cancellationToken = default);

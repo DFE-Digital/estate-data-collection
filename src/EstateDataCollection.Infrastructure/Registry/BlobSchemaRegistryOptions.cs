@@ -4,10 +4,7 @@ namespace EstateDataCollection.Infrastructure.Registry;
 
 public class BlobSchemaRegistryOptions : Common.Markers.IOption<BlobSchemaRegistryOptions>
 {
-    public static string SectionName
-    {
-        get { return "Blob:Schema"; }
-    }
+    public static string SectionName => "Blob:Schema";
 
     [Required, MinLength(1)]
     public string ContainerName { get; init; } = "schemas";
@@ -24,27 +21,28 @@ public class BlobSchemaRegistryOptions : Common.Markers.IOption<BlobSchemaRegist
     /// </summary>
     [Required, MinLength(1)]
     public string DraftErrorBlobSuffix { get; init; } = ".error.json";
-    
+
     [Required, MinLength(1)]
     public string CacheKey { get; init; } = "schema:{schemaName}:v{version}";
-    
+
     [Required, MinLength(1)]
     public string SchemaBlobDirectory { get; init; } = "{schemaName}/v{version}.schema.json";
-    
+
     [Required, MinLength(1)]
     public string MetaBlobDirectory { get; init; } = "{schemaName}/v{version}.meta.json";
+
+    /// <summary>
+    /// Blob path format for persisted diagnostic error/warning reports inside the schemas container
+    /// ({schemaName}/v{version}.error.json). Preserved alongside .meta.json even when a schema version is deleted.
+    /// </summary>
+    [Required, MinLength(1)]
+    public string ErrorBlobDirectory { get; init; } = "{schemaName}/v{version}.error.json";
 
     /// <summary>
     /// Blob path format for companion quality/business rules JSON ({schemaName}/v{version}.rules.json).
     /// </summary>
     [Required, MinLength(1)]
     public string RulesBlobDirectory { get; init; } = "{schemaName}/v{version}.rules.json";
-
-    /// <summary>
-    /// Legacy alias for RulesBlobDirectory ({schemaName}/v{version}.logic.json) checked as fallback on read.
-    /// </summary>
-    [Required, MinLength(1)]
-    public string LogicBlobDirectory { get; init; } = "{schemaName}/v{version}.logic.json";
 
     /// <summary>
     /// Blob path format when raw ODCS YAML contracts are uploaded directly ({schemaName}/v{version}.odcs.yaml).

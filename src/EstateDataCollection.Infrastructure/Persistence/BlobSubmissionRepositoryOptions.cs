@@ -4,10 +4,7 @@ namespace EstateDataCollection.Infrastructure.Persistence;
 
 public class BlobSubmissionRepositoryOptions : Common.Markers.IOption<BlobSubmissionRepositoryOptions>
 {
-    public static string SectionName
-    {
-        get { return "Blob:Submission"; }
-    }
+    public static string SectionName => "Blob:Submission";
 
     [Required, MinLength(1)]
     public string PayloadContainerName { get; init; } = "payloads";
@@ -25,5 +22,11 @@ public class BlobSubmissionRepositoryOptions : Common.Markers.IOption<BlobSubmis
     public string AuditBlobPrefixFormat { get; init; } = "{submissionId}/audit/";
 
     [Required, MinLength(1)]
-    public string ProcessedBlobNameFormat { get; init; } = "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json";
+    public string ProcessedBlobNameFormat { get; init; } = "urn={establishmentIdentifier}/schema={schemaName}/v={schemaVersion}/{submissionId}/payload.json";
+
+    [Required, MinLength(1)]
+    public string IdentifierIndexPrefix { get; init; } = "identifier-index/";
+
+    [Required, MinLength(1)]
+    public string ReferenceDataContainerName { get; init; } = "reference-data";
 }

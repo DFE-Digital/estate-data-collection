@@ -4,6 +4,7 @@ using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Submissions.GetSubmissionStatistics;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -36,7 +37,7 @@ public sealed class GetStatisticsPage(
             new GetSubmissionStatisticsRequest(schemaName),
             cancellationToken);
 
-        var meta = CreatePageMeta(http, "Submission Statistics", activeNav: "statistics");
+        var meta = CreatePageMeta(http, AdminUiMessages.StatisticsTitle, activeNav: "statistics");
 
         if (result.IsFailure)
         {

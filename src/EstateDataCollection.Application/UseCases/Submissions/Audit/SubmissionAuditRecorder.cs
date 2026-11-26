@@ -46,7 +46,7 @@ internal static class SubmissionAuditRecorder
         {
             var mappedErrors = validationErrors is { Count: > 0 }
                 ? validationErrors
-                    .Select(e => new SubmissionAuditValidationIssue(e.PropertyPath, e.Message, e.RuleId))
+                    .Select(e => new SubmissionAuditValidationIssue(e.PropertyPath, e.Message, e.RuleId, e.Severity))
                     .ToArray()
                 : null;
 

@@ -13,8 +13,4 @@
     <ProjectReference Include="..\EstateDataCollection.Domain\EstateDataCollection.Domain.csproj" />
   </ItemGroup>
   
-  <ItemGroup>
-    <Folder Include="UseCases\Schema\" />
-  </ItemGroup>
-  
 </Project>

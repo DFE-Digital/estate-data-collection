@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Text;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Web.Models.Options;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -7,13 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace EstateDataCollection.Common.Web.Extensions;
-
-public sealed class RequestBodyTooLargeException(long maxSizeBytes)
-    : InvalidOperationException($"The request payload exceeds the configured maximum limit of {Math.Max(1, maxSizeBytes / (1024 * 1024))} MB.")
-{
-    public long MaxSizeBytes { get; } = maxSizeBytes;
-    public int MaxSizeMb { get; } = Math.Max(1, (int)Math.Ceiling(maxSizeBytes / (1024d * 1024d)));
-}
 
 public static class HttpRequestExtensions
 {
@@ -86,8 +80,8 @@ public static class HttpRequestExtensions
         var problem = new ProblemDetails
         {
             Status = StatusCodes.Status413PayloadTooLarge,
-            Title = "Payload Too Large",
-            Detail = $"The request payload exceeds the configured maximum limit of {maxSizeMb} MB.",
+            Title = ErrorMessages.PayloadTooLargeTitle,
+            Detail = ErrorMessages.RequestBodyExceedsLimitMb(maxSizeMb),
             Instance = instancePath
         };
         problem.Extensions["errorCode"] = "Payload.TooLarge";

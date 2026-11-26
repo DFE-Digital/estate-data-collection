@@ -70,7 +70,12 @@ public sealed class GetSchemasUseCase(
                         LastTestRunAtUtc: m.LastTestRunAtUtc,
                         LastTestRunAppVersion: m.LastTestRunAppVersion,
                         LastTestRunPassed: m.LastTestRunPassed,
-                        LastTestRunWarnings: m.LastTestRunWarnings))
+                        LastTestRunWarnings: m.LastTestRunWarnings,
+                        HasErrorReport: m.HasErrorReport,
+                        ErrorSummary: m.ErrorSummary,
+                        SignedOffBy: m.SignedOffBy,
+                        SignedOffAtUtc: m.SignedOffAtUtc,
+                        DeletedAtUtc: m.DeletedAtUtc))
                     .ToList();
 
                 var activeFields = request.IncludeActiveVersionFields && activeMeta is not null

@@ -5,6 +5,7 @@ using EstateDataCollection.Admin.UI.Rendering;
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemas;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -38,7 +39,7 @@ public sealed class GetDashboardPage(
                 IncludeRetired: true),
             cancellationToken);
 
-        var meta = CreatePageMeta(http, "Schema Contracts & Lifecycle", activeNav: "schemas");
+        var meta = CreatePageMeta(http, AdminUiMessages.DashboardTitle, activeNav: "schemas");
 
         var model = result.IsSuccess
             ? new DashboardViewModel(meta, result.Value.Schemas)

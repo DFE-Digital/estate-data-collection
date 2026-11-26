@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Messages;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
@@ -8,10 +9,7 @@ public sealed record QualityRulesViewerViewModel(
     bool NoRules,
     IReadOnlyList<QualityRuleCardViewModel> Rules)
 {
-    public string RuleSummaryText
-    {
-        get { return $"{RuleCount} active {(RuleCount == 1 ? "rule" : "rules")}"; }
-    }
+    public string RuleSummaryText => AdminUiMessages.ActiveRuleSummary(RuleCount);
 
     public static QualityRulesViewerViewModel From(IReadOnlyList<SchemaQualityRuleSummary>? rules)
     {

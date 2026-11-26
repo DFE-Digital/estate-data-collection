@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Extensions;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -25,7 +26,16 @@ public class VerifySchemaUseCase(
             var idDefValidation = request.IdentifierConfig.ValidateDefinition();
             if (idDefValidation.IsFailure)
             {
-                return idDefValidation.Error;
+                return BuildErrorReportResult(idDefValidation.Error, nameof(request.IdentifierConfig));
+            }
+        }
+
+        if (request.ValidationPolicy is not null)
+        {
+            var policyValidation = request.ValidationPolicy.ValidateDefinition();
+            if (policyValidation.IsFailure)
+            {
+                return BuildErrorReportResult(policyValidation.Error, nameof(request.ValidationPolicy));
             }
         }
 
@@ -37,23 +47,24 @@ public class VerifySchemaUseCase(
 
         if (resolvedInputs.IsFailure)
         {
-            return resolvedInputs.Error;
+            return BuildErrorReportResult(resolvedInputs.Error, "odcs");
         }
 
-        var (schemaInput, rulesInput, _, _, _) = resolvedInputs.Value;
+        var (schemaInput, rulesInput, _, _, _, parsedValidationPolicy) = resolvedInputs.Value;
+        var effectivePolicy = request.ValidationPolicy ?? parsedValidationPolicy;
         var effectiveRulesInput = string.IsNullOrWhiteSpace(rulesInput) && !string.IsNullOrWhiteSpace(schemaInput)
             ? null
             : rulesInput;
-        var validFixtures = request.SampleValidFixtures ?? [];
-        var invalidFixtures = request.SampleInvalidFixtures ?? [];
 
         var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
             schemaInput,
             effectiveRulesInput,
-            validFixtures,
-            invalidFixtures,
+            request.SampleValidFixtures ?? [],
+            request.SampleInvalidFixtures ?? [],
             request.IdentifierConfig,
-            cancellationToken);
+            cancellationToken,
+            effectivePolicy,
+            request.AmbientFixtures);
 
         if (verification.IsFailure)
         {
@@ -63,23 +74,51 @@ public class VerifySchemaUseCase(
             return verification.Error;
         }
 
-        if (!verification.Value.IsSuccessful)
+        var report = verification.Value;
+        if (!report.IsSuccessful)
         {
-            var errors = verification.Value.ToValidationErrors("schema").ToList();
-
+            var errors = report.ToValidationErrors("schema").ToList();
             _instrumentation.SchemaVerificationFailed(
                 errors.Count,
-                string.Join("; ", verification.Value.Errors));
+                string.Join("; ", report.Errors));
 
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, errors: errors);
+            return new VerifySchemaResult(
+                Message: SchemaValidationMessages.SchemaVerificationFoundErrors(errors.Count),
+                ResolvedIdentifierConfig: report.ResolvedIdentifierConfig,
+                InvalidFixtureOutcomes: report.InvalidFixtureOutcomes,
+                Warnings: report.WarningMessages,
+                EngineTraces: report.EngineTraces,
+                IsSuccessful: false,
+                Issues: report.Issues,
+                SyntaxErrors: report.SyntaxErrors.Select(e => e.Message).ToArray(),
+                FixtureErrors: report.FixtureErrors.Select(e => e.Message).ToArray(),
+                AnalyserFindings: report.AnalyserFindings);
         }
 
         _instrumentation.SchemaVerificationSucceeded();
         return new VerifySchemaResult(
-            "Schema verified successfully",
-            verification.Value.ResolvedIdentifierConfig,
-            verification.Value.InvalidFixtureOutcomes,
-            verification.Value.WarningMessages,
-            verification.Value.EngineTraces);
+            Message: SchemaValidationMessages.SchemaVerifiedSuccessfully,
+            ResolvedIdentifierConfig: report.ResolvedIdentifierConfig,
+            InvalidFixtureOutcomes: report.InvalidFixtureOutcomes,
+            Warnings: report.WarningMessages,
+            EngineTraces: report.EngineTraces,
+            IsSuccessful: true,
+            Issues: report.Issues,
+            SyntaxErrors: [],
+            FixtureErrors: [],
+            AnalyserFindings: report.AnalyserFindings);
+    }
+
+    private static VerifySchemaResult BuildErrorReportResult(Error error, string defaultPath)
+    {
+        var normalised = SchemaCandidatePersistence.NormaliseError(error, defaultPath);
+
+        return new VerifySchemaResult(
+            Message: SchemaValidationMessages.SchemaVerificationFoundErrors(normalised.Messages.Count),
+            Warnings: [],
+            IsSuccessful: false,
+            Issues: normalised.Issues,
+            SyntaxErrors: normalised.Messages,
+            FixtureErrors: []);
     }
 }

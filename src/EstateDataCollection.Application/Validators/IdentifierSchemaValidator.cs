@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
@@ -30,7 +31,7 @@ public static class IdentifierSchemaValidator
                     ? defValidation.Error.ValidationErrors
                         .Select(e => new ValidationMessage(typeof(IdentifierSchemaValidator), e.PropertyPath, e.Message, source: ValidationSources.Identifier))
                         .ToList()
-                    : [new ValidationMessage(typeof(IdentifierSchemaValidator), "identifierConfig", defValidation.Error.Description ?? "Invalid identifier configuration.", source: ValidationSources.Identifier)];
+                    : [new ValidationMessage(typeof(IdentifierSchemaValidator), "identifierConfig", defValidation.Error.Description ?? DomainMessages.InvalidIdentifierConfigFallback, source: ValidationSources.Identifier)];
 
                 return new IdentifierSchemaAlignmentResult(
                     IsValid: false,
@@ -55,7 +56,7 @@ public static class IdentifierSchemaValidator
             }
         }
 
-        var fallbackPaths = defaultPaths is { Count: > 0 } ? defaultPaths : ["school.urn", "urn"];
+        var fallbackPaths = defaultPaths is { Count: > 0 } ? defaultPaths : [];
 
         // Rules-only verification (no JSON schema in this payload): validate definition only.
         if (string.IsNullOrWhiteSpace(rawJsonSchema))
@@ -113,7 +114,7 @@ public static class IdentifierSchemaValidator
                         new ValidationMessage(
                             typeof(IdentifierSchemaValidator),
                             "identifierConfig.jsonPointer",
-                            inspection.FailureReason ?? $"Identifier pointer '{normalized.JsonPointer}' does not exist in the JSON Schema.",
+                            inspection.FailureReason ?? SchemaValidationMessages.IdentifierPointerNotFound(normalized.JsonPointer),
                             source: ValidationSources.Identifier,
                             path: normalized.JsonPointer)
                     ]);
@@ -132,7 +133,7 @@ public static class IdentifierSchemaValidator
                         new ValidationMessage(
                             typeof(IdentifierSchemaValidator),
                             "identifierConfig.jsonPointer",
-                            inspection.FailureReason ?? $"Identifier pointer '{normalized.JsonPointer}' must resolve to a scalar string, integer, or number property.",
+                            inspection.FailureReason ?? SchemaValidationMessages.IdentifierPointerMustBeScalar(normalized.JsonPointer),
                             source: ValidationSources.Identifier,
                             path: normalized.JsonPointer)
                     ]);
@@ -208,7 +209,7 @@ public static class IdentifierSchemaValidator
                 new ValidationMessage(
                     typeof(IdentifierSchemaValidator),
                     "identifierConfig.jsonPointer",
-                    $"Schema does not declare a compatible school identifier property at any default path ({searchedFormatted}). Configure IdentifierConfig.JsonPointer (or upload a .meta.json), or set IdentifierConfig.Type to 'None'.",
+                    SchemaValidationMessages.SchemaMissingDefaultIdentifierPath(searchedFormatted),
                     source: ValidationSources.Identifier)
             ]);
     }
@@ -254,7 +255,7 @@ public static class IdentifierSchemaValidator
                 IsRequiredInSchema: false,
                 AllowsNull: false,
                 NormalizedPointer: null,
-                FailureReason: $"Identifier pointer '{rawPath}' is not a valid JSON Pointer or dot-notation path.");
+                FailureReason: SchemaValidationMessages.IdentifierPointerInvalidSyntax(rawPath));
         }
 
         var normalizedPointer = SchemaIdentifierConfig.ToJsonPointer(segments);
@@ -274,7 +275,7 @@ public static class IdentifierSchemaValidator
                     IsRequiredInSchema: false,
                     AllowsNull: false,
                     NormalizedPointer: normalizedPointer,
-                    FailureReason: $"Property '{segment}' at path '{normalizedPointer}' is not declared in the JSON Schema.");
+                    FailureReason: SchemaValidationMessages.PropertyNotDeclaredInSchema(segment, normalizedPointer));
             }
 
             if (!IsPropertyInRequiredList(resolved, matchedName))
@@ -334,10 +335,10 @@ public static class IdentifierSchemaValidator
                     return (true, allowsNull, null);
                 }
 
-                return (false, allowsNull, $"Identifier enum at '{normalizedPointer}' must contain string or numeric values.");
+                return (false, allowsNull, SchemaValidationMessages.IdentifierEnumMustBeScalar(normalizedPointer));
             }
 
-            return (false, allowsNull, $"Identifier property at '{normalizedPointer}' must declare a scalar JSON Schema type ('string', 'integer', or 'number').");
+            return (false, allowsNull, SchemaValidationMessages.IdentifierMustDeclareScalarType(normalizedPointer));
         }
 
         var hasCompatibleScalar = typeSet.Contains("string") || typeSet.Contains("integer") || typeSet.Contains("number");
@@ -347,7 +348,7 @@ public static class IdentifierSchemaValidator
             return (
                 false,
                 allowsNull,
-                $"Identifier property at '{normalizedPointer}' has incompatible type '{foundTypes}'. Expected 'string', 'integer', or 'number'.");
+                SchemaValidationMessages.IdentifierIncompatibleType(normalizedPointer, foundTypes));
         }
 
         return (true, allowsNull, null);

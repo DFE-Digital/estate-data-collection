@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
+using EstateDataCollection.Common.Messages;
 
 namespace EstateDataCollection.Domain.Schema;
 
@@ -24,6 +25,12 @@ public class SchemaMetadata
     public SchemaIdentifierConfig? IdentifierConfig { get; private set; }
 
     [JsonInclude]
+    public SchemaValidationPolicy? ValidationPolicy { get; private set; }
+
+    [JsonIgnore]
+    public SchemaValidationPolicy EffectiveValidationPolicy => ValidationPolicy ?? SchemaValidationPolicy.Default;
+
+    [JsonInclude]
     public DateTimeOffset? LastTestRunAtUtc { get; private set; }
 
     [JsonInclude]
@@ -44,6 +51,21 @@ public class SchemaMetadata
     [JsonInclude]
     public IReadOnlyList<SchemaEngineTraceRecord>? LastTestRunEngineTraces { get; private set; }
 
+    [JsonInclude]
+    public string? SignedOffBy { get; private set; }
+
+    [JsonInclude]
+    public DateTimeOffset? SignedOffAtUtc { get; private set; }
+
+    [JsonInclude]
+    public DateTimeOffset? DeletedAtUtc { get; private set; }
+
+    [JsonInclude]
+    public bool HasErrorReport { get; private set; }
+
+    [JsonInclude]
+    public string? ErrorSummary { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     
     #region Domain Factories
@@ -56,13 +78,15 @@ public class SchemaMetadata
         string name,
         int version,
         string rawJsonSchema,
-        SchemaIdentifierConfig? identifierConfig = null)
+        SchemaIdentifierConfig? identifierConfig = null,
+        SchemaValidationPolicy? validationPolicy = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(version);
         ArgumentException.ThrowIfNullOrWhiteSpace(rawJsonSchema);
 
         var normalizedConfig = ValidateAndNormaliseIdentifier(identifierConfig);
+        var normalizedPolicy = ValidateAndNormalisePolicy(validationPolicy);
 
         return new SchemaMetadata
         {
@@ -71,7 +95,58 @@ public class SchemaMetadata
             RawJsonSchema = rawJsonSchema,
             Sha256Hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawJsonSchema))),
             State = SchemaLifecycleState.Draft,
-            IdentifierConfig = normalizedConfig
+            IdentifierConfig = normalizedConfig,
+            ValidationPolicy = normalizedPolicy
+        };
+    }
+
+    /// <summary>
+    /// Factory for consuming a schema contract that failed hard pre-flight checks into <see cref="SchemaLifecycleState.Invalid"/>.
+    /// Reserves the version key in the registry alongside <c>.meta.json</c> and <c>.error.json</c>.
+    /// </summary>
+    public static SchemaMetadata CreateInvalid(
+        string name,
+        int version,
+        string? rawJsonSchema,
+        SchemaIdentifierConfig? identifierConfig = null,
+        SchemaValidationPolicy? validationPolicy = null,
+        string? errorSummary = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(version);
+
+        var schemaText = rawJsonSchema ?? string.Empty;
+        SchemaIdentifierConfig? safeIdConfig = null;
+        try
+        {
+            safeIdConfig = ValidateAndNormaliseIdentifier(identifierConfig);
+        }
+        catch
+        {
+            safeIdConfig = identifierConfig;
+        }
+
+        SchemaValidationPolicy? safePolicy = null;
+        try
+        {
+            safePolicy = ValidateAndNormalisePolicy(validationPolicy);
+        }
+        catch
+        {
+            safePolicy = validationPolicy;
+        }
+
+        return new SchemaMetadata
+        {
+            Name = name,
+            Version = version,
+            RawJsonSchema = schemaText,
+            Sha256Hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(schemaText))),
+            State = SchemaLifecycleState.Invalid,
+            IdentifierConfig = safeIdConfig,
+            ValidationPolicy = safePolicy,
+            HasErrorReport = true,
+            ErrorSummary = string.IsNullOrWhiteSpace(errorSummary) ? null : errorSummary.Trim()
         };
     }
 
@@ -82,42 +157,29 @@ public class SchemaMetadata
     /// <summary>
     /// Can this schema accept any traffic? (Active versions and Deprecated versions in grace period)
     /// </summary>
-    public bool CanAcceptTraffic
-    {
-        get { return State is SchemaLifecycleState.Active or SchemaLifecycleState.Deprecated; }
-    }
+    public bool CanAcceptTraffic => State is SchemaLifecycleState.Active or SchemaLifecycleState.Deprecated;
 
     /// <summary>
     /// Is this eligible to be the default version when no explicit version is requested?
     /// </summary>
-    public bool CanBeDefault
-    {
-        get { return State is SchemaLifecycleState.Active; }
-    }
+    public bool CanBeDefault => State is SchemaLifecycleState.Active;
 
     /// <summary>
     /// Can the schema definition still be edited or overwritten?
     /// </summary>
-    public bool IsMutable
-    {
-        get { return State is SchemaLifecycleState.Draft; }
-    }
+    public bool IsMutable => State is SchemaLifecycleState.Draft;
 
     /// <summary>
     /// Can dry-run test payloads be executed against this schema?
     /// </summary>
-    public bool AllowsDryRun
-    {
-        get { return State is SchemaLifecycleState.Draft or SchemaLifecycleState.Validated; }
-    }
+    public bool AllowsDryRun => State is SchemaLifecycleState.Draft or SchemaLifecycleState.Validated or SchemaLifecycleState.Unvalidated;
 
     /// <summary>
     /// Can the schema be used
     /// </summary>
-    public bool IsRetired
-    {
-        get { return State is SchemaLifecycleState.Retired; }
-    }
+    public bool IsRetired => State is SchemaLifecycleState.Retired;
+
+    public bool IsDeleted => State is SchemaLifecycleState.Deleted;
 
     #endregion
 
@@ -184,7 +246,10 @@ public class SchemaMetadata
         return includeUnscheduled &&
                State is SchemaLifecycleState.Unassigned
                    or SchemaLifecycleState.Draft
-                   or SchemaLifecycleState.Validated;
+                   or SchemaLifecycleState.Validated
+                   or SchemaLifecycleState.Invalid
+                   or SchemaLifecycleState.Unvalidated
+                   or SchemaLifecycleState.Deleted;
     }
 
     /// <summary>
@@ -206,7 +271,71 @@ public class SchemaMetadata
     {
         EffectiveFromUtc = null;
         EffectiveToUtc = null;
+        HasErrorReport = false;
+        ErrorSummary = null;
         State = SchemaLifecycleState.Validated;
+    }
+
+    /// <summary>
+    /// Marks the schema as <see cref="SchemaLifecycleState.Unvalidated"/> when hard checks passed
+    /// but warnings were recorded and require explicit sign-off before scheduling.
+    /// </summary>
+    public void MarkUnvalidated(string? errorSummary = null)
+    {
+        EffectiveFromUtc = null;
+        EffectiveToUtc = null;
+        HasErrorReport = true;
+        ErrorSummary = string.IsNullOrWhiteSpace(errorSummary) ? null : errorSummary.Trim();
+        State = SchemaLifecycleState.Unvalidated;
+    }
+
+    /// <summary>
+    /// Marks the schema as <see cref="SchemaLifecycleState.Invalid"/> when hard checks failed.
+    /// </summary>
+    public void MarkInvalid(string? errorSummary = null)
+    {
+        EffectiveFromUtc = null;
+        EffectiveToUtc = null;
+        HasErrorReport = true;
+        ErrorSummary = string.IsNullOrWhiteSpace(errorSummary) ? null : errorSummary.Trim();
+        State = SchemaLifecycleState.Invalid;
+    }
+
+    /// <summary>
+    /// Explicitly signs off an <see cref="SchemaLifecycleState.Unvalidated"/> schema version,
+    /// transitioning it to <see cref="SchemaLifecycleState.Validated"/>.
+    /// </summary>
+    public void SignOff(string signedOffBy)
+    {
+        if (State != SchemaLifecycleState.Unvalidated)
+        {
+            throw new InvalidOperationException(DomainMessages.OnlyUnvalidatedCanBeSignedOff(State));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(signedOffBy);
+
+        SignedOffBy = signedOffBy.Trim();
+        SignedOffAtUtc = DateTimeOffset.UtcNow;
+        HasErrorReport = false;
+        ErrorSummary = null;
+        State = SchemaLifecycleState.Validated;
+    }
+
+    /// <summary>
+    /// Marks the schema version as a <see cref="SchemaLifecycleState.Deleted"/> tombstone
+    /// while preserving <c>.meta.json</c> and <c>.error.json</c> so the version key remains consumed.
+    /// </summary>
+    public void MarkDeleted()
+    {
+        if (State == SchemaLifecycleState.Deleted)
+        {
+            return;
+        }
+
+        EffectiveFromUtc = null;
+        EffectiveToUtc = null;
+        DeletedAtUtc = DateTimeOffset.UtcNow;
+        State = SchemaLifecycleState.Deleted;
     }
 
     /// <summary>
@@ -215,6 +344,14 @@ public class SchemaMetadata
     public void ConfigureIdentifier(SchemaIdentifierConfig? identifierConfig)
     {
         IdentifierConfig = ValidateAndNormaliseIdentifier(identifierConfig);
+    }
+
+    /// <summary>
+    /// Configures or updates the per-schema-version validation policy (severity gating, workflow pipeline override, draft reference policy).
+    /// </summary>
+    public void ConfigureValidationPolicy(SchemaValidationPolicy? validationPolicy)
+    {
+        ValidationPolicy = ValidateAndNormalisePolicy(validationPolicy);
     }
 
     /// <summary>
@@ -240,6 +377,12 @@ public class SchemaMetadata
         LastTestRunEngineTraces = engineTraces is { Count: > 0 } ? engineTraces.ToArray() : [];
     }
 
+    public void UpdateErrorReportStatus(bool hasErrorReport, string? errorSummary = null)
+    {
+        HasErrorReport = hasErrorReport;
+        ErrorSummary = string.IsNullOrWhiteSpace(errorSummary) ? null : errorSummary.Trim();
+    }
+
     private static SchemaIdentifierConfig? ValidateAndNormaliseIdentifier(SchemaIdentifierConfig? identifierConfig)
     {
         if (identifierConfig is null)
@@ -252,18 +395,42 @@ public class SchemaMetadata
         {
             var reason = validation.Error.ValidationErrors.FirstOrDefault()?.Message
                          ?? validation.Error.Description
-                         ?? "Invalid identifier configuration.";
+                         ?? DomainMessages.InvalidIdentifierConfigFallback;
             throw new ArgumentException(reason, nameof(identifierConfig));
         }
 
         return identifierConfig.Normalise();
     }
 
+    private static SchemaValidationPolicy? ValidateAndNormalisePolicy(SchemaValidationPolicy? validationPolicy)
+    {
+        if (validationPolicy is null)
+        {
+            return null;
+        }
+
+        var validation = validationPolicy.ValidateDefinition();
+        if (validation.IsFailure)
+        {
+            var reason = validation.Error.ValidationErrors.FirstOrDefault()?.Message
+                         ?? validation.Error.Description
+                         ?? DomainMessages.InvalidValidationPolicyFallback;
+            throw new ArgumentException(reason, nameof(validationPolicy));
+        }
+
+        return validationPolicy.Normalise();
+    }
+
     public void ScheduleActivation(DateTimeOffset effectiveFromUtc, DateTimeOffset? effectiveToUtc = null)
     {
+        if (State is SchemaLifecycleState.Invalid or SchemaLifecycleState.Unvalidated or SchemaLifecycleState.Deleted)
+        {
+            throw new InvalidOperationException(DomainMessages.SchemaStateCannotBeScheduledOrActivated(State));
+        }
+
         if (effectiveToUtc.HasValue && effectiveToUtc.Value <= effectiveFromUtc)
         {
-            throw new ArgumentException("EffectiveToUtc must be later than EffectiveFromUtc.", nameof(effectiveToUtc));
+            throw new ArgumentException(DomainMessages.EffectiveToBeforeEffectiveFrom, nameof(effectiveToUtc));
         }
 
         EffectiveFromUtc = effectiveFromUtc;
@@ -275,11 +442,21 @@ public class SchemaMetadata
 
     public void Deprecate()
     {
+        if (State is SchemaLifecycleState.Invalid or SchemaLifecycleState.Unvalidated or SchemaLifecycleState.Deleted)
+        {
+            throw new InvalidOperationException(DomainMessages.SchemaStateCannotBeDeprecated(State));
+        }
+
         State = SchemaLifecycleState.Deprecated;
     }
 
     public void Retire()
     {
+        if (State is SchemaLifecycleState.Invalid or SchemaLifecycleState.Deleted)
+        {
+            throw new InvalidOperationException(DomainMessages.SchemaStateCannotBeRetired(State));
+        }
+
         State = SchemaLifecycleState.Retired;
     }
 

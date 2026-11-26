@@ -11,8 +11,5 @@ public sealed record DashboardTestRunItemViewModel(
     string? DetailsText,
     string? EngineTracesSummary = null)
 {
-    public bool HasEngineTracesSummary
-    {
-        get { return !string.IsNullOrWhiteSpace(EngineTracesSummary); }
-    }
+    public bool HasEngineTracesSummary => !string.IsNullOrWhiteSpace(EngineTracesSummary);
 }

@@ -1,24 +1,23 @@
 using System.Text.Json.Serialization;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Domain.Schema;
 
 /// <summary>
-/// Per-schema-version metadata configuration for extracting an establishment / school identifier
-/// (e.g. URN, UKPRN, LAEstab, or any custom property) from a submission payload.
+/// Per-schema-version metadata configuration for extracting an establishment identifier
+/// (e.g. URN, UKPRN, LAEstab, or any custom scalar property) from a submission payload.
 /// Stored in {schemaName}/v{version}.meta.json so that ODCS data contracts
 /// remain agnostic of EDC storage partitioning and identifier extraction mechanics.
 /// </summary>
 public sealed record SchemaIdentifierConfig
 {
     public const string NoneType = "None";
-    public const string DefaultUrnType = "URN";
 
     /// <summary>
     /// Identifier type/label (e.g. "URN", "UKPRN", "LAEstab", custom label, or "None" to disable).
-    /// Defaults to "URN".
     /// </summary>
-    public string Type { get; init; } = DefaultUrnType;
+    public string Type { get; init; } = NoneType;
 
     /// <summary>
     /// JSON Pointer or dot-notation path to the identifier within the submission payload
@@ -29,15 +28,12 @@ public sealed record SchemaIdentifierConfig
 
     /// <summary>
     /// Automatically derived from the JSON Schema's 'required' declaration along <see cref="JsonPointer"/>
-    /// (falling back to ValidationOptions.RequireUrnOnFinalise when schema metadata is unavailable).
+    /// (falling back to ValidationOptions.RequireIdentifierOnFinalise when schema metadata is unavailable).
     /// </summary>
     public bool? Required { get; init; }
 
     [JsonIgnore]
-    public bool IsDisabled
-    {
-        get { return string.Equals(Type?.Trim(), NoneType, StringComparison.OrdinalIgnoreCase); }
-    }
+    public bool IsDisabled => string.Equals(Type?.Trim(), NoneType, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Validates structural invariants of this identifier configuration (type label and pointer syntax).
@@ -48,8 +44,8 @@ public sealed record SchemaIdentifierConfig
         {
             return Error.Validation(
                 ErrorCodes.SchemaInvalidIdentifierConfig,
-                new { Message = "Identifier Type cannot be empty. Use 'None' to disable or provide an identifier type (e.g. 'URN', 'UKPRN', 'LAEstab')." },
-                [new ValidationError("identifierConfig.type", "Identifier Type cannot be empty.")]);
+                new { Message = DomainMessages.IdentifierTypeEmpty },
+                [new ValidationError("identifierConfig.type", DomainMessages.IdentifierTypeShortEmpty)]);
         }
 
         var trimmedType = Type.Trim();
@@ -60,8 +56,8 @@ public sealed record SchemaIdentifierConfig
             {
                 return Error.Validation(
                     ErrorCodes.SchemaInvalidIdentifierConfig,
-                    new { Message = "Identifier JsonPointer must be empty when identifier Type is 'None'." },
-                    [new ValidationError("identifierConfig.jsonPointer", "JsonPointer cannot be set when identifier Type is 'None'.")]);
+                    new { Message = DomainMessages.IdentifierPointerForbiddenWhenNone },
+                    [new ValidationError("identifierConfig.jsonPointer", DomainMessages.IdentifierPointerShortForbiddenWhenNone)]);
             }
 
             return Result.Success();
@@ -69,26 +65,28 @@ public sealed record SchemaIdentifierConfig
 
         if (trimmedType.Contains('/') || trimmedType.Contains('\\') || trimmedType.Contains("..") || trimmedType.Any(char.IsWhiteSpace))
         {
+            var invalidTypeMsg = DomainMessages.IdentifierTypeInvalidChars(trimmedType);
             return Error.Validation(
                 ErrorCodes.SchemaInvalidIdentifierConfig,
-                new { Message = $"Identifier Type '{trimmedType}' must not contain whitespace, slashes, or '..'." },
-                [new ValidationError("identifierConfig.type", $"Identifier Type '{trimmedType}' must not contain whitespace, slashes, or '..'.")]);
+                new { Message = invalidTypeMsg },
+                [new ValidationError("identifierConfig.type", invalidTypeMsg)]);
         }
 
         if (!string.IsNullOrWhiteSpace(JsonPointer) && !TryParsePointerSegments(JsonPointer, out _))
         {
             return Error.Validation(
                 ErrorCodes.SchemaInvalidIdentifierConfig,
-                new { Message = $"Identifier JsonPointer '{JsonPointer}' is not a valid JSON Pointer or dot-notation object path." },
-                [new ValidationError("identifierConfig.jsonPointer", $"JsonPointer '{JsonPointer}' is not a valid object property path (examples: '/urn', '/school/urn').")]);
+                new { Message = DomainMessages.IdentifierPointerInvalid(JsonPointer) },
+                [new ValidationError("identifierConfig.jsonPointer", DomainMessages.IdentifierPointerInvalidWithExamples(JsonPointer))]);
         }
 
         return Result.Success();
     }
 
-    public SchemaIdentifierConfig Normalise()
+    public SchemaIdentifierConfig Normalise(string? defaultType = null)
     {
-        var trimmedType = string.IsNullOrWhiteSpace(Type) ? DefaultUrnType : Type.Trim();
+        var fallbackType = string.IsNullOrWhiteSpace(defaultType) ? NoneType : defaultType.Trim();
+        var trimmedType = string.IsNullOrWhiteSpace(Type) ? fallbackType : Type.Trim();
         if (string.Equals(trimmedType, NoneType, StringComparison.OrdinalIgnoreCase))
         {
             return new SchemaIdentifierConfig
@@ -99,9 +97,9 @@ public sealed record SchemaIdentifierConfig
             };
         }
 
-        if (string.Equals(trimmedType, DefaultUrnType, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(trimmedType, fallbackType, StringComparison.OrdinalIgnoreCase))
         {
-            trimmedType = DefaultUrnType;
+            trimmedType = fallbackType;
         }
 
         var pointer = string.IsNullOrWhiteSpace(JsonPointer) ? null : JsonPointer.Trim();

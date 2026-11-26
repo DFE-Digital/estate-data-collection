@@ -2,7 +2,9 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Extensions;
+using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,7 +27,7 @@ public sealed partial class IngestDraftSchemaUseCase(
     {
         if (string.IsNullOrWhiteSpace(request.BlobPath))
         {
-            return Error.Failure(ErrorCodes.PayloadEmpty, "Draft blob path cannot be empty.");
+            return Error.Failure(ErrorCodes.PayloadEmpty, SchemaValidationMessages.DraftBlobPathEmpty);
         }
 
         _instrumentation.IngestingDraftBlob(request.BlobPath);
@@ -48,22 +50,24 @@ public sealed partial class IngestDraftSchemaUseCase(
                 Status: "IgnoredCompanionBlob");
         }
 
+        string? prelimSchemaId = null;
+        int? prelimVersion = null;
+        if (!string.IsNullOrWhiteSpace(artifact.RawSchemaJson))
+        {
+            ExtractJsonSchemaMetadata(artifact.RawSchemaJson, out prelimSchemaId, out prelimVersion);
+        }
+
+        var fallbackSchemaName = ResolveSchemaName(artifact.SchemaName, prelimSchemaId, request.BlobPath);
+        var fallbackVersion = artifact.Version ?? prelimVersion ?? 1;
+
         if (artifact.IdentifierConfig is not null)
         {
             var idDefValidation = artifact.IdentifierConfig.ValidateDefinition();
             if (idDefValidation.IsFailure)
             {
-                var idErrMsg = idDefValidation.Error.ValidationErrors.FirstOrDefault()?.Message
-                               ?? idDefValidation.Error.Description
-                               ?? "Invalid identifier configuration in draft .meta.json.";
-                await schemaRegistry.RecordDraftIngestionFailureAsync(
-                    request.BlobPath,
-                    artifact.SchemaName,
-                    artifact.Version,
-                    [idErrMsg],
-                    cancellationToken);
-
-                return idDefValidation.Error;
+                return await PersistInvalidDraftWithConflictCheckAsync(
+                    request.BlobPath, artifact, fallbackSchemaName, fallbackVersion,
+                    idDefValidation.Error, "identifierConfig", cancellationToken);
             }
         }
 
@@ -75,20 +79,12 @@ public sealed partial class IngestDraftSchemaUseCase(
 
         if (resolvedInputs.IsFailure)
         {
-            var errMsg = resolvedInputs.Error.ValidationErrors.FirstOrDefault()?.Message
-                         ?? resolvedInputs.Error.Description
-                         ?? "Failed to parse ODCS YAML contract.";
-            await schemaRegistry.RecordDraftIngestionFailureAsync(
-                request.BlobPath,
-                artifact.SchemaName,
-                artifact.Version,
-                [errMsg],
-                cancellationToken);
-
-            return resolvedInputs.Error;
+            return await PersistInvalidDraftWithConflictCheckAsync(
+                request.BlobPath, artifact, fallbackSchemaName, fallbackVersion,
+                resolvedInputs.Error, "odcs", cancellationToken);
         }
 
-        var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, metadataContractId, rawVersionText) = resolvedInputs.Value;
+        var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, metadataContractId, rawVersionText, parsedValidationPolicy) = resolvedInputs.Value;
         var metadataVersion = TryParseMajorVersion(rawVersionText);
 
         // JSON schema metadata takes precedence over ODCS YAML metadata when both are present
@@ -106,63 +102,39 @@ public sealed partial class IngestDraftSchemaUseCase(
         var schemaName = ResolveSchemaName(artifact.SchemaName, metadataContractId, request.BlobPath);
         var version = artifact.Version ?? metadataVersion ?? 1;
 
-        // If a standalone .rules.json / .logic.json file arrived and no companion .schema.json was in draft-schemas,
+        // If a standalone .rules.json file arrived and no companion .schema.json was in draft-schemas,
         // check whether the active schemas container already has {schemaName}/v{version}.schema.json.
         if (string.IsNullOrWhiteSpace(effectiveSchemaJson) && !string.IsNullOrWhiteSpace(effectiveRulesJson))
         {
             var existingActive = await schemaRegistry.GetExplicitSchemaAsync(schemaName, version, cancellationToken);
-            if (existingActive.IsSuccess && !string.IsNullOrWhiteSpace(existingActive.Value.Metadata.RawJsonSchema))
+            if (existingActive.IsSuccess)
             {
-                effectiveSchemaJson = existingActive.Value.Metadata.RawJsonSchema;
+                if (existingActive.Value.Metadata.IsDeleted)
+                {
+                    return Error.Conflict(ErrorCodes.SchemaAlreadyExists, new { schemaName, version });
+                }
+
+                if (!string.IsNullOrWhiteSpace(existingActive.Value.Metadata.RawJsonSchema))
+                {
+                    effectiveSchemaJson = existingActive.Value.Metadata.RawJsonSchema;
+                }
             }
             else
             {
-                // Validate the rules syntax and any fixtures now; if valid, keep staged in draft-schemas until .schema.json lands.
-                var rulesOnlyVerification = await schemaVerifier.VerifyCandidateSchemaAsync(
-                    null,
-                    effectiveRulesJson,
-                    artifact.SampleValidFixtures,
-                    artifact.SampleInvalidFixtures,
-                    identifierConfig: null,
-                    cancellationToken);
-
-                if (rulesOnlyVerification.IsFailure)
-                {
-                    return rulesOnlyVerification.Error;
-                }
-
-                if (!rulesOnlyVerification.Value.IsSuccessful)
-                {
-                    await schemaRegistry.RecordDraftIngestionFailureAsync(
-                        request.BlobPath,
-                        schemaName,
-                        version,
-                        rulesOnlyVerification.Value.Errors,
-                        cancellationToken);
-
-                    var errors = rulesOnlyVerification.Value.ToValidationErrors("rules").ToList();
-
-                    _instrumentation.DraftVerificationFailed(
-                        request.BlobPath,
-                        schemaName,
-                        version,
-                        errors.Count,
-                        string.Join("; ", rulesOnlyVerification.Value.Errors));
-
-                    return Error.Validation(ErrorCodes.SchemaVerificationFailed, errors: errors);
-                }
-
-                _instrumentation.DraftRulesStagedAwaitingSchema(request.BlobPath, schemaName, version);
-                return new IngestDraftSchemaResult(
-                    BlobPath: request.BlobPath,
-                    SchemaName: schemaName,
-                    Version: version,
-                    Promoted: false,
-                    Status: "StagedAwaitingSchema");
+                var rulesOnlyResult = await HandleStandaloneRulesDraftAsync(
+                    request.BlobPath, schemaName, version, effectiveRulesJson, artifact, cancellationToken);
+                return rulesOnlyResult;
+            }
+        }
+        else
+        {
+            var conflict = await CheckConsumedConflictAsync(schemaName, version, cancellationToken);
+            if (conflict is not null)
+            {
+                return conflict;
             }
         }
 
-        // Verify structural JSON schema + quality rules + identifier alignment + in-flight fixtures
         var schemaParam = string.IsNullOrWhiteSpace(effectiveRulesJson)
             ? (effectiveSchemaJson ?? string.Empty)
             : effectiveSchemaJson;
@@ -174,73 +146,101 @@ public sealed partial class IngestDraftSchemaUseCase(
             artifact.SampleValidFixtures,
             artifact.SampleInvalidFixtures,
             artifact.IdentifierConfig,
-            cancellationToken);
+            cancellationToken,
+            parsedValidationPolicy);
 
         if (verification.IsFailure)
         {
             return verification.Error;
         }
 
-        if (!verification.Value.IsSuccessful)
+        var report = verification.Value;
+        var effectiveIdentifierConfig = report.ResolvedIdentifierConfig ?? artifact.IdentifierConfig;
+
+        if (!report.IsSuccessful)
         {
-            await schemaRegistry.RecordDraftIngestionFailureAsync(
-                request.BlobPath,
-                schemaName,
-                version,
-                verification.Value.Errors,
-                cancellationToken);
-
-            var errors = verification.Value.ToValidationErrors("schema").ToList();
-
             _instrumentation.DraftVerificationFailed(
                 request.BlobPath,
                 schemaName,
                 version,
-                errors.Count,
-                string.Join("; ", verification.Value.Errors));
+                report.Errors.Count,
+                string.Join("; ", report.Errors));
 
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, errors: errors);
-        }
-
-        var effectiveIdentifierConfig = verification.Value.ResolvedIdentifierConfig ?? artifact.IdentifierConfig;
-
-        SchemaMetadata metadata;
-        try
-        {
-            metadata = SchemaMetadata.CreateDraft(schemaName, version, effectiveSchemaJson!, effectiveIdentifierConfig);
-            // Schema packs ingested from draft-schemas do not carry effective dates;
-            // they are promoted in Validated state (EffectiveFromUtc = null, EffectiveToUtc = null)
-            // until scheduled via the Admin API.
-            metadata.MarkValidated();
-        }
-        catch (Exception ex)
-        {
-            await schemaRegistry.RecordDraftIngestionFailureAsync(
-                request.BlobPath,
+            var persistFailed = await SchemaCandidatePersistence.PersistFailedVerificationAsync(
+                schemaRegistry,
                 schemaName,
                 version,
-                [ex.Message],
-                cancellationToken);
-
-            return Error.Validation(ErrorCodes.SchemaInvalidSchedule, ex.Message);
-        }
-
-        var hasFixtures = artifact.SampleValidFixtures.Count > 0 || artifact.SampleInvalidFixtures.Count > 0;
-        var saveResult = hasFixtures
-            ? await schemaRegistry.SaveSchemaAsync(
-                metadata,
+                effectiveSchemaJson ?? artifact.RawSchemaJson,
                 effectiveRulesJson,
                 rawOdcsYaml,
                 artifact.SampleValidFixtures,
                 artifact.SampleInvalidFixtures,
-                cancellationToken)
-            : (effectiveRulesJson is not null || rawOdcsYaml is not null
-                ? await schemaRegistry.SaveSchemaAsync(metadata, effectiveRulesJson, rawOdcsYaml, cancellationToken)
-                : await schemaRegistry.SaveSchemaAsync(metadata, cancellationToken));
+                effectiveIdentifierConfig,
+                parsedValidationPolicy,
+                report,
+                cancellationToken);
+
+            if (persistFailed.IsFailure)
+            {
+                return persistFailed.Error;
+            }
+
+            var (invalidMeta, errorReport) = persistFailed.Value;
+            _ = await schemaRegistry.CompleteDraftIngestionAsync(artifact, cancellationToken);
+            return new IngestDraftSchemaResult(
+                BlobPath: request.BlobPath,
+                SchemaName: schemaName,
+                Version: version,
+                Promoted: false,
+                Status: "Invalid",
+                State: invalidMeta.State.ToNode(),
+                Sha256Hash: invalidMeta.Sha256Hash,
+                HasErrorReport: true,
+                ErrorSummary: invalidMeta.ErrorSummary,
+                Issues: errorReport.Issues);
+        }
+
+        SchemaMetadata metadata;
+        SchemaErrorReport? warningReport;
+        try
+        {
+            metadata = SchemaCandidatePersistence.CreateVerifiedMetadata(
+                schemaName,
+                version,
+                effectiveSchemaJson!,
+                effectiveIdentifierConfig,
+                parsedValidationPolicy,
+                report,
+                out warningReport);
+        }
+        catch (Exception ex)
+        {
+            await schemaRegistry.RecordDraftIngestionFailureAsync(
+                request.BlobPath, schemaName, version, [ex.Message], cancellationToken);
+            return Error.Validation(ErrorCodes.SchemaInvalidSchedule, ex.Message);
+        }
+
+        var saveResult = await SchemaCandidatePersistence.SaveWithArtifactsAsync(
+            schemaRegistry,
+            metadata,
+            effectiveRulesJson,
+            rawOdcsYaml,
+            artifact.SampleValidFixtures,
+            artifact.SampleInvalidFixtures,
+            cancellationToken);
 
         if (saveResult.IsFailure)
         {
             return saveResult.Error;
+        }
+
+        if (warningReport is not null)
+        {
+            var errSave = await schemaRegistry.SaveErrorReportAsync(warningReport, cancellationToken);
+            if (errSave.IsFailure)
+            {
+                return errSave.Error;
+            }
         }
 
         _ = await schemaRegistry.CompleteDraftIngestionAsync(artifact, cancellationToken);
@@ -251,9 +251,131 @@ public sealed partial class IngestDraftSchemaUseCase(
             SchemaName: schemaName,
             Version: version,
             Promoted: true,
-            Status: "Promoted",
+            Status: metadata.State == SchemaLifecycleState.Unvalidated ? "PromotedUnvalidated" : "Promoted",
             State: metadata.State.ToNode(),
-            Sha256Hash: metadata.Sha256Hash);
+            Sha256Hash: metadata.Sha256Hash,
+            HasErrorReport: metadata.HasErrorReport,
+            ErrorSummary: metadata.ErrorSummary,
+            Issues: warningReport?.Issues ?? report.Issues);
+    }
+
+    private async Task<Result<IngestDraftSchemaResult>> HandleStandaloneRulesDraftAsync(
+        string blobPath,
+        string schemaName,
+        int version,
+        string effectiveRulesJson,
+        DraftSchemaArtifact artifact,
+        CancellationToken cancellationToken)
+    {
+        var rulesOnlyVerification = await schemaVerifier.VerifyCandidateSchemaAsync(
+            null,
+            effectiveRulesJson,
+            artifact.SampleValidFixtures,
+            artifact.SampleInvalidFixtures,
+            identifierConfig: null,
+            cancellationToken);
+
+        if (rulesOnlyVerification.IsFailure)
+        {
+            return rulesOnlyVerification.Error;
+        }
+
+        if (!rulesOnlyVerification.Value.IsSuccessful)
+        {
+            await schemaRegistry.RecordDraftIngestionFailureAsync(
+                blobPath,
+                schemaName,
+                version,
+                rulesOnlyVerification.Value.Errors,
+                cancellationToken);
+
+            var errors = rulesOnlyVerification.Value.ToValidationErrors("rules").ToList();
+            _instrumentation.DraftVerificationFailed(
+                blobPath,
+                schemaName,
+                version,
+                errors.Count,
+                string.Join("; ", rulesOnlyVerification.Value.Errors));
+
+            return Error.Validation(ErrorCodes.SchemaVerificationFailed, errors: errors);
+        }
+
+        _instrumentation.DraftRulesStagedAwaitingSchema(blobPath, schemaName, version);
+        return new IngestDraftSchemaResult(
+            BlobPath: blobPath,
+            SchemaName: schemaName,
+            Version: version,
+            Promoted: false,
+            Status: "StagedAwaitingSchema");
+    }
+
+    private async Task<Error?> CheckConsumedConflictAsync(
+        string schemaName,
+        int version,
+        CancellationToken cancellationToken)
+    {
+        var exists = await schemaRegistry.ExistsAsync(schemaName, version, cancellationToken);
+        if (exists.IsFailure)
+        {
+            return exists.Error;
+        }
+
+        return exists.Value
+            ? Error.Conflict(ErrorCodes.SchemaAlreadyExists, new { schemaName, version })
+            : null;
+    }
+
+    private async Task<Result<IngestDraftSchemaResult>> PersistInvalidDraftWithConflictCheckAsync(
+        string blobPath,
+        DraftSchemaArtifact artifact,
+        string schemaName,
+        int version,
+        Error error,
+        string defaultPath,
+        CancellationToken cancellationToken)
+    {
+        var conflict = await CheckConsumedConflictAsync(schemaName, version, cancellationToken);
+        if (conflict is not null)
+        {
+            return conflict;
+        }
+
+        var normalised = SchemaCandidatePersistence.NormaliseError(error, defaultPath);
+        _instrumentation.DraftVerificationFailed(blobPath, schemaName, version, normalised.Messages.Count, normalised.Summary);
+
+        var persist = await SchemaCandidatePersistence.PersistInvalidCandidateAsync(
+            schemaRegistry,
+            schemaName,
+            version,
+            artifact.RawSchemaJson,
+            artifact.RawRulesJson,
+            artifact.RawOdcsYaml,
+            artifact.SampleValidFixtures,
+            artifact.SampleInvalidFixtures,
+            artifact.IdentifierConfig,
+            validationPolicy: null,
+            error,
+            defaultPath,
+            cancellationToken);
+
+        if (persist.IsFailure)
+        {
+            return persist.Error;
+        }
+
+        var (metadata, report) = persist.Value;
+        _ = await schemaRegistry.CompleteDraftIngestionAsync(artifact, cancellationToken);
+        return new IngestDraftSchemaResult(
+            BlobPath: blobPath,
+            SchemaName: schemaName,
+            Version: version,
+            Promoted: false,
+            Status: "Invalid",
+            State: metadata.State.ToNode(),
+            Sha256Hash: metadata.Sha256Hash,
+            HasErrorReport: true,
+            ErrorSummary: metadata.ErrorSummary,
+            Issues: report.Issues);
     }
 
     private static string ResolveSchemaName(string? pathSchemaName, string? metadataContractId, string blobPath)
@@ -269,7 +391,7 @@ public sealed partial class IngestDraftSchemaUseCase(
         }
 
         var fileName = Path.GetFileName(blobPath);
-        foreach (var suffix in new[] { ".odcs.yaml", ".odcs.yml", ".schema.json", ".rules.json", ".logic.json", ".yaml", ".yml", ".json" })
+        foreach (var suffix in new[] { ".odcs.yaml", ".odcs.yml", ".schema.json", ".rules.json", ".yaml", ".yml", ".json" })
         {
             if (fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
             {

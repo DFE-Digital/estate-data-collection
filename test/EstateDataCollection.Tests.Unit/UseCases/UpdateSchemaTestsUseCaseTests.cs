@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models;
@@ -29,6 +30,7 @@ public sealed class UpdateSchemaTestsUseCaseTests
     [Fact]
     public async Task When_Fixtures_Pass_Verification_Should_Update_Blobs_And_Metadata()
     {
+        // Arrange
         var metadata = SchemaMetadata.CreateDraft(
             "school-site",
             1,
@@ -56,7 +58,9 @@ public sealed class UpdateSchemaTestsUseCaseTests
                 Arg.Is<IReadOnlyList<string>>(v => v.Count == 2),
                 Arg.Is<IReadOnlyList<string>>(inv => inv.Count == 1),
                 metadata.IdentifierConfig,
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [])));
 
         _registry.UpdateSchemaFixturesAsync(
@@ -70,12 +74,12 @@ public sealed class UpdateSchemaTestsUseCaseTests
         _registry.UpdateSchemaMetadataAsync(metadata, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var result = (await _sut.ExecuteAsync(new UpdateSchemaTestsRequest(
-            "school-site",
-            1,
-            newValid,
-            newInvalid))).ShouldSucceed();
+        var request = new UpdateSchemaTestsRequest("school-site", 1, newValid, newInvalid);
 
+        // Act
+        var result = (await _sut.ExecuteAsync(request)).ShouldSucceed();
+
+        // Assert
         result.SchemaName.Should().Be("school-site");
         result.Version.Should().Be(1);
         result.ValidFixtureCount.Should().Be(2);
@@ -99,6 +103,7 @@ public sealed class UpdateSchemaTestsUseCaseTests
     [Fact]
     public async Task When_Fixtures_Fail_Verification_Should_Return_ValidationError_And_Not_Overwrite_Blobs()
     {
+        // Arrange
         var metadata = SchemaMetadata.CreateDraft("school-site", 1, JsonSchemaFixtures.ValidV1Schema);
         var resolved = new ResolvedSchema(
             Metadata: metadata,
@@ -113,17 +118,23 @@ public sealed class UpdateSchemaTestsUseCaseTests
                 Arg.Any<IReadOnlyList<string>>(),
                 Arg.Any<IReadOnlyList<string>>(),
                 Arg.Any<SchemaIdentifierConfig?>(),
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult(
                 [],
                 [new ValidationMessage(typeof(UpdateSchemaTestsUseCaseTests), "SampleValidFixtures:0", "SampleValidFixtures:0 violated quality rules: capacity >= 0")])));
 
-        var result = await _sut.ExecuteAsync(new UpdateSchemaTestsRequest(
+        var request = new UpdateSchemaTestsRequest(
             "school-site",
             1,
             ValidFixtures: ["""{"urn":123456,"capacity":-5}"""],
-            InvalidFixtures: []));
+            InvalidFixtures: []);
 
+        // Act
+        var result = await _sut.ExecuteAsync(request);
+
+        // Assert
         var err = result.ShouldFailWith("Schema.VerificationFailed");
         err.Type.Should().Be(ErrorType.Validation);
         err.ValidationErrors.Should().ContainSingle(v =>
@@ -137,11 +148,16 @@ public sealed class UpdateSchemaTestsUseCaseTests
     [Fact]
     public async Task When_Schema_Does_Not_Exist_Should_Return_NotFound()
     {
+        // Arrange
         _registry.GetExplicitSchemaAsync("missing-schema", 4, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Failure(Error.NotFound(ErrorCodes.SchemaNotFound)));
 
-        var result = await _sut.ExecuteAsync(new UpdateSchemaTestsRequest("missing-schema", 4, [], []));
+        var request = new UpdateSchemaTestsRequest("missing-schema", 4, [], []);
 
+        // Act
+        var result = await _sut.ExecuteAsync(request);
+
+        // Assert
         result.ShouldFailWith("Schema.NotFound");
     }
 }

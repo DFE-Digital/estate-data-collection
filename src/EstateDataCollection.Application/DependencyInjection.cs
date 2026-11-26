@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Application.Validators.Workflow;
 using EstateDataCollection.Common.Markers;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,6 +13,9 @@ public static class DependencyInjection
         services.Scan(scan => scan
             .FromAssemblies(typeof(DependencyInjection).Assembly)
             .AddClasses(classes => classes.AssignableTo<IApplication>())
+            .AsImplementedInterfaces()
+            .WithScopedLifetime()
+            .AddClasses(classes => classes.AssignableTo<IWorkflowStep>())
             .AsImplementedInterfaces()
             .WithScopedLifetime()
             .AddClasses(classes => classes.AssignableTo<IUseCase>().Where(t => !t.IsGenericTypeDefinition))

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 
@@ -57,7 +58,7 @@ public sealed class GetSubmissionDetailUseCase(
         {
             if (string.IsNullOrWhiteSpace(mergedDraftPayload))
             {
-                pendingErrors = [new ValidationError("$", "No draft payload has been uploaded yet.")];
+                pendingErrors = [new ValidationError("$", SubmissionMessages.NoDraftPayloadUploadedYet)];
             }
             else
             {

@@ -1,3 +1,4 @@
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
@@ -41,10 +42,10 @@ public sealed record IdentifierConfigFieldsetViewModel(
             : matchedProp!.Pointer;
 
         var pointerPreview = isNone
-            ? "None (disabled)"
+            ? AdminUiMessages.IdentifierPointerNoneDisabled
             : (!string.IsNullOrWhiteSpace(activePointer)
                 ? activePointer
-                : "Not set — enter or select a property");
+                : AdminUiMessages.IdentifierPointerNotSet);
 
         var autoDerivedLabel = IdentifierPropertyDiscovery.DeriveTypeFromPointerOrNull(activePointer);
         var trimmedLabel = label?.Trim() ?? string.Empty;
@@ -54,27 +55,27 @@ public sealed record IdentifierConfigFieldsetViewModel(
 
         var labelInputValue = hasExplicitOverride ? trimmedLabel : string.Empty;
         var labelPreview = isNone
-            ? "None"
+            ? AdminUiMessages.IdentifierLabelNone
             : (hasExplicitOverride
                 ? trimmedLabel
-                : (autoDerivedLabel ?? "Derived from property name"));
+                : (autoDerivedLabel ?? AdminUiMessages.IdentifierLabelDerivedFromProperty));
 
         bool? effectiveRequired = isNone
             ? false
             : (required ?? matchedProp?.Required);
 
         var requiredPreview = isNone
-            ? "No (identifier partitioning disabled)"
+            ? AdminUiMessages.IdentifierRequiredNoDisabled
             : effectiveRequired switch
             {
-                true => "Yes (required by JSON Schema)",
-                false => "No (optional in JSON Schema)",
-                null => "Derived automatically from JSON Schema 'required' on Verify / Save"
+                true => AdminUiMessages.IdentifierRequiredYesSchema,
+                false => AdminUiMessages.IdentifierRequiredNoSchema,
+                null => AdminUiMessages.IdentifierRequiredAutoDerived
             };
 
         var labelPlaceholder = autoDerivedLabel is not null
-            ? $"Auto: {autoDerivedLabel}"
-            : "Derived from property";
+            ? AdminUiMessages.IdentifierLabelAutoPlaceholder(autoDerivedLabel)
+            : AdminUiMessages.IdentifierLabelPlaceholderFallback;
 
         var options = props
             .Select(p => new IdentifierPropertySelectOptionViewModel(
@@ -82,7 +83,7 @@ public sealed record IdentifierConfigFieldsetViewModel(
                 DerivedType: p.DerivedType,
                 RequiredAttributeValue: p.Required ? "true" : "false",
                 IsSelected: string.Equals(selectedPropValue, p.Pointer, StringComparison.OrdinalIgnoreCase),
-                DisplayText: $"{p.Pointer} ({p.ValueType}, {(p.Required ? "required" : "optional")})"))
+                DisplayText: AdminUiMessages.IdentifierOptionDisplay(p.Pointer, p.ValueType, p.Required)))
             .ToList();
 
         return new IdentifierConfigFieldsetViewModel(

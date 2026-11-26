@@ -7,6 +7,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.GetSchemaDetail;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -49,7 +50,7 @@ public sealed class PostRunSchemaVersionTestsEndpoint(
                 IncludeRetired: true),
             cancellationToken);
 
-        var meta = CreatePageMeta(http, $"Tests - {schemaName} v{version}", activeNav: "schemas");
+        var meta = CreatePageMeta(http, AdminUiMessages.TestsPageTitle(schemaName, version), activeNav: "schemas");
 
         if (runResult.IsFailure)
         {

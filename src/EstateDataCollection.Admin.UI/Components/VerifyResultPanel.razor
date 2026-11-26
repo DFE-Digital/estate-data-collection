@@ -9,19 +9,39 @@
         {
             <ErrorSummary Model="Model.ErrorSummary" />
         }
-        else if (Model.HasResult)
+
+        if (Model.HasResult)
         {
             <NotificationBanner Model="Model.SuccessBanner" />
+        }
 
+        if (Model.HasReport)
+        {
             if (Model.HasWarnings)
             {
                 <div class="govuk-warning-text govuk-!-margin-bottom-3">
                     <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
                     <strong class="govuk-warning-text__text">
                         <span class="govuk-visually-hidden">Warning</span>
-                        @Model.WarningCount invalid fixture(s) failed validation, but it is unknown if expected because <code class="dfe-code-badge">expectedErrors</code> was not configured.
+                        @if (Model.AllWarningsAreUnknownInvalidFixtures)
+                        {
+                            <span>@Model.WarningCount invalid fixture(s) failed validation, but it is unknown if expected because <code class="dfe-code-badge">expectedErrors</code> was not configured.</span>
+                        }
+                        else
+                        {
+                            <span>@Model.WarningCount warning(s) recorded during contract verification:</span>
+                        }
                     </strong>
                 </div>
+                if (Model.ShowWarningBullets)
+                {
+                    <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-4">
+                        @foreach (var warn in Model.Warnings)
+                        {
+                            <li>@warn</li>
+                        }
+                    </ul>
+                }
             }
 
             if (Model.ShowTabs)
@@ -30,6 +50,81 @@
                     <GovUkTabStrip Model="Model.Tabs" />
 
                     <GovUkTabPanel Tab="Model.SummaryTab">
+                        @if (Model.HasIssueGroups)
+                        {
+                            <div class="govuk-inset-text govuk-body-s govuk-!-margin-top-0 govuk-!-margin-bottom-3" id="verify-issues-by-severity">
+                                <strong>Issues by severity:</strong>
+                                @foreach (var group in Model.IssueGroups)
+                                {
+                                    <div class="govuk-!-margin-top-2">
+                                        <strong class="@group.TagCssClass">@group.SeverityLabel (@group.Count)</strong>
+                                        <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                                            @foreach (var item in group.Items)
+                                            {
+                                                <li>
+                                                    @if (item.HasPropertyPath)
+                                                    {
+                                                        <code class="dfe-code-badge">@item.PropertyPath</code>
+                                                    }
+                                                    <span>@item.Message</span>
+                                                    @if (item.HasEngineId)
+                                                    {
+                                                        <span class="govuk-hint">(@item.EngineId)</span>
+                                                    }
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (Model.HasAnalyserFindings)
+                        {
+                            <div class="govuk-inset-text govuk-body-s govuk-!-margin-top-0 govuk-!-margin-bottom-3" id="verify-analyser-findings">
+                                <strong>Contract consistency analyser findings (@Model.AnalyserFindings.Count):</strong>
+                                <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                                    @foreach (var finding in Model.AnalyserFindings)
+                                    {
+                                        <li>
+                                            <strong class="@finding.SeverityTagCssClass">@finding.SeverityName</strong>
+                                            @if (finding.HasPropertyPath)
+                                            {
+                                                <code class="dfe-code-badge">@finding.PropertyPath</code>
+                                            }
+                                            <span>@finding.Message</span>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+
+                        @if (Model.HasSyntaxErrors)
+                        {
+                            <div class="govuk-inset-text govuk-body-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">
+                                <strong>Syntax errors (@Model.SyntaxErrors.Count):</strong>
+                                <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                                    @foreach (var err in Model.SyntaxErrors)
+                                    {
+                                        <li>@err</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+
+                        @if (Model.HasFixtureErrors)
+                        {
+                            <div class="govuk-inset-text govuk-body-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">
+                                <strong>Fixture errors (@Model.FixtureErrors.Count):</strong>
+                                <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                                    @foreach (var err in Model.FixtureErrors)
+                                    {
+                                        <li>@err</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+
                         @if (Model.HasInvalidFixtureOutcomes)
                         {
                             <div class="govuk-inset-text govuk-body-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">
@@ -90,6 +185,35 @@
             }
             else
             {
+                if (Model.HasIssueGroups)
+                {
+                    <div class="govuk-inset-text govuk-body-s govuk-!-margin-top-0 govuk-!-margin-bottom-3" id="verify-issues-by-severity">
+                        <strong>Issues by severity:</strong>
+                        @foreach (var group in Model.IssueGroups)
+                        {
+                            <div class="govuk-!-margin-top-2">
+                                <strong class="@group.TagCssClass">@group.SeverityLabel (@group.Count)</strong>
+                                <ul class="govuk-list govuk-list--bullet govuk-!-margin-top-1 govuk-!-margin-bottom-0">
+                                    @foreach (var item in group.Items)
+                                    {
+                                        <li>
+                                            @if (item.HasPropertyPath)
+                                            {
+                                                <code class="dfe-code-badge">@item.PropertyPath</code>
+                                            }
+                                            <span>@item.Message</span>
+                                            @if (item.HasEngineId)
+                                            {
+                                                <span class="govuk-hint">(@item.EngineId)</span>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                }
+
                 if (Model.HasInvalidFixtureOutcomes)
                 {
                     <div class="govuk-inset-text govuk-body-s govuk-!-margin-top-0 govuk-!-margin-bottom-3">

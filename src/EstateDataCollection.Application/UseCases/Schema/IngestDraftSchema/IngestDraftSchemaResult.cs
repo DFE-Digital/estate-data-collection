@@ -1,4 +1,5 @@
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.UseCases.Schema.IngestDraftSchema;
 
@@ -12,4 +13,7 @@ public sealed record IngestDraftSchemaResult(
     bool Promoted,
     string Status,
     Node<int>? State = null,
-    string? Sha256Hash = null);
+    string? Sha256Hash = null,
+    bool HasErrorReport = false,
+    string? ErrorSummary = null,
+    IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? Issues = null);

@@ -11,6 +11,7 @@ public sealed class SchemaMetadataBuilder
     private DateTimeOffset? _effectiveFrom = DateTimeOffset.UtcNow.AddDays(-1);
     private DateTimeOffset? _effectiveTo;
     private SchemaIdentifierConfig? _identifierConfig;
+    private SchemaValidationPolicy? _validationPolicy;
     private bool _markValidated;
     private bool _retire;
 
@@ -71,6 +72,12 @@ public sealed class SchemaMetadataBuilder
         return this;
     }
 
+    public SchemaMetadataBuilder WithValidationPolicy(SchemaValidationPolicy? validationPolicy)
+    {
+        _validationPolicy = validationPolicy;
+        return this;
+    }
+
     public SchemaMetadataBuilder WithUrnPointer(string jsonPointer, bool required = true)
     {
         _identifierConfig = new SchemaIdentifierConfig
@@ -102,7 +109,7 @@ public sealed class SchemaMetadataBuilder
 
     public SchemaMetadata Build()
     {
-        var meta = SchemaMetadata.CreateDraft(_name, _version, _jsonSchema, _identifierConfig);
+        var meta = SchemaMetadata.CreateDraft(_name, _version, _jsonSchema, _identifierConfig, _validationPolicy);
 
         if (_effectiveFrom.HasValue)
         {

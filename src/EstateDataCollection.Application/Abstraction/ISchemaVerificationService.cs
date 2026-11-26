@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common.Markers;
 using EstateDataCollection.Common.Results;
@@ -13,5 +14,7 @@ public interface ISchemaVerificationService : IApplication
         IReadOnlyList<string> sampleValidPayloads,
         IReadOnlyList<string> sampleInvalidPayloads,
         SchemaIdentifierConfig? identifierConfig = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        SchemaValidationPolicy? validationPolicy = null,
+        IReadOnlyDictionary<string, JsonNode?>? ambientFixtures = null);
 }

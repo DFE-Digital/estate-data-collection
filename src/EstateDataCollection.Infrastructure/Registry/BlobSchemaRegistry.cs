@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
@@ -17,13 +16,15 @@ using Microsoft.Extensions.Options;
 
 namespace EstateDataCollection.Infrastructure.Registry;
 
-public sealed class BlobSchemaRegistry(
+public sealed partial class BlobSchemaRegistry(
     BlobServiceClient blobServiceClient,
     IOptions<BlobSchemaRegistryOptions> options,
     IMemoryCache cache,
     BlobSchemaRegistryInstrumentation? instrumentation = null,
     IOdcsContractParser? odcsParser = null) : ISchemaRegistry
 {
+    private static readonly JsonSchema EmptyCompiledSchema = JsonSchema.FromText("{}");
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -113,7 +114,7 @@ public sealed class BlobSchemaRegistry(
             var results = new List<SchemaMetadata>();
             foreach (var ((sName, ver), flags) in discoveredVersions.OrderBy(k => k.Key.Name).ThenBy(k => k.Key.Version))
             {
-                if (!flags.HasSchema)
+                if (!flags.HasSchema && !flags.HasMeta)
                 {
                     continue;
                 }
@@ -193,130 +194,6 @@ public sealed class BlobSchemaRegistry(
         }
     }
 
-    public async Task<Result> UpdateSchemaFixturesAsync(
-        string schemaName,
-        int version,
-        IReadOnlyList<string> validFixtures,
-        IReadOnlyList<string> invalidFixtures,
-        CancellationToken cancellationToken = default)
-    {
-        var namespacing = new { schemaName, version };
-        var schemasContainer = blobServiceClient.GetBlobContainerClient(options.Value.ContainerName);
-        var schemaBlob = schemasContainer.GetBlobClient(options.Value.SchemaBlobDirectory.FormatWith(namespacing));
-
-        if (!await schemaBlob.ExistsAsync(cancellationToken))
-        {
-            _instrumentation.SchemaBlobNotFound(schemaName, version);
-            return Error.NotFound(ErrorCodes.SchemaNotFound, new { schemaName, version });
-        }
-
-        var validFixturesBlob = schemasContainer.GetBlobClient(options.Value.ValidFixturesBlobDirectory.FormatWith(namespacing));
-        var invalidFixturesBlob = schemasContainer.GetBlobClient(options.Value.InvalidFixturesBlobDirectory.FormatWith(namespacing));
-
-        var validExisted = false;
-        string? previousValidSnapshot = null;
-        var invalidExisted = false;
-        string? previousInvalidSnapshot = null;
-        var validModified = false;
-        var invalidModified = false;
-
-        try
-        {
-            if (await validFixturesBlob.ExistsAsync(cancellationToken))
-            {
-                validExisted = true;
-                previousValidSnapshot = (await validFixturesBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-            }
-
-            if (await invalidFixturesBlob.ExistsAsync(cancellationToken))
-            {
-                invalidExisted = true;
-                previousInvalidSnapshot = (await invalidFixturesBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-            }
-
-            if (validFixtures.Count > 0)
-            {
-                var validJson = DraftSchemaBlobPathParser.SerialiseFixturesArray(validFixtures);
-                using var validStream = new MemoryStream(Encoding.UTF8.GetBytes(validJson));
-                await validFixturesBlob.UploadAsync(validStream, new BlobUploadOptions
-                {
-                    HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" }
-                }, cancellationToken);
-                validModified = true;
-            }
-            else if (validExisted)
-            {
-                await validFixturesBlob.DeleteIfExistsAsync(cancellationToken: cancellationToken);
-                validModified = true;
-            }
-
-            if (invalidFixtures.Count > 0)
-            {
-                var invalidJson = DraftSchemaBlobPathParser.SerialiseFixturesArray(invalidFixtures);
-                using var invalidStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
-                await invalidFixturesBlob.UploadAsync(invalidStream, new BlobUploadOptions
-                {
-                    HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" }
-                }, cancellationToken);
-                invalidModified = true;
-            }
-            else if (invalidExisted)
-            {
-                await invalidFixturesBlob.DeleteIfExistsAsync(cancellationToken: cancellationToken);
-                invalidModified = true;
-            }
-
-            cache.Remove(options.Value.CacheKey.FormatWith(namespacing));
-            _instrumentation.SchemaFixturesUpdated(schemaName, version, validFixtures.Count, invalidFixtures.Count);
-
-            return Result.Success();
-        }
-        catch (Exception ex)
-        {
-            try
-            {
-                if (validModified)
-                {
-                    if (validExisted && previousValidSnapshot is not null)
-                    {
-                        using var restoreValid = new MemoryStream(Encoding.UTF8.GetBytes(previousValidSnapshot));
-                        await validFixturesBlob.UploadAsync(restoreValid, new BlobUploadOptions
-                        {
-                            HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" }
-                        }, CancellationToken.None);
-                    }
-                    else if (!validExisted)
-                    {
-                        await validFixturesBlob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                    }
-                }
-
-                if (invalidModified)
-                {
-                    if (invalidExisted && previousInvalidSnapshot is not null)
-                    {
-                        using var restoreInvalid = new MemoryStream(Encoding.UTF8.GetBytes(previousInvalidSnapshot));
-                        await invalidFixturesBlob.UploadAsync(restoreInvalid, new BlobUploadOptions
-                        {
-                            HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" }
-                        }, CancellationToken.None);
-                    }
-                    else if (!invalidExisted)
-                    {
-                        await invalidFixturesBlob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                    }
-                }
-            }
-            catch (Exception rollbackEx)
-            {
-                _instrumentation.SchemaSaveToBlobRollbackFailed(schemaName, version, rollbackEx.Message);
-            }
-
-            _instrumentation.SchemaSaveToBlobFailed(schemaName, version, ex.Message);
-            return Error.Failure(ErrorCodes.SchemaPersistFailed, new { ex.Message });
-        }
-    }
-
     public async Task<Result<ResolvedSchema>> GetExplicitSchemaAsync(string schemaName, int version, CancellationToken cancellationToken = default)
     {
         var namespacing = new { schemaName, version };
@@ -335,17 +212,23 @@ public sealed class BlobSchemaRegistry(
         var schemaBlob = schemasContainer.GetBlobClient(options.Value.SchemaBlobDirectory.FormatWith(namespacing));
         var metaBlob = schemasContainer.GetBlobClient(options.Value.MetaBlobDirectory.FormatWith(namespacing));
 
-        if (!await schemaBlob.ExistsAsync(cancellationToken))
+        var schemaExists = (await schemaBlob.ExistsAsync(cancellationToken)).Value;
+        var metaExists = (await metaBlob.ExistsAsync(cancellationToken)).Value;
+
+        if (!schemaExists && !metaExists)
         {
             _instrumentation.SchemaBlobNotFound(schemaName, version);
             return Error.NotFound(ErrorCodes.SchemaNotFound, new { schemaName, version });
         }
 
-        var schemaJson = (await schemaBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-        var compiledSchema = JsonSchema.FromText(schemaJson);
+        var schemaJson = schemaExists
+            ? (await schemaBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString()
+            : string.Empty;
+
+        var compiledSchema = CompileSchemaSafe(schemaJson);
 
         SchemaMetadata metadata;
-        if (await metaBlob.ExistsAsync(cancellationToken))
+        if (metaExists)
         {
             var metaJson = (await metaBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
             metadata = JsonSerializer.Deserialize<SchemaMetadata>(metaJson, JsonOptions)!;
@@ -364,16 +247,7 @@ public sealed class BlobSchemaRegistry(
         if (await rulesBlob.ExistsAsync(cancellationToken))
         {
             rawRulesJson = (await rulesBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-            rules = JsonSerializer.Deserialize<List<BusinessRule>>(rawRulesJson, JsonOptions);
-        }
-        else if (!string.Equals(options.Value.RulesBlobDirectory, options.Value.LogicBlobDirectory, StringComparison.OrdinalIgnoreCase))
-        {
-            var logicBlob = schemasContainer.GetBlobClient(options.Value.LogicBlobDirectory.FormatWith(namespacing));
-            if (await logicBlob.ExistsAsync(cancellationToken))
-            {
-                rawRulesJson = (await logicBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-                rules = JsonSerializer.Deserialize<List<BusinessRule>>(rawRulesJson, JsonOptions);
-            }
+            rules = TryDeserializeRules(rawRulesJson);
         }
 
         var validFixtures = await TryLoadFixturesAsync(
@@ -388,7 +262,12 @@ public sealed class BlobSchemaRegistry(
             consumedBlobs: null,
             cancellationToken);
 
-        var resolved = new ResolvedSchema(metadata, compiledSchema, rules, rawRulesJson, validFixtures, invalidFixtures);
+        var errorReport = await TryLoadErrorReportAsync(
+            schemasContainer,
+            options.Value.ErrorBlobDirectory.FormatWith(namespacing),
+            cancellationToken);
+
+        var resolved = new ResolvedSchema(metadata, compiledSchema, rules, rawRulesJson, validFixtures, invalidFixtures, errorReport);
         cache.Set(key, resolved, TimeSpan.FromMinutes(15));
         _instrumentation.SchemaLoadedFromBlob(schemaName, version);
 
@@ -407,8 +286,13 @@ public sealed class BlobSchemaRegistry(
 
         var schemasContainer = blobServiceClient.GetBlobContainerClient(options.Value.ContainerName);
         var schemaBlob = schemasContainer.GetBlobClient(options.Value.SchemaBlobDirectory.FormatWith(namespacing));
+        if ((await schemaBlob.ExistsAsync(cancellationToken)).Value)
+        {
+            return true;
+        }
 
-        return (await schemaBlob.ExistsAsync(cancellationToken)).Value;
+        var metaBlob = schemasContainer.GetBlobClient(options.Value.MetaBlobDirectory.FormatWith(namespacing));
+        return (await metaBlob.ExistsAsync(cancellationToken)).Value;
     }
 
     public Task<Result> SaveSchemaAsync(SchemaMetadata metadata, CancellationToken cancellationToken = default)
@@ -434,7 +318,6 @@ public sealed class BlobSchemaRegistry(
         CancellationToken cancellationToken = default)
     {
         var namespacing = new { schemaName = metadata.Name, version = metadata.Version };
-
         var schemasContainer = blobServiceClient.GetBlobContainerClient(options.Value.ContainerName);
 
         var schemaBlob = schemasContainer.GetBlobClient(options.Value.SchemaBlobDirectory.FormatWith(namespacing));
@@ -444,72 +327,40 @@ public sealed class BlobSchemaRegistry(
         var validFixturesBlob = schemasContainer.GetBlobClient(options.Value.ValidFixturesBlobDirectory.FormatWith(namespacing));
         var invalidFixturesBlob = schemasContainer.GetBlobClient(options.Value.InvalidFixturesBlobDirectory.FormatWith(namespacing));
 
-        Response<BlobContentInfo>? rawSchemaFileUpload = null;
-        Response<BlobContentInfo>? companionMetafieldUpload = null;
-        Response<BlobContentInfo>? companionRulesUpload = null;
-        Response<BlobContentInfo>? odcsUpload = null;
-        Response<BlobContentInfo>? validFixturesUpload = null;
-        Response<BlobContentInfo>? invalidFixturesUpload = null;
+        var uploadedBlobs = new List<BlobClient>(6);
 
         try
         {
-            // 1. Upload companion metadata file first ({schemaName}/v{version}.meta.json)
             var metaJson = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
-            using var metaStream = new MemoryStream(Encoding.UTF8.GetBytes(metaJson));
-            companionMetafieldUpload = await metaBlob.UploadAsync(metaStream, new BlobUploadOptions
-            {
-                HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" }
-            }, cancellationToken);
+            await UploadTextBlobAsync(metaBlob, metaJson, "application/json", uploadedBlobs, cancellationToken);
 
-            // 2. Upload companion rules file if present ({schemaName}/v{version}.rules.json)
             if (!string.IsNullOrWhiteSpace(rawRulesJson))
             {
-                using var rulesStream = new MemoryStream(Encoding.UTF8.GetBytes(rawRulesJson));
-                companionRulesUpload = await rulesBlob.UploadAsync(rulesStream, new BlobUploadOptions
-                {
-                    HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" }
-                }, cancellationToken);
+                await UploadTextBlobAsync(rulesBlob, rawRulesJson, "application/json", uploadedBlobs, cancellationToken);
             }
 
-            // 3. Upload raw ODCS YAML contract if present ({schemaName}/v{version}.odcs.yaml)
             if (!string.IsNullOrWhiteSpace(rawOdcsYaml))
             {
-                using var odcsStream = new MemoryStream(Encoding.UTF8.GetBytes(rawOdcsYaml));
-                odcsUpload = await odcsBlob.UploadAsync(odcsStream, new BlobUploadOptions
-                {
-                    HttpHeaders = new BlobHttpHeaders { ContentType = "application/x-yaml" }
-                }, cancellationToken);
+                await UploadTextBlobAsync(odcsBlob, rawOdcsYaml, "application/x-yaml", uploadedBlobs, cancellationToken);
             }
 
-            // 4. Upload stored golden regression test fixtures if provided ({schemaName}/v{version}.valid.json / .invalid.json)
             if (sampleValidFixtures is { Count: > 0 })
             {
                 var validJson = DraftSchemaBlobPathParser.SerialiseFixturesArray(sampleValidFixtures);
-                using var validStream = new MemoryStream(Encoding.UTF8.GetBytes(validJson));
-                validFixturesUpload = await validFixturesBlob.UploadAsync(validStream, new BlobUploadOptions
-                {
-                    HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" }
-                }, cancellationToken);
+                await UploadTextBlobAsync(validFixturesBlob, validJson, "application/json", uploadedBlobs, cancellationToken);
             }
 
             if (sampleInvalidFixtures is { Count: > 0 })
             {
                 var invalidJson = DraftSchemaBlobPathParser.SerialiseFixturesArray(sampleInvalidFixtures);
-                using var invalidStream = new MemoryStream(Encoding.UTF8.GetBytes(invalidJson));
-                invalidFixturesUpload = await invalidFixturesBlob.UploadAsync(invalidStream, new BlobUploadOptions
-                {
-                    HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" }
-                }, cancellationToken);
+                await UploadTextBlobAsync(invalidFixturesBlob, invalidJson, "application/json", uploadedBlobs, cancellationToken);
             }
 
-            // 5. Upload raw schema file LAST as the commit marker ({schemaName}/v{version}.schema.json)
-            using var schemaStream = new MemoryStream(Encoding.UTF8.GetBytes(metadata.RawJsonSchema));
-            rawSchemaFileUpload = await schemaBlob.UploadAsync(schemaStream, new BlobUploadOptions
+            if (!string.IsNullOrWhiteSpace(metadata.RawJsonSchema))
             {
-                HttpHeaders = new BlobHttpHeaders { ContentType = "application/schema+json" }
-            }, cancellationToken);
+                await UploadTextBlobAsync(schemaBlob, metadata.RawJsonSchema, "application/schema+json", uploadedBlobs, cancellationToken);
+            }
 
-            // Invalidate or update local memory cache
             cache.Remove(options.Value.CacheKey.FormatWith(namespacing));
             _instrumentation.SchemaSavedToBlob(metadata.Name, metadata.Version);
 
@@ -519,39 +370,13 @@ public sealed class BlobSchemaRegistry(
         {
             try
             {
-                if (rawSchemaFileUpload?.HasValue == true)
+                foreach (var blob in uploadedBlobs)
                 {
-                    await schemaBlob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                }
-
-                if (companionMetafieldUpload?.HasValue == true)
-                {
-                    await metaBlob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                }
-
-                if (companionRulesUpload?.HasValue == true)
-                {
-                    await rulesBlob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                }
-
-                if (odcsUpload?.HasValue == true)
-                {
-                    await odcsBlob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                }
-
-                if (validFixturesUpload?.HasValue == true)
-                {
-                    await validFixturesBlob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                }
-
-                if (invalidFixturesUpload?.HasValue == true)
-                {
-                    await invalidFixturesBlob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
+                    await blob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
                 }
             }
             catch (Exception rollbackException)
             {
-                // Best-effort compensating rollback; preserve original exception for logging and Result.Failure
                 _instrumentation.SchemaSaveToBlobRollbackFailed(metadata.Name, metadata.Version, rollbackException.Message);
             }
 
@@ -560,328 +385,94 @@ public sealed class BlobSchemaRegistry(
         }
     }
 
-    public async Task<Result<DraftSchemaArtifact>> GetDraftArtefactAsync(
-        string blobPath,
+    public async Task<Result<SchemaMetadata>> DeleteSchemaVersionAsync(
+        string schemaName,
+        int version,
         CancellationToken cancellationToken = default)
     {
-        var normalisedPath = DraftSchemaBlobPathParser.NormaliseDraftBlobPath(blobPath, options.Value.DraftContainerName);
-        DraftSchemaBlobPathParser.TryParseDraftBlobPathConvention(normalisedPath, out var pathSchemaName, out var pathVersion, out var basePrefix);
-
-        if (DraftSchemaBlobPathParser.IsIgnoredCompanionBlob(normalisedPath, options.Value.DraftErrorBlobSuffix))
+        var existingResult = await GetExplicitSchemaAsync(schemaName, version, cancellationToken);
+        if (existingResult.IsFailure)
         {
-            return new DraftSchemaArtifact(
-                TriggerBlobPath: normalisedPath,
-                SchemaName: pathSchemaName,
-                Version: pathVersion,
-                RawSchemaJson: null,
-                RawRulesJson: null,
-                RawOdcsYaml: null,
-                SampleValidFixtures: [],
-                SampleInvalidFixtures: [],
-                ConsumedDraftBlobPaths: [],
-                IsIgnoredCompanionBlob: true);
+            return existingResult.Error;
         }
 
-        var draftContainer = blobServiceClient.GetBlobContainerClient(options.Value.DraftContainerName);
-        var triggerBlob = draftContainer.GetBlobClient(normalisedPath);
+        var metadata = existingResult.Value.Metadata;
+        metadata.MarkDeleted();
 
-        if (!await triggerBlob.ExistsAsync(cancellationToken))
+        var metaSave = await UpdateSchemaMetadataAsync(metadata, cancellationToken);
+        if (metaSave.IsFailure)
         {
-            return Error.NotFound(ErrorCodes.SchemaNotFound, new { blobPath = normalisedPath });
+            return metaSave.Error;
         }
 
-        var content = (await triggerBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-        var consumedBlobs = new List<string> { normalisedPath };
+        var namespacing = new { schemaName = metadata.Name, version = metadata.Version };
+        var schemasContainer = blobServiceClient.GetBlobContainerClient(options.Value.ContainerName);
 
-        string? rawSchemaJson = null;
-        string? rawRulesJson = null;
-        string? rawOdcsYaml = null;
+        // Delete contract & fixture blobs while strictly retaining .meta.json and .error.json as tombstones
+        var blobsToDelete = new[]
+        {
+            options.Value.SchemaBlobDirectory.FormatWith(namespacing),
+            options.Value.RulesBlobDirectory.FormatWith(namespacing),
+            options.Value.OdcsBlobDirectory.FormatWith(namespacing),
+            options.Value.ValidFixturesBlobDirectory.FormatWith(namespacing),
+            options.Value.InvalidFixturesBlobDirectory.FormatWith(namespacing)
+        };
 
-        if (_odcsParser.IsOdcsYaml(content, normalisedPath))
+        foreach (var path in blobsToDelete.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            rawOdcsYaml = content;
-        }
-        else if (DraftSchemaBlobPathParser.IsRulesBlob(normalisedPath, content))
-        {
-            rawRulesJson = content;
-        }
-        else
-        {
-            rawSchemaJson = content;
+            await schemasContainer.GetBlobClient(path).DeleteIfExistsAsync(cancellationToken: cancellationToken);
         }
 
-        // Probe companion JSON schema if not already loaded ({basePrefix}.schema.json)
-        if (rawSchemaJson is null)
-        {
-            var companionSchemaPath = $"{basePrefix}.schema.json";
-            if (!consumedBlobs.Contains(companionSchemaPath, StringComparer.OrdinalIgnoreCase))
-            {
-                var companionSchemaBlob = draftContainer.GetBlobClient(companionSchemaPath);
-                if (await companionSchemaBlob.ExistsAsync(cancellationToken))
-                {
-                    rawSchemaJson = (await companionSchemaBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-                    consumedBlobs.Add(companionSchemaPath);
-                }
-            }
-        }
-
-        // Probe companion JSON rules if not already loaded ({basePrefix}.rules.json or .logic.json)
-        if (rawRulesJson is null)
-        {
-            foreach (var rulesSuffix in new[] { ".rules.json", ".logic.json" })
-            {
-                var companionRulesPath = $"{basePrefix}{rulesSuffix}";
-                if (consumedBlobs.Contains(companionRulesPath, StringComparer.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var companionRulesBlob = draftContainer.GetBlobClient(companionRulesPath);
-                if (await companionRulesBlob.ExistsAsync(cancellationToken))
-                {
-                    rawRulesJson = (await companionRulesBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-                    consumedBlobs.Add(companionRulesPath);
-                    break;
-                }
-            }
-        }
-
-        // Probe companion ODCS YAML if not already loaded ({basePrefix}.odcs.yaml / .odcs.yml / .yaml / .yml)
-        if (rawOdcsYaml is null)
-        {
-            foreach (var yamlSuffix in new[] { ".odcs.yaml", ".odcs.yml", ".yaml", ".yml" })
-            {
-                var companionYamlPath = $"{basePrefix}{yamlSuffix}";
-                if (consumedBlobs.Contains(companionYamlPath, StringComparer.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var companionYamlBlob = draftContainer.GetBlobClient(companionYamlPath);
-                if (await companionYamlBlob.ExistsAsync(cancellationToken))
-                {
-                    rawOdcsYaml = (await companionYamlBlob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-                    consumedBlobs.Add(companionYamlPath);
-                    break;
-                }
-            }
-        }
-
-        // Check for optional companion metadata file in draft-schemas: {basePrefix}.meta.json
-        var metaLoadResult = await TryLoadDraftIdentifierConfigAsync(
-            draftContainer,
-            $"{basePrefix}.meta.json",
-            consumedBlobs,
-            cancellationToken);
-
-        if (metaLoadResult.IsFailure)
-        {
-            await RecordDraftIngestionFailureAsync(
-                normalisedPath,
-                pathSchemaName,
-                pathVersion,
-                [metaLoadResult.Error.Description ?? "Malformed draft .meta.json companion file."],
-                cancellationToken);
-            return metaLoadResult.Error;
-        }
-
-        // Check for optional in-flight golden fixture files in draft-schemas: {basePrefix}.valid.json and {basePrefix}.invalid.json
-        var validFixtures = await TryLoadFixturesAsync(draftContainer, $"{basePrefix}.valid.json", consumedBlobs, cancellationToken);
-        var invalidFixtures = await TryLoadFixturesAsync(draftContainer, $"{basePrefix}.invalid.json", consumedBlobs, cancellationToken);
-
-        return new DraftSchemaArtifact(
-            TriggerBlobPath: normalisedPath,
-            SchemaName: pathSchemaName,
-            Version: pathVersion,
-            RawSchemaJson: rawSchemaJson,
-            RawRulesJson: rawRulesJson,
-            RawOdcsYaml: rawOdcsYaml,
-            SampleValidFixtures: validFixtures,
-            SampleInvalidFixtures: invalidFixtures,
-            ConsumedDraftBlobPaths: consumedBlobs,
-            IsIgnoredCompanionBlob: false,
-            IdentifierConfig: metaLoadResult.Value);
+        cache.Remove(options.Value.CacheKey.FormatWith(namespacing));
+        _instrumentation.SchemaVersionDeleted(metadata.Name, metadata.Version);
+        return metadata;
     }
 
-    public async Task<Result> CompleteDraftIngestionAsync(
-        DraftSchemaArtifact artifact,
-        CancellationToken cancellationToken = default)
-    {
-        var draftContainer = blobServiceClient.GetBlobContainerClient(options.Value.DraftContainerName);
-        var deletedCount = 0;
-
-        foreach (var path in artifact.ConsumedDraftBlobPaths.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            try
-            {
-                await draftContainer.GetBlobClient(path).DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                await draftContainer.GetBlobClient($"{path}{options.Value.DraftErrorBlobSuffix}").DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                deletedCount++;
-            }
-            catch
-            {
-                // Best-effort cleanup of consumed draft files
-            }
-        }
-
-        _instrumentation.DraftBlobsCleanedUp(deletedCount, options.Value.DraftContainerName, artifact.TriggerBlobPath);
-        return Result.Success();
-    }
-
-    public async Task<Result> RecordDraftIngestionFailureAsync(
-        string blobPath,
-        string? schemaName,
-        int? version,
-        IReadOnlyList<string> errors,
-        CancellationToken cancellationToken = default)
-    {
-        var normalisedPath = DraftSchemaBlobPathParser.NormaliseDraftBlobPath(blobPath, options.Value.DraftContainerName);
-        var errorBlobPath = $"{normalisedPath}{options.Value.DraftErrorBlobSuffix}";
-        var draftContainer = blobServiceClient.GetBlobContainerClient(options.Value.DraftContainerName);
-        var errorBlob = draftContainer.GetBlobClient(errorBlobPath);
-
-        Response<BlobContentInfo>? errorBlobUpload = null;
-        try
-        {
-            var diagnosticPayload = new
-            {
-                blobPath = normalisedPath,
-                schemaName,
-                version,
-                failedAtUtc = DateTimeOffset.UtcNow,
-                errors
-            };
-
-            var errorJson = JsonSerializer.Serialize(diagnosticPayload, new JsonSerializerOptions { WriteIndented = true });
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(errorJson));
-            errorBlobUpload = await errorBlob.UploadAsync(stream, new BlobUploadOptions
-            {
-                HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" }
-            }, cancellationToken);
-
-            _instrumentation.DraftFailureRecorded(errorBlobPath, errors.Count);
-            return Result.Success();
-        }
-        catch (Exception ex)
-        {
-            try
-            {
-                if (errorBlobUpload?.HasValue == true)
-                {
-                    await errorBlob.DeleteIfExistsAsync(cancellationToken: CancellationToken.None);
-                }
-            }
-            catch
-            {
-                // Best-effort compensating rollback
-            }
-
-            return Error.Failure(ErrorCodes.SchemaPersistFailed, new { ex.Message });
-        }
-    }
-
-    private static async Task<Result<SchemaIdentifierConfig?>> TryLoadDraftIdentifierConfigAsync(
-        BlobContainerClient draftContainer,
-        string metaBlobPath,
-        List<string> consumedBlobs,
+    private static async Task UploadTextBlobAsync(
+        BlobClient blob,
+        string content,
+        string contentType,
+        List<BlobClient> uploadedBlobs,
         CancellationToken cancellationToken)
     {
-        var blob = draftContainer.GetBlobClient(metaBlobPath);
-        if (!await blob.ExistsAsync(cancellationToken))
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        var response = await blob.UploadAsync(stream, new BlobUploadOptions
         {
-            return (SchemaIdentifierConfig?)null;
-        }
+            HttpHeaders = new BlobHttpHeaders { ContentType = contentType }
+        }, cancellationToken);
 
-        var raw = (await blob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-        consumedBlobs.Add(metaBlobPath);
-
-        if (string.IsNullOrWhiteSpace(raw))
+        if (response?.HasValue != false)
         {
-            return (SchemaIdentifierConfig?)null;
-        }
-
-        try
-        {
-            var node = JsonNode.Parse(raw);
-            if (node is not JsonObject obj)
-            {
-                return Error.Validation(
-                    ErrorCodes.SchemaInvalidIdentifierConfig,
-                    new { Message = $"Draft metadata file '{metaBlobPath}' must be a JSON object." });
-            }
-
-            JsonNode? configNode = null;
-            foreach (var kvp in obj)
-            {
-                if (string.Equals(kvp.Key, "identifierConfig", StringComparison.OrdinalIgnoreCase))
-                {
-                    configNode = kvp.Value;
-                    break;
-                }
-            }
-
-            if (configNode is not null)
-            {
-                var parsed = configNode.Deserialize<SchemaIdentifierConfig>(JsonOptions);
-                return parsed;
-            }
-
-            var hasDirectFields = obj.Any(kvp =>
-                string.Equals(kvp.Key, "type", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(kvp.Key, "jsonPointer", StringComparison.OrdinalIgnoreCase));
-
-            if (hasDirectFields)
-            {
-                var directParsed = obj.Deserialize<SchemaIdentifierConfig>(JsonOptions);
-                return directParsed;
-            }
-
-            return (SchemaIdentifierConfig?)null;
-        }
-        catch (Exception ex)
-        {
-            return Error.Validation(
-                ErrorCodes.SchemaInvalidIdentifierConfig,
-                new { Message = $"Draft metadata file '{metaBlobPath}' is malformed JSON: {ex.Message}" });
+            uploadedBlobs.Add(blob);
         }
     }
 
-    private static async Task<IReadOnlyList<string>> TryLoadFixturesAsync(
-        BlobContainerClient container,
-        string fixtureBlobPath,
-        List<string>? consumedBlobs,
-        CancellationToken cancellationToken)
+    private static JsonSchema CompileSchemaSafe(string schemaJson)
     {
-        var blob = container.GetBlobClient(fixtureBlobPath);
-        if (!await blob.ExistsAsync(cancellationToken))
+        if (string.IsNullOrWhiteSpace(schemaJson))
         {
-            return [];
-        }
-
-        var raw = (await blob.DownloadContentAsync(cancellationToken)).Value.Content.ToString();
-        consumedBlobs?.Add(fixtureBlobPath);
-
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return [];
+            return EmptyCompiledSchema;
         }
 
         try
         {
-            var node = JsonNode.Parse(raw);
-            if (node is JsonArray arr)
-            {
-                return arr
-                    .Where(item => item is not null)
-                    .Select(item => item is JsonValue v && v.TryGetValue<string>(out var s) ? s : item!.ToJsonString())
-                    .ToList();
-            }
+            return JsonSchema.FromText(schemaJson);
         }
         catch
         {
-            // Fall through and return raw payload so verification reports any syntax issues
+            return EmptyCompiledSchema;
         }
+    }
 
-        return [raw];
+    private static IReadOnlyList<BusinessRule>? TryDeserializeRules(string rawRulesJson)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<BusinessRule>>(rawRulesJson, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

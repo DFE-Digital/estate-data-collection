@@ -9,7 +9,7 @@ using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
-using EstateDataCollection.Infrastructure.Validation;
+using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;
@@ -23,6 +23,7 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
     [Fact]
     public async Task GetSubmissionStatistics_Should_Aggregate_Draft_And_Finalised_Counts_Per_Schema()
     {
+        // Arrange
         var registry = Substitute.For<ISchemaRegistry>();
         var queryRepo = Substitute.For<ISubmissionQueryRepository>();
 
@@ -67,8 +68,11 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
             .Returns(Result<IReadOnlyList<SubmissionSummary>>.Success(summaries));
 
         var sut = new GetSubmissionStatisticsUseCase(registry, queryRepo);
+
+        // Act
         var stats = (await sut.ExecuteAsync(new GetSubmissionStatisticsRequest())).ShouldSucceed();
 
+        // Assert
         stats.TotalSubmissions.Should().Be(3);
         stats.DraftSubmissions.Should().Be(2);
         stats.DraftWithPayloadSubmissions.Should().Be(1);
@@ -93,6 +97,7 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
     [Fact]
     public async Task GetSubmissionDetail_For_Draft_With_Multiple_Chunks_Should_Merge_Validate_And_Build_NextSteps()
     {
+        // Arrange
         var infra = Substitute.For<ISubmissionInfrastructure>();
         var queryRepo = Substitute.For<ISubmissionQueryRepository>();
         var auditStore = Substitute.For<ISubmissionAuditStore>();
@@ -118,11 +123,14 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
         registry.GetExplicitSchemaAsync("edc_payload", 1, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Success(resolved));
 
-        var validationService = new PayloadValidationService(validator, new JsonLogicValidator());
+        var validationService = new PayloadValidationService(validator, new QualityRuleCoordinator());
         var evaluationService = new SubmissionEvaluationService(infra, registry, validationService);
         var sut = new GetSubmissionDetailUseCase(infra, queryRepo, auditStore, evaluationService);
+
+        // Act
         var detail = (await sut.ExecuteAsync(new GetSubmissionDetailRequest(session.SubmissionId))).ShouldSucceed();
 
+        // Assert
         detail.DraftItems.Should().HaveCount(2);
         detail.MergedDraftPayloadJson.Should().Contain("104521");
         detail.MergedDraftPayloadJson.Should().Contain("Test School");
@@ -134,7 +142,10 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
     [Fact]
     public void NextStepsBuilder_Should_Provide_Finalise_Instruction_When_Ready()
     {
+        // Arrange
         var id = Guid.NewGuid();
+
+        // Act
         var guidance = SubmissionNextStepsBuilder.Build(
             id,
             isFinalised: false,
@@ -143,6 +154,7 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
             draftCount: 2,
             pendingErrors: []);
 
+        // Assert
         guidance.Summary.Should().Contain("Merged 2 timestamped draft submissions");
         guidance.NextSteps.Should().ContainSingle(s => s.Contains($"POST /api/submissions/{id}/finalise"));
     }
@@ -150,6 +162,7 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
     [Fact]
     public async Task GetSubmissions_Should_Delegate_Filters_And_Collect_Available_Schema_Names()
     {
+        // Arrange
         var registry = Substitute.For<ISchemaRegistry>();
         var queryRepo = Substitute.For<ISubmissionQueryRepository>();
 
@@ -164,8 +177,11 @@ public sealed class GetSubmissionStatisticsAndDetailUseCaseTests
             .Returns(Result<IReadOnlyList<SubmissionSummary>>.Success([]));
 
         var sut = new GetSubmissionsUseCase(registry, queryRepo);
+
+        // Act
         var res = (await sut.ExecuteAsync(new GetSubmissionsRequest("alpha_schema", 1, "Draft", "1045"))).ShouldSucceed();
 
+        // Assert
         res.AvailableSchemaNames.Should().Equal("alpha_schema", "beta_schema");
         res.Status.Should().Be("Draft");
     }

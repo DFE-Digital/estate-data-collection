@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Messages;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
@@ -6,10 +7,7 @@ public sealed record FieldsViewerViewModel(
     int TopLevelFieldCount,
     SchemaFieldTreeViewModel Tree)
 {
-    public string TopLevelFieldSummaryText
-    {
-        get { return $"{TopLevelFieldCount} top-level {(TopLevelFieldCount == 1 ? "field" : "fields")}"; }
-    }
+    public string TopLevelFieldSummaryText => AdminUiMessages.TopLevelFieldSummary(TopLevelFieldCount);
 
     public static FieldsViewerViewModel From(IReadOnlyList<SchemaFieldDescriptor>? fields)
     {

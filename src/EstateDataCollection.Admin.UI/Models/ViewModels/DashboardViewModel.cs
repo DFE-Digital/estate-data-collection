@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.RunSchemaTests;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
@@ -11,10 +12,7 @@ public sealed record DashboardViewModel(
     Error? PageError = null,
     RunSchemaTestsResult? TestRunResult = null)
 {
-    public int TotalSchemas
-    {
-        get { return Schemas.Count; }
-    }
+    public int TotalSchemas => Schemas.Count;
 
     public int TotalVersions
     {
@@ -36,34 +34,57 @@ public sealed record DashboardViewModel(
         }
     }
 
-    public NotificationBannerViewModel? SuccessBannerModel
-    {
-        get { return NotificationBannerViewModel.Success(SuccessBanner); }
-    }
-
-    public NotificationBannerViewModel? ValidatedUnscheduledBannerModel
+    public int ErrorReportVersionCount
     {
         get
         {
-            return ValidatedUnscheduledCount > 0
-                ? NotificationBannerViewModel.Info(
-                    message: $"{ValidatedUnscheduledCount} validated schema version(s) are currently unscheduled.",
-                    title: "New version(s) ready to schedule",
-                    detail:
-                    "Contracts promoted from draft-schemas or submitted via the workbench remain in Validated state until you configure an effective window or activate them.")
-                : null;
+            return Schemas
+                .SelectMany(s => s.Versions)
+                .Count(v => v.HasErrorReport && !string.Equals(v.State.Name, "Deleted", StringComparison.OrdinalIgnoreCase));
         }
     }
 
-    public ErrorSummaryViewModel? ErrorSummary
+    public int InvalidVersionCount
     {
-        get { return ErrorSummaryViewModel.From(PageError); }
+        get
+        {
+            return Schemas
+                .SelectMany(s => s.Versions)
+                .Count(v => string.Equals(v.State.Name, "Invalid", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
-    public bool HasTestRunResult
+    public int UnvalidatedVersionCount
     {
-        get { return TestRunResult is not null; }
+        get
+        {
+            return Schemas
+                .SelectMany(s => s.Versions)
+                .Count(v => string.Equals(v.State.Name, "Unvalidated", StringComparison.OrdinalIgnoreCase));
+        }
     }
+
+    public NotificationBannerViewModel? SuccessBannerModel => NotificationBannerViewModel.Success(SuccessBanner);
+
+    public NotificationBannerViewModel? ValidatedUnscheduledBannerModel =>
+        ValidatedUnscheduledCount > 0
+            ? NotificationBannerViewModel.Info(
+                message: AdminUiMessages.UnscheduledVersionsBannerMessage(ValidatedUnscheduledCount),
+                title: AdminUiMessages.UnscheduledVersionsBannerTitle,
+                detail: AdminUiMessages.UnscheduledVersionsBannerDetail)
+            : null;
+
+    public NotificationBannerViewModel? ErrorReportAttentionBannerModel =>
+        ErrorReportVersionCount > 0
+            ? NotificationBannerViewModel.Info(
+                message: AdminUiMessages.ErrorReportAttentionBannerMessage(ErrorReportVersionCount, InvalidVersionCount, UnvalidatedVersionCount),
+                title: AdminUiMessages.ErrorReportAttentionBannerTitle,
+                detail: AdminUiMessages.ErrorReportAttentionBannerDetail)
+            : null;
+
+    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);
+
+    public bool HasTestRunResult => TestRunResult is not null;
 
     public DashboardTestRunSummaryViewModel? TestRunSummary
     {
@@ -72,15 +93,9 @@ public sealed record DashboardViewModel(
 
     private DashboardTestRunSummaryViewModel? _testRunSummary;
 
-    public bool HasSchemas
-    {
-        get { return Schemas.Count > 0; }
-    }
+    public bool HasSchemas => Schemas.Count > 0;
 
-    public bool NoSchemas
-    {
-        get { return Schemas.Count == 0; }
-    }
+    public bool NoSchemas => Schemas.Count == 0;
 
     public IReadOnlyList<SchemaSectionCardViewModel> SchemaCards
     {

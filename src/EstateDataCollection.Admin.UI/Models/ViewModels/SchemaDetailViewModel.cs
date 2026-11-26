@@ -1,6 +1,9 @@
+using System.Globalization;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Common.Routing;
+using EstateDataCollection.Domain.Schema;
 
 namespace EstateDataCollection.Admin.UI.Models.ViewModels;
 
@@ -10,137 +13,95 @@ public sealed record SchemaDetailViewModel(
     string? SuccessBanner = null,
     Error? PageError = null)
 {
-    public NotificationBannerViewModel? SuccessBannerModel
-    {
-        get { return NotificationBannerViewModel.Success(SuccessBanner); }
-    }
+    public NotificationBannerViewModel? SuccessBannerModel => NotificationBannerViewModel.Success(SuccessBanner);
 
-    public ErrorSummaryViewModel? ErrorSummary
-    {
-        get { return ErrorSummaryViewModel.From(PageError); }
-    }
+    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);
 
-    public bool HasDetail
-    {
-        get { return Detail is not null; }
-    }
+    public bool HasDetail => Detail is not null;
 
-    public string SchemaName
-    {
-        get { return Detail?.SchemaName ?? string.Empty; }
-    }
+    public string SchemaName => Detail?.SchemaName ?? string.Empty;
 
-    public string VersionDisplay
-    {
-        get { return Detail is null ? string.Empty : $"v{Detail.Version}"; }
-    }
+    public string VersionDisplay => Detail is null 
+        ? string.Empty 
+        : $"v{Detail.Version}";
 
-    public string BackToSchemaUrl
-    {
-        get
-        {
-            return Detail is null ? AppRoutes.AdminUi.Dashboard : AppRoutes.AdminUi.SchemaVersions(Detail.SchemaName);
-        }
-    }
+    public string NextVersionDisplay => Detail is null 
+        ? string.Empty 
+        : $"v{Detail.Version + 1}";
 
-    public bool CanModifyLifecycle
-    {
-        get
-        {
-            return Detail is not null &&
-                   !string.Equals(Detail.State.Name, "Retired", StringComparison.OrdinalIgnoreCase);
-        }
-    }
+    public string BackToSchemaUrl => Detail is null 
+        ? AppRoutes.AdminUi.Dashboard 
+        : AppRoutes.AdminUi.SchemaVersions(Detail.SchemaName);
 
-    public string ScheduleUrl
-    {
-        get
-        {
-            return Detail is null
-                ? string.Empty
-                : AppRoutes.AdminUi.SchemaSchedule(Detail.SchemaName, Detail.Version);
-        }
-    }
+    public bool IsRetired => Detail is not null && Detail.State.Key == (int)SchemaLifecycleState.Retired;
 
-    public string TestsUrl
-    {
-        get
-        {
-            return Detail is null
-                ? string.Empty
-                : AppRoutes.AdminUi.SchemaTests(Detail.SchemaName, Detail.Version);
-        }
-    }
+    public bool IsInvalid => Detail is not null &&  Detail.State.Key == (int)SchemaLifecycleState.Invalid;
 
-    public string RunTestsActionUrl
-    {
-        get
-        {
-            return Detail is null
-                ? string.Empty
-                : AppRoutes.AdminUi.SchemaTestsRun(Detail.SchemaName, Detail.Version);
-        }
-    }
+    public bool IsUnvalidated => Detail is not null &&  Detail.State.Key == (int)SchemaLifecycleState.Unvalidated;
 
-    public int ValidFixturesCount
-    {
-        get { return Detail?.ValidFixtures?.Count ?? 0; }
-    }
+    public bool IsDeleted =>
+        Detail is not null &&
+        (Detail.State.Key == (int)SchemaLifecycleState.Deleted || Detail.DeletedAtUtc.HasValue);
 
-    public int InvalidFixturesCount
-    {
-        get { return Detail?.InvalidFixtures?.Count ?? 0; }
-    }
+    public bool CanModifyLifecycle => Detail is not null && !IsRetired && !IsDeleted && !IsInvalid && !IsUnvalidated;
 
-    public int StoredTestsCount
-    {
-        get { return ValidFixturesCount + InvalidFixturesCount; }
-    }
+    public bool CanRunTests => Detail is not null && !IsDeleted;
 
-    public LifecycleTagViewModel? StateTag
-    {
-        get { return Detail is null ? null : LifecycleTagViewModel.From(Detail.State.Name); }
-    }
+    public bool CanSignOff => Detail is not null && IsUnvalidated;
 
-    public string AcceptsTrafficDisplay
-    {
-        get
-        {
-            return Detail?.CanAcceptTraffic == true
-                ? "Yes (public submissions permitted)"
-                : "No";
-        }
-    }
+    public bool CanDelete => Detail is not null && !IsDeleted;
 
-    public string EffectiveFromDisplay
-    {
-        get { return Detail?.EffectiveFromUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Unscheduled"; }
-    }
+    public string ScheduleUrl =>
+        Detail is null
+            ? string.Empty
+            : AppRoutes.AdminUi.SchemaSchedule(Detail.SchemaName, Detail.Version);
 
-    public string EffectiveToDisplay
-    {
-        get { return Detail?.EffectiveToUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Open-ended"; }
-    }
+    public string TestsUrl =>
+        Detail is null
+            ? string.Empty
+            : AppRoutes.AdminUi.SchemaTests(Detail.SchemaName, Detail.Version);
 
-    public bool HasIdentifierConfig
-    {
-        get { return Detail?.IdentifierConfig is not null; }
-    }
+    public string RunTestsActionUrl =>
+        Detail is null
+            ? string.Empty
+            : AppRoutes.AdminUi.SchemaTestsRun(Detail.SchemaName, Detail.Version);
 
-    public bool NoIdentifierConfig
-    {
-        get { return !HasIdentifierConfig; }
-    }
+    public string SignOffActionUrl =>
+        Detail is null
+            ? string.Empty
+            : AppRoutes.AdminUi.SchemaSignOff(Detail.SchemaName, Detail.Version);
 
-    public string IdentifierType
-    {
-        get { return Detail?.IdentifierConfig?.Type ?? string.Empty; }
-    }
+    public string DeleteActionUrl =>
+        Detail is null
+            ? string.Empty
+            : AppRoutes.AdminUi.SchemaDelete(Detail.SchemaName, Detail.Version);
 
-    public string IdentifierPointerDisplay
-    {
-        get { return Detail?.IdentifierConfig?.JsonPointer ?? "none"; }
-    }
+    public int ValidFixturesCount => Detail?.ValidFixtures?.Count ?? 0;
+
+    public int InvalidFixturesCount => Detail?.InvalidFixtures?.Count ?? 0;
+
+    public int StoredTestsCount => ValidFixturesCount + InvalidFixturesCount;
+
+    public LifecycleTagViewModel? StateTag => Detail is not null 
+        ? LifecycleTagViewModel.From(Detail.State.Name) 
+        : null;
+
+    public string AcceptsTrafficDisplay =>
+        Detail?.CanAcceptTraffic == true
+            ? AdminUiMessages.AcceptsTrafficYes
+            : AdminUiMessages.AcceptsTrafficNo;
+
+    public string EffectiveFromDisplay => Detail?.EffectiveFromUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? AdminUiMessages.UnscheduledLabel;
+
+    public string EffectiveToDisplay => Detail?.EffectiveToUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? AdminUiMessages.OpenEndedLabel;
+
+    public bool HasIdentifierConfig => Detail?.IdentifierConfig is not null;
+
+    public bool NoIdentifierConfig => !HasIdentifierConfig;
+
+    public string IdentifierType => Detail?.IdentifierConfig?.Type ?? string.Empty;
+
+    public string IdentifierPointerDisplay => Detail?.IdentifierConfig?.JsonPointer ?? "none";
 
     public string IdentifierRequiredDisplay
     {
@@ -148,72 +109,140 @@ public sealed record SchemaDetailViewModel(
         {
             return Detail?.IdentifierConfig?.Required switch
             {
-                true => "Yes",
-                false => "No",
-                null => "Default"
+                true => AdminUiMessages.IdentifierRequiredYes,
+                false => AdminUiMessages.IdentifierRequiredNo,
+                null => AdminUiMessages.IdentifierRequiredDefault
             };
         }
     }
 
-    public bool HasLastTestRun
-    {
-        get { return Detail?.LastTestRunAtUtc.HasValue == true; }
-    }
+    private SchemaValidationPolicy EffectivePolicy => Detail?.ValidationPolicy ?? SchemaValidationPolicy.Default;
 
-    public string LastTestRunTagText
-    {
-        get { return Detail?.LastTestRunPassed == true ? "Passed" : "Failed"; }
-    }
+    public string FailOnMinimumSeverityDisplay => EffectivePolicy.FailOnMinimumSeverity.ToString();
 
-    public string LastTestRunTagCssClass
+    public string WorkflowPipelineKeyDisplay => EffectivePolicy.WorkflowPipelineKey ?? AdminUiMessages.DefaultLabel;
+
+    public string CrossSubmissionDraftPolicyDisplay => EffectivePolicy.CrossSubmissionDraftPolicy.ToString();
+
+    public string NumericToleranceOverrideDisplay => EffectivePolicy.NumericToleranceOverride?.ToString(CultureInfo.InvariantCulture) ?? AdminUiMessages.NoneLabel;
+
+    public bool HasSignedOff => !string.IsNullOrWhiteSpace(Detail?.SignedOffBy);
+
+    public string SignedOffDisplay
     {
         get
         {
-            return Detail?.LastTestRunPassed == true
-                ? "govuk-tag govuk-tag--green"
-                : "govuk-tag govuk-tag--red";
+            if (!HasSignedOff)
+            {
+                return string.Empty;
+            }
+
+            return Detail?.SignedOffAtUtc is { } atUtc
+                ? $"{Detail.SignedOffBy} ({atUtc:yyyy-MM-dd HH:mm:ss 'UTC'})"
+                : Detail!.SignedOffBy!;
         }
     }
 
-    public string LastTestRunTimestampDisplay
+    public string DeletedAtDisplay => Detail?.DeletedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "Deleted";
+
+    public bool HasErrorReport => Detail?.HasErrorReport == true || Detail?.ErrorReport is not null;
+
+    public bool HasErrorReportErrors
     {
         get
         {
-            return Detail?.LastTestRunAtUtc is { } atUtc
-                ? $"({atUtc:yyyy-MM-dd HH:mm} UTC)"
-                : string.Empty;
+            if (IsInvalid || HasErrorReportSyntaxErrors || HasErrorReportFixtureErrors)
+            {
+                return true;
+            }
+
+            var issues = Detail?.ErrorReport?.Issues;
+            return issues is not null &&
+                   ((issues.TryGetValue(RuleSeverity.Critical, out var critical) && critical.Count > 0) ||
+                    (issues.TryGetValue(RuleSeverity.Error, out var errors) && errors.Count > 0));
         }
     }
 
-    public string Sha256Hash
+    public string ErrorReportHeading =>
+        HasErrorReportErrors
+            ? AdminUiMessages.ErrorReportHeadingFailed
+            : AdminUiMessages.ErrorReportHeadingWarnings;
+
+    public string ErrorReportTagText
     {
-        get { return Detail?.Sha256Hash ?? string.Empty; }
+        get
+        {
+            if (IsInvalid)
+            {
+                return AdminUiMessages.ErrorReportTagInvalid;
+            }
+
+            return HasErrorReportErrors ? AdminUiMessages.ErrorReportTagErrors : AdminUiMessages.ErrorReportTagWarnings;
+        }
     }
 
-    public string CreatedAtDisplay
+    public string ErrorReportTagCssClass => HasErrorReportErrors ? "govuk-tag govuk-tag--red" : "govuk-tag govuk-tag--yellow";
+
+    public string ErrorReportSummaryText => Detail?.ErrorReport?.Summary ?? Detail?.ErrorSummary ?? string.Empty;
+
+    public bool HasErrorReportSummary => !string.IsNullOrWhiteSpace(ErrorReportSummaryText);
+
+    public bool HasErrorReportRecordedAt => Detail?.ErrorReport is not null;
+
+    public string ErrorReportRecordedAtDisplay => Detail?.ErrorReport?.RecordedAtUtc.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? string.Empty;
+
+    public IReadOnlyList<string> ErrorReportSyntaxErrors => Detail?.ErrorReport?.SyntaxErrors ?? [];
+
+    public bool HasErrorReportSyntaxErrors => ErrorReportSyntaxErrors.Count > 0;
+
+    public IReadOnlyList<string> ErrorReportFixtureErrors => Detail?.ErrorReport?.FixtureErrors ?? [];
+
+    public bool HasErrorReportFixtureErrors => ErrorReportFixtureErrors.Count > 0;
+
+    public IReadOnlyList<string> ErrorReportWarnings => Detail?.ErrorReport?.Warnings ?? [];
+
+    public bool HasErrorReportWarnings => ErrorReportWarnings.Count > 0;
+
+    public IReadOnlyList<SeverityIssueGroupViewModel> ErrorReportIssueGroups
     {
-        get { return Detail?.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? string.Empty; }
+        get { return field ??= SeverityIssueGroupViewModel.FromDictionary(Detail?.ErrorReport?.Issues); }
     }
+
+    public bool HasErrorReportIssues => ErrorReportIssueGroups.Count > 0;
+
+    public bool HasLastTestRun => Detail?.LastTestRunAtUtc.HasValue == true;
+
+    public string LastTestRunTagText => Detail?.LastTestRunPassed == true ? AdminUiMessages.TagPassed : AdminUiMessages.TagFailed;
+
+    public string LastTestRunTagCssClass =>
+        Detail?.LastTestRunPassed == true
+            ? "govuk-tag govuk-tag--green"
+            : "govuk-tag govuk-tag--red";
+
+    public string LastTestRunTimestampDisplay =>
+        Detail?.LastTestRunAtUtc is { } atUtc
+            ? $"({atUtc:yyyy-MM-dd HH:mm} UTC)"
+            : string.Empty;
+
+    public string Sha256Hash => Detail?.Sha256Hash ?? string.Empty;
+
+    public string CreatedAtDisplay => Detail?.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? string.Empty;
 
     public FieldsViewerViewModel FieldsViewer
     {
-        get { return _fieldsViewer ??= FieldsViewerViewModel.From(Detail?.Fields); }
+        get { return field ??= FieldsViewerViewModel.From(Detail?.Fields); }
     }
-
-    private FieldsViewerViewModel? _fieldsViewer;
 
     public QualityRulesViewerViewModel QualityRulesViewer
     {
-        get { return _qualityRulesViewer ??= QualityRulesViewerViewModel.From(Detail?.QualityRules); }
+        get { return field ??= QualityRulesViewerViewModel.From(Detail?.QualityRules); }
     }
-
-    private QualityRulesViewerViewModel? _qualityRulesViewer;
 
     public ValidationEngineDiagnosticsViewModel EngineDiagnostics
     {
         get
         {
-            return _engineDiagnostics ??= ValidationEngineDiagnosticsViewModel.FromDetail(
+            return field ??= ValidationEngineDiagnosticsViewModel.FromDetail(
                 Detail?.LastTestRunEngineTraces,
                 Detail?.RegisteredEngines,
                 Detail?.QualityRules,
@@ -221,52 +250,38 @@ public sealed record SchemaDetailViewModel(
         }
     }
 
-    private ValidationEngineDiagnosticsViewModel? _engineDiagnostics;
+    public bool HasRawJsonSchema => !string.IsNullOrWhiteSpace(Detail?.RawJsonSchema);
 
-    public bool HasRawJsonSchema
+    public string RawJsonSchema => Detail?.RawJsonSchema ?? string.Empty;
+    
+    public static class TabIds
     {
-        get { return !string.IsNullOrWhiteSpace(Detail?.RawJsonSchema); }
-    }
-
-    public string RawJsonSchema
-    {
-        get { return Detail?.RawJsonSchema ?? string.Empty; }
+        public const string Fields = "schema-fields";
+        public const string QualityRules = "schema-quality-rules";
+        public const string ValidationEngines = "schema-validation-engines";
+        public const string RawJson = "schema-raw-json";
     }
 
     public GovUkTabsViewModel Tabs
     {
         get
         {
-            return _tabs ??= GovUkTabsViewModel.Create(
+            return field ??= GovUkTabsViewModel.Create(
                 "schema-detail-tabs",
                 [
-                    ("schema-fields", $"Fields ({FieldsViewer.TopLevelFieldCount})", true),
-                    ("schema-quality-rules", $"Quality rules ({QualityRulesViewer.RuleCount})", true),
-                    ("schema-validation-engines", "Validation engines", EngineDiagnostics.HasContent),
-                    ("schema-raw-json", "Raw JSON Schema", HasRawJsonSchema)
+                    (TabIds.Fields, AdminUiMessages.SchemaFieldsTabLabel(FieldsViewer.TopLevelFieldCount), true),
+                    (TabIds.QualityRules, AdminUiMessages.SchemaQualityRulesTabLabel(QualityRulesViewer.RuleCount), true),
+                    (TabIds.ValidationEngines, AdminUiMessages.SchemaValidationEnginesTabLabel, EngineDiagnostics.HasContent),
+                    (TabIds.RawJson, AdminUiMessages.SchemaRawJsonTabLabel, HasRawJsonSchema)
                 ]);
         }
     }
 
-    private GovUkTabsViewModel? _tabs;
+    public GovUkTabItemViewModel? FieldsTab => Tabs.Find(TabIds.Fields);
 
-    public GovUkTabItemViewModel? FieldsTab
-    {
-        get { return Tabs.Find("schema-fields"); }
-    }
+    public GovUkTabItemViewModel? QualityRulesTab => Tabs.Find(TabIds.QualityRules);
 
-    public GovUkTabItemViewModel? QualityRulesTab
-    {
-        get { return Tabs.Find("schema-quality-rules"); }
-    }
+    public GovUkTabItemViewModel? ValidationEnginesTab => Tabs.Find(TabIds.ValidationEngines);
 
-    public GovUkTabItemViewModel? ValidationEnginesTab
-    {
-        get { return Tabs.Find("schema-validation-engines"); }
-    }
-
-    public GovUkTabItemViewModel? RawJsonSchemaTab
-    {
-        get { return Tabs.Find("schema-raw-json"); }
-    }
+    public GovUkTabItemViewModel? RawJsonSchemaTab => Tabs.Find(TabIds.RawJson);
 }

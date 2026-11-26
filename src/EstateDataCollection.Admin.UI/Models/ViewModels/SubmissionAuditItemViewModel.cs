@@ -20,4 +20,8 @@ public sealed record SubmissionAuditItemViewModel(
     bool HasProcesses,
     IReadOnlyList<ValidationErrorItemViewModel> ValidationIssues,
     bool HasValidationIssues,
-    string RawAuditJson);
+    string RawAuditJson,
+    IReadOnlyList<SeverityIssueGroupViewModel>? ValidationIssueGroups = null)
+{
+    public bool HasValidationIssueGroups => ValidationIssueGroups is { Count: > 0 };
+}

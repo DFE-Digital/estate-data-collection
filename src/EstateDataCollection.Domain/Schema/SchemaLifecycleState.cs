@@ -9,5 +9,8 @@ public enum SchemaLifecycleState
     Scheduled = 3,
     Active = 4,
     Deprecated = 5,
-    Retired = 6
+    Retired = 6,
+    Invalid = 7,
+    Unvalidated = 8,
+    Deleted = 9
 }

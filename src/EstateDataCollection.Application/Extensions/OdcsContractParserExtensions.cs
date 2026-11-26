@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Inputs;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 
 namespace EstateDataCollection.Application.Extensions;
@@ -32,7 +33,7 @@ public static class OdcsContractParserExtensions
             {
                 return Error.Validation(
                     ErrorCodes.SchemaVerificationFailed,
-                    errors: [new ValidationError("schema", parsed.Error.Description ?? "Invalid ODCS YAML.")]);
+                    errors: [new ValidationError("schema", parsed.Error.Description ?? SchemaValidationMessages.InvalidOdcsYamlFallback)]);
             }
 
             return Result<ResolvedContractInputs>.Success(new ResolvedContractInputs(
@@ -40,7 +41,8 @@ public static class OdcsContractParserExtensions
                 RulesJson: !string.IsNullOrWhiteSpace(rulesJson) ? rulesJson : parsed.Value.GeneratedRulesJson,
                 RawOdcsYaml: odcsYaml,
                 ContractId: parsed.Value.ContractId,
-                Version: parsed.Value.Version));
+                Version: parsed.Value.Version,
+                ValidationPolicy: parsed.Value.ValidationPolicy));
         }
 
         if (parser is not null && !string.IsNullOrWhiteSpace(schemaJson) && parser.IsOdcsYaml(schemaJson, fileName))
@@ -50,7 +52,7 @@ public static class OdcsContractParserExtensions
             {
                 return Error.Validation(
                     ErrorCodes.SchemaVerificationFailed,
-                    errors: [new ValidationError("schema", parsed.Error.Description ?? "Invalid ODCS YAML.")]);
+                    errors: [new ValidationError("schema", parsed.Error.Description ?? SchemaValidationMessages.InvalidOdcsYamlFallback)]);
             }
 
             return Result<ResolvedContractInputs>.Success(new ResolvedContractInputs(
@@ -58,7 +60,8 @@ public static class OdcsContractParserExtensions
                 RulesJson: !string.IsNullOrWhiteSpace(rulesJson) ? rulesJson : parsed.Value.GeneratedRulesJson,
                 RawOdcsYaml: schemaJson,
                 ContractId: parsed.Value.ContractId,
-                Version: parsed.Value.Version));
+                Version: parsed.Value.Version,
+                ValidationPolicy: parsed.Value.ValidationPolicy));
         }
 
         return Result<ResolvedContractInputs>.Success(new ResolvedContractInputs(

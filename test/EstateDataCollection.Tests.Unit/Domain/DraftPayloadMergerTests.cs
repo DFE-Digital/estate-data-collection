@@ -11,6 +11,7 @@ public sealed class DraftPayloadMergerTests
     [Fact]
     public void Merge_Should_DeepMerge_Nested_Objects_And_Replace_Arrays_Chronologically()
     {
+        // Arrange
         var t1 = new DateTimeOffset(2026, 11, 20, 9, 0, 0, TimeSpan.Zero);
         var t2 = t1.AddMinutes(10);
         var t3 = t1.AddMinutes(20);
@@ -23,8 +24,10 @@ public sealed class DraftPayloadMergerTests
             new("sub/drafts/01.json", t1, """{"urn":104521,"school":{"urn":104521},"blocks":["OLD"]}""", 56)
         ];
 
+        // Act
         var mergedJson = DraftPayloadMerger.Merge(items).ShouldSucceed();
 
+        // Assert
         using var doc = JsonDocument.Parse(mergedJson);
         var root = doc.RootElement;
 
@@ -39,19 +42,30 @@ public sealed class DraftPayloadMergerTests
     [Fact]
     public void MergeJsonPayloads_With_Malformed_Json_Should_Return_Validation_Error()
     {
-        var result = DraftPayloadMerger.MergeJsonPayloads(
+        // Arrange
+        IReadOnlyList<string> payloads =
         [
             """{"urn":104521}""",
             "{not-valid-json"
-        ]);
+        ];
 
+        // Act
+        var result = DraftPayloadMerger.MergeJsonPayloads(payloads);
+
+        // Assert
         result.ShouldFailWith("Json.Malformed");
     }
 
     [Fact]
     public void Merge_With_Empty_List_Should_Return_PayloadEmpty()
     {
-        var result = DraftPayloadMerger.Merge([]);
+        // Arrange
+        IReadOnlyList<SubmissionDraftItem> items = [];
+
+        // Act
+        var result = DraftPayloadMerger.Merge(items);
+
+        // Assert
         result.ShouldFailWith("Payload.Empty");
     }
 }

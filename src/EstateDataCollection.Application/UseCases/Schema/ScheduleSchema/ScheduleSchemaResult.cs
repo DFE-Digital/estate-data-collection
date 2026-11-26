@@ -10,5 +10,6 @@ public sealed record ScheduleSchemaResult(
     DateTimeOffset? EffectiveFromUtc,
     DateTimeOffset? EffectiveToUtc,
     string Sha256Hash,
-    SchemaIdentifierConfig? IdentifierConfig = null
+    SchemaIdentifierConfig? IdentifierConfig = null,
+    SchemaValidationPolicy? ValidationPolicy = null
 );

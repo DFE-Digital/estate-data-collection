@@ -2,6 +2,7 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
 using EstateDataCollection.Common.Extensions;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -60,7 +61,7 @@ public class CreateSubmissionUseCase(
             if (!string.Equals(schemaResult.Error.Code, ErrorCodes.SchemaRetired.GetName(), StringComparison.Ordinal))
             {
                 var detail = string.Equals(schemaResult.Error.Code, ErrorCodes.SchemaNotActive.GetName(), StringComparison.Ordinal) && request.Version.HasValue
-                    ? $"Schema v{request.Version.Value} cannot accept traffic."
+                    ? SubmissionMessages.SchemaVersionCannotAcceptTraffic(request.Version.Value)
                     : schemaResult.Error.Description ?? string.Empty;
                 _instrumentation.SchemaResolutionFailed(request.SchemaName, detail);
             }
@@ -77,7 +78,7 @@ public class CreateSubmissionUseCase(
         var outcome = await SubmissionExecutionScope.StepAsync(
             SubmissionProcessCatalog.CreateSession,
             () => infrastructure.CreateSessionAsync(submission, cancellationToken),
-            _ => new ProcessStepDetails(Summary: $"Created session {submission.SubmissionId}"));
+            _ => new ProcessStepDetails(Summary: SubmissionMessages.CreatedSessionSummary(submission.SubmissionId)));
 
         if (outcome.IsFailure)
         {
@@ -88,7 +89,7 @@ public class CreateSubmissionUseCase(
         SubmissionExecutionScope.Current?.SetAuditOutcome(
             outcomeStatus: "Succeeded",
             httpStatus: 201,
-            message: $"Draft session created for {submission.SchemaName} v{submission.SchemaVersion}");
+            message: SubmissionMessages.DraftSessionCreatedAudit(submission.SchemaName, submission.SchemaVersion));
 
         _instrumentation.SubmissionSessionCreated(
             submission.SubmissionId,

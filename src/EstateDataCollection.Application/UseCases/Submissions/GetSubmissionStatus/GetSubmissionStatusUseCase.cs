@@ -1,5 +1,7 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Common.Helpers;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,7 +27,7 @@ public class GetSubmissionStatusUseCase(
             SubmissionProcessCatalog.GetSession,
             () => infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken),
             loaded => new ProcessStepDetails(
-                Summary: loaded.IsFinalised ? "Session finalised" : "Draft session loaded"));
+                Summary: loaded.IsFinalised ? SubmissionMessages.SessionFinalised : SubmissionMessages.DraftSessionLoaded));
 
         if (sessionResult.IsFailure)
         {
@@ -77,7 +79,8 @@ public class GetSubmissionStatusUseCase(
                 DraftCount: inventory.Count,
                 LastDraftAtUtc: inventory.LastDraftAtUtc,
                 NextSteps: finalisedGuidance.NextSteps,
-                Summary: finalisedGuidance.Summary);
+                Summary: finalisedGuidance.Summary,
+                Issues: ValidationIssuesHelper.EmptyIssues);
         }
 
         var draftPayload = await evaluationService.AssembleStoredDraftAsync(
@@ -91,7 +94,7 @@ public class GetSubmissionStatusUseCase(
             {
                 IReadOnlyList<ValidationError> missingDraftErrors =
                 [
-                    new ValidationError("$", "No draft payload has been uploaded yet.")
+                    new ValidationError("$", SubmissionMessages.NoDraftPayloadUploadedYet)
                 ];
 
                 var emptyGuidance = SubmissionNextStepsBuilder.Build(
@@ -129,7 +132,8 @@ public class GetSubmissionStatusUseCase(
                     DraftCount: 0,
                     LastDraftAtUtc: null,
                     NextSteps: emptyGuidance.NextSteps,
-                    Summary: emptyGuidance.Summary);
+                    Summary: emptyGuidance.Summary,
+                    Issues: ValidationIssuesHelper.GroupBySeverity(missingDraftErrors));
             }
 
             return draftPayload.Error;
@@ -189,6 +193,7 @@ public class GetSubmissionStatusUseCase(
             DraftCount: effectiveDraftCount,
             LastDraftAtUtc: inventory.LastDraftAtUtc,
             NextSteps: draftGuidance.NextSteps,
-            Summary: draftGuidance.Summary);
+            Summary: draftGuidance.Summary,
+            Issues: evaluation.EffectiveIssues);
     }
 }

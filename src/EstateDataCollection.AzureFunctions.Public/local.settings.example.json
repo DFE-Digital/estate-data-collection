@@ -16,7 +16,7 @@
     "Blob:Submission:ProcessedContainerName": "processed",
     "Blob:Submission:SessionBlobNameFormat": "{submissionId}/session.json",
     "Blob:Submission:PayloadBlobNameFormat": "{submissionId}/draft.json",
-    "Blob:Submission:ProcessedBlobNameFormat": "urn={urn}/schema={schemaName}/v={schemaVersion}/{submissionId}.json"
+    "Blob:Submission:ProcessedBlobNameFormat": "urn={establishmentIdentifier}/schema={schemaName}/v={schemaVersion}/{submissionId}/payload.json"
   },
   "Host": {
     "LocalHttpPort": 7071

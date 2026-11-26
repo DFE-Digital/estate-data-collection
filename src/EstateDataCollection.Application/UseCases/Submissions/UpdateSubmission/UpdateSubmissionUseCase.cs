@@ -1,5 +1,7 @@
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Submissions.Audit;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,7 +11,8 @@ namespace EstateDataCollection.Application.UseCases.Submissions.UpdateSubmission
 public class UpdateSubmissionUseCase(
     ISubmissionInfrastructure infrastructure,
     ISubmissionEvaluationService evaluationService,
-    UpdateSubmissionUseCaseInstrumentation? instrumentation = null
+    UpdateSubmissionUseCaseInstrumentation? instrumentation = null,
+    IIdentifierIndexRepository? identifierIndexRepository = null
 ) : IUseCase<UpdateSubmissionResult, UpdateSubmissionRequest>
 {
     private readonly UpdateSubmissionUseCaseInstrumentation _instrumentation =
@@ -23,7 +26,7 @@ public class UpdateSubmissionUseCase(
             SubmissionProcessCatalog.GetSession,
             () => infrastructure.GetSessionAsync(request.SubmissionId, cancellationToken),
             loaded => new ProcessStepDetails(
-                Summary: loaded.IsFinalised ? "Session already finalised" : "Draft session loaded"));
+                Summary: loaded.IsFinalised ? SubmissionMessages.SessionAlreadyFinalised : SubmissionMessages.DraftSessionLoaded));
 
         if (session.IsFailure)
         {
@@ -59,7 +62,7 @@ public class UpdateSubmissionUseCase(
                 {
                     schema.Value.Metadata.Name,
                     schema.Value.Metadata.Version,
-                    Message = $"Schema '{schema.Value.Metadata.Name}' v{schema.Value.Metadata.Version} is retired and no longer accepts updates."
+                    Message = SubmissionMessages.SchemaRetiredNoUpdates(schema.Value.Metadata.Name, schema.Value.Metadata.Version)
                 });
         }
 
@@ -95,12 +98,31 @@ public class UpdateSubmissionUseCase(
             () => infrastructure.SaveDraftPayloadAsync(request.SubmissionId, request.Payload, cancellationToken),
             () => new ProcessStepDetails(
                 ItemCount: draftCountAfterSave,
-                Summary: $"Saved timestamped draft chunk #{draftCountAfterSave} ({request.Payload.Length} chars)"));
+                Summary: SubmissionMessages.SavedDraftChunkSummary(draftCountAfterSave, request.Payload.Length)));
 
         if (save.IsFailure)
         {
             _instrumentation.DraftPayloadSaveFailed(request.SubmissionId, save.Error.Description ?? string.Empty);
             return save.Error;
+        }
+
+        if (identifierIndexRepository is not null &&
+            evaluation.Value.IdentifierEvaluation.Identifier is { } extractedId &&
+            !string.IsNullOrWhiteSpace(extractedId.Value))
+        {
+            var indexEntry = new IdentifierIndexEntry(
+                SubmissionId: request.SubmissionId,
+                SchemaName: session.Value.SchemaName,
+                SchemaVersion: session.Value.SchemaVersion,
+                Status: "Draft",
+                UpdatedAtUtc: DateTimeOffset.UtcNow,
+                PayloadPath: $"{request.SubmissionId}/draft.json");
+
+            await identifierIndexRepository.UpsertEntryAsync(
+                extractedId.Type,
+                extractedId.Value,
+                indexEntry,
+                cancellationToken);
         }
 
         var isValid = errors.Count == 0;
@@ -122,8 +144,8 @@ public class UpdateSubmissionUseCase(
             outcomeStatus: isValid ? "Succeeded" : "SavedWithPendingErrors",
             httpStatus: 200,
             message: isValid
-                ? $"Draft payload saved (chunk #{draftCountAfterSave}) with no validation errors"
-                : $"Draft payload saved (chunk #{draftCountAfterSave}) with {errors.Count} pending validation error(s)",
+                ? SubmissionMessages.DraftSavedNoErrors(draftCountAfterSave)
+                : SubmissionMessages.DraftSavedWithPendingErrors(draftCountAfterSave, errors.Count),
             validationErrors: errors,
             identifier: auditIdentifier);
 
@@ -136,7 +158,8 @@ public class UpdateSubmissionUseCase(
             SavedAtUtc: DateTimeOffset.UtcNow,
             DraftCount: draftCountAfterSave,
             NextSteps: guidance.NextSteps,
-            Summary: guidance.Summary
+            Summary: guidance.Summary,
+            Issues: evaluation.Value.EffectiveIssues
         );
     }
 }

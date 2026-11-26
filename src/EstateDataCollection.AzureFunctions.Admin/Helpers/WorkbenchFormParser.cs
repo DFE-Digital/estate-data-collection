@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EstateDataCollection.Admin.UI.Models;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using Microsoft.AspNetCore.Http;
@@ -43,7 +44,7 @@ public static class WorkbenchFormParser
                 {
                     validationErrors?.Add(new ValidationError(
                         "identifierPointer",
-                        "Enter a JSON Pointer path (e.g. '/school/urn' or '/establishment/laestab'), select a property from the schema, or choose 'None'."));
+                        AdminUiMessages.EnterIdentifierPointerOrNone));
                     effectivePointer = null;
                 }
                 else
@@ -62,7 +63,7 @@ public static class WorkbenchFormParser
             {
                 validationErrors?.Add(new ValidationError(
                     "identifierPointer",
-                    "Enter a JSON Pointer path (e.g. '/school/urn' or '/establishment/laestab'), select a property from the schema, or choose 'None'."));
+                    AdminUiMessages.EnterIdentifierPointerOrNone));
                 effectivePointer = null;
             }
             else
@@ -88,7 +89,7 @@ public static class WorkbenchFormParser
                 {
                     validationErrors?.Add(new ValidationError(
                         "identifierCustomType",
-                        "Provide a custom identifier type label or JSON Pointer path."));
+                        AdminUiMessages.ProvideCustomIdentifierTypeOrPointer));
                 }
 
                 effectiveType = IdentifierPropertyDiscovery.DeriveTypeFromPointer(effectivePointer);
@@ -149,13 +150,13 @@ public static class WorkbenchFormParser
         var version = 1;
         if (!string.IsNullOrWhiteSpace(versionRaw) && (!int.TryParse(versionRaw, out version) || version < 1))
         {
-            validationErrors.Add(new ValidationError("version", "Version must be an integer greater than or equal to 1."));
+            validationErrors.Add(new ValidationError("version", AdminUiMessages.VersionMustBeAtLeastOne));
             version = 1;
         }
 
         if (requireSchemaIdentity && string.IsNullOrWhiteSpace(schemaName))
         {
-            validationErrors.Add(new ValidationError("schemaName", "Schema name is required when saving a schema version."));
+            validationErrors.Add(new ValidationError("schemaName", AdminUiMessages.SchemaNameRequiredWhenSaving));
         }
 
         var validFixturesResult = ParseFixtures(validFixtureJson, "validFixtureJson");
@@ -172,11 +173,11 @@ public static class WorkbenchFormParser
 
         if (string.Equals(inputMode, "odcs", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(odcsYaml))
         {
-            validationErrors.Add(new ValidationError("odcsYaml", "Provide ODCS v3 YAML contract content."));
+            validationErrors.Add(new ValidationError("odcsYaml", AdminUiMessages.ProvideOdcsYamlContent));
         }
         else if (string.Equals(inputMode, "json", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(schemaJson))
         {
-            validationErrors.Add(new ValidationError("schemaJson", "Provide JSON Schema content."));
+            validationErrors.Add(new ValidationError("schemaJson", AdminUiMessages.ProvideJsonSchemaContent));
         }
 
         var identifierConfig = ParseIdentifierConfig(form, validationErrors);
@@ -201,7 +202,7 @@ public static class WorkbenchFormParser
         {
             return Error.Validation(
                 "Workbench.InvalidForm",
-                "One or more workbench fields are invalid.",
+                AdminUiMessages.WorkbenchFormInvalid,
                 validationErrors);
         }
 
@@ -263,15 +264,15 @@ public static class WorkbenchFormParser
 
             return Error.Validation(
                 "Workbench.InvalidFixtureJson",
-                "Fixture payload must be a JSON object or JSON array of objects.",
-                [new ValidationError(fieldName, "Must be a JSON object or JSON array of objects.")]);
+                AdminUiMessages.FixturePayloadMustBeObjectOrArray,
+                [new ValidationError(fieldName, AdminUiMessages.FixtureMustBeObjectOrArrayShort)]);
         }
         catch (JsonException ex)
         {
             return Error.Validation(
                 "Workbench.MalformedFixtureJson",
                 ex.Message,
-                [new ValidationError(fieldName, $"Invalid JSON: {ex.Message}")]);
+                [new ValidationError(fieldName, AdminUiMessages.InvalidJsonDetail(ex.Message))]);
         }
     }
 }

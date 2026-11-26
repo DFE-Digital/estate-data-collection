@@ -4,7 +4,7 @@ namespace EstateDataCollection.Application.Abstraction;
 /// Typed execution summary produced per validation engine for a single payload evaluation.
 /// </summary>
 public sealed record ValidationEngineTrace(
-    ValidationEngineDescriptor Descriptor,
+    WorkflowEngineDescriptor Descriptor,
     string Outcome,
     int ItemsEvaluated,
     int ViolationCount,

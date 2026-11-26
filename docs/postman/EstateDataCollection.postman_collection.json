@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "c1f79f22-9650-48e2-9ef4-7cb45d625d19",
     "name": "Estate Data Collection (EDC) API",
-    "description": "Comprehensive Postman test kit for the Estate Data Collection (EDC) Azure Functions platform (Public & Admin Function Apps).\n\nCovers:\n0. Health & Version Observability (GET /api/about)\n1. Admin Schema & Multi-Engine Quality Rule Verification (POST /api/schemas/verify — JSON Schema Draft-07 & 2020-12, ODCS v3.2.0 YAML, JsonLogic & CEL)\n2. Admin Schema Ingestion, Scheduling & Catalogue Management (POST /api/schemas/{schemaName}/versions/{version}, PATCH /api/schemas/{schemaName}/versions/{version}/schedule, GET /api/schemas, GET /api/schemas/{schemaName}/versions/{version})\n3. Public Schema Discovery & Catalogue (GET /api/schemas, GET /api/schemas/{schemaName}, GET /api/schemas/{schemaName}/versions/{version})\n4. CDC Survey Submission Lifecycle (POST /api/submissions/{cdcSchemaName}, GET /api/submissions/{submissionId}, PUT /api/submissions/{submissionId}, GET /api/submissions/{submissionId}/check, POST /api/submissions/{submissionId}/finalise)\n5. ODCS v3.2.0 Survey Sites Workflow (edc-survey-sites)\n6. CDC Survey Two-Step Validation Pipeline (cdc_survey with 10 Quality Rules)",
+    "description": "Comprehensive Postman test kit for the Estate Data Collection (EDC) Azure Functions platform (Public & Admin Function Apps).\n\nCovers:\n0. Health & Version Observability (GET /api/about)\n1. Admin Schema & Multi-Engine Verification (POST /api/schemas/verify — always 200 OK report with issues by severity, analyzerFindings, engineTraces, validationPolicy, ambientFixtures; GET /api/schemas/engines; CCD Elemental Dataset v3 ODCS v3.2.0)\n2. Admin Schema Ingestion, Lifecycle Tombstone & Sign-Off (Invalid .error.json, DELETE tombstone + 409 Conflict guard -> v+1, Unvalidated + PATCH .../signoff -> Validated, Schedule & Catalogue)\n3. Public Schema Discovery & Catalogue (GET /api/schemas, GET /api/schemas/{schemaName}, GET /api/schemas/{schemaName}/versions/{version})\n4. CDC Survey Submission Lifecycle (Drafts with severity-grouped issues -> Ready -> Finalised /{submissionId}/payload.json bundle)\n5. ODCS v3.2.0 Survey Sites Workflow (edc-survey-sites)\n6. CDC Survey Multi-Step Validation Pipeline (cdc_survey with 10 Quality Rules)\n7. CCD Elemental Dataset v3 Workflow (ccd-elemental-v3 with reference data, cross-submission site/block integrity, CEL/JsonLogic/unique rules, and processed bundle layout)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -53,6 +53,31 @@
     },
     {
       "key": "odcsSubmissionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ccdV3SchemaName",
+      "value": "ccd-elemental-v3",
+      "type": "string"
+    },
+    {
+      "key": "ccdBaselineSchemaName",
+      "value": "edc-sites-baseline",
+      "type": "string"
+    },
+    {
+      "key": "lifecycleSchemaName",
+      "value": "edc-lifecycle-demo",
+      "type": "string"
+    },
+    {
+      "key": "ccdV3SubmissionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ccdBaselineSubmissionId",
       "value": "",
       "type": "string"
     }
@@ -130,6 +155,13 @@
                   "        pm.expect(jsonData.successful).to.be.true;",
                   "    }",
                   "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "pm.test(\"Dry-run verification report indicates isSuccessful=true with engine traces\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.engineTraces).to.be.an(\"array\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -185,6 +217,13 @@
                   "        pm.expect(jsonData.successful).to.be.true;",
                   "    }",
                   "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "pm.test(\"Dry-run verification report indicates isSuccessful=true with engine traces\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.engineTraces).to.be.an(\"array\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -240,6 +279,13 @@
                   "        pm.expect(jsonData.successful).to.be.true;",
                   "    }",
                   "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "pm.test(\"Dry-run verification report indicates isSuccessful=true with engine traces\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.engineTraces).to.be.an(\"array\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -295,6 +341,13 @@
                   "        pm.expect(jsonData.successful).to.be.true;",
                   "    }",
                   "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "pm.test(\"Dry-run verification report indicates isSuccessful=true with engine traces\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.engineTraces).to.be.an(\"array\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -350,6 +403,13 @@
                   "        pm.expect(jsonData.successful).to.be.true;",
                   "    }",
                   "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "pm.test(\"Dry-run verification report indicates isSuccessful=true with engine traces\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.engineTraces).to.be.an(\"array\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -409,6 +469,13 @@
                   "        pm.expect(jsonData.successful).to.be.true;",
                   "    }",
                   "    pm.expect(data.message).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "pm.test(\"Dry-run verification report indicates isSuccessful=true with engine traces\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.engineTraces).to.be.an(\"array\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -445,6 +512,172 @@
             "description": "Verifies an ODCS v3.2.0 YAML contract wrapped in a JSON request alongside sample valid and invalid test fixtures."
           },
           "response": []
+        },
+        {
+          "name": "1.7 Get Registered Validation Engines",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/engines",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "engines"
+              ]
+            },
+            "description": "Returns all registered structural schema, quality rule, identifier extraction, context enrichment, and contract consistency analyzer engines."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns all expected validation engines\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.engines).to.be.an(\"array\").that.is.not.empty;",
+                  "    const ids = data.engines.map(e => e.engineId);",
+                  "    [\"json-schema\", \"jsonlogic\", \"cel\", \"unique\", \"identifier-extractor\", \"contract-consistency-analyzer\", \"reference-data-enrichment\", \"cross-submission-enrichment\"]",
+                  "        .forEach(expected => pm.expect(ids).to.include(expected));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.8 Verify Schema with Multi-Severity Analyzer Findings (Always 200 OK)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/verify",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "verify"
+              ]
+            },
+            "description": "Demonstrates that POST /api/schemas/verify always returns 200 OK with structured diagnostics (isSuccessful=false, issues grouped by severity, analyzerFindings, syntaxErrors, engineTraces) and identifier-agnostic identifier configuration.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\": \\\"https://json-schema.org/draft/2020-12/schema\\\", \\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"identifier\\\", \\\"quantity\\\"], \\\"properties\\\": {\\\"identifier\\\": {\\\"type\\\": \\\"string\\\", \\\"minLength\\\": 1}, \\\"quantity\\\": {\\\"type\\\": \\\"number\\\", \\\"maximum\\\": 50}}}\",\n  \"rulesJson\": \"[{\\\"id\\\": \\\"R-BAD-CASING\\\", \\\"description\\\": \\\"Wrong casing field triggers analyzer error\\\", \\\"engine\\\": \\\"cel\\\", \\\"path\\\": \\\"/\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"implementation\\\": \\\"this.Quantity >= 0\\\"}, {\\\"id\\\": \\\"R-WARN-BOUND\\\", \\\"description\\\": \\\"Bound exceeds schema maximum triggers analyzer warning\\\", \\\"engine\\\": \\\"cel\\\", \\\"path\\\": \\\"/\\\", \\\"severity\\\": \\\"WARNING\\\", \\\"implementation\\\": \\\"this.quantity >= 100\\\"}]\",\n  \"sampleValidFixtures\": [\n    \"{\\\"identifier\\\": \\\"EST-104521\\\", \\\"quantity\\\": 10}\"\n  ],\n  \"identifierConfig\": {\n    \"type\": \"EstablishmentId\",\n    \"jsonPointer\": \"/identifier\",\n    \"required\": true\n  },\n  \"validationPolicy\": {\n    \"failOnMinimumSeverity\": \"Error\",\n    \"crossSubmissionDraftPolicy\": \"WarnOnDraftReferences\"\n  }\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK even when verification detects contract errors\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Report returns isSuccessful=false with Error + Warning analyzerFindings and grouped issues\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.isSuccessful).to.be.false;",
+                  "    pm.expect(data.analyzerFindings).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(data.issues).to.be.an(\"object\");",
+                  "    pm.expect(data.issues.error).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(data.issues.warning).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(data.engineTraces).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.9 Verify CCD Elemental v3 ODCS v3.2.0 Contract & Ambient Fixtures",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/verify",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "verify"
+              ]
+            },
+            "description": "Dry-run verifies the full CCD Elemental Dataset v3 ODCS v3.2.0 contract (CEL + JsonLogic + unique + DependsOn + ancestor access + float epsilon + reference-data & cross-submission ambientFixtures).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileName\": \"ccd-elemental-v3.odcs.yaml\",\n  \"odcsYaml\": \"version: \\\"3.0.0\\\"\\nkind: DataContract\\napiVersion: v3.2.0\\n\\nid: ccd-elemental-v3\\nname: ccd-elemental-v3\\nstatus: draft\\n\\ndomain: capital-delivery\\ntenant: DfE\\n\\ncustomProperties:\\n  - property: failOnMinimumSeverity\\n    value: Error\\n  - property: crossSubmissionDraftPolicy\\n    value: WarnOnDraftReferences\\n\\nservers:\\n  - server: databricks\\n    type: databricks\\n    environment: dev\\n    description: CCD Elemental Dataset v3 stored in Databricks Silver layer\\n    catalog: eed_catalogue_30_bronze\\n    schema: cde_edc_integration\\n\\ndescription:\\n  purpose: >\\n    Captures DfE Capital Condition Data (CCD) Elemental Dataset v3 submissions including\\n    survey metadata, establishment identifier, surveyed elements, occurrences, replacement data,\\n    and multi-year repair schedules.\\n  usage: >\\n    Used for public collection, multi-engine quality validation (JsonLogic, CEL, unique),\\n    cross-submission site/block integrity, and reference-data verification.\\n  limitations: >\\n    Binary photo attachment upload and Microsoft Defender malware scanning are handled separately\\n    by the upload manifest workflow; this contract validates photoReference format and requiredness.\\n\\nschema:\\n  - name: submission\\n    logicalType: object\\n    description: Top-level CCD Elemental Dataset v3 payload container\\n    quality:\\n      - id: CCD-ELEM-V3-006\\n        type: custom\\n        engine: cel\\n        severity: CRITICAL\\n        stage: 10\\n        order: 4\\n        stopOnFailure: true\\n        path: \\\"/\\\"\\n        description: Submission must contain at least one surveyed element.\\n        message: Submission must contain at least one element in 'elements'.\\n        implementation: \\\"size(this.elements) > 0\\\"\\n\\n    properties:\\n      - name: survey\\n        logicalType: object\\n        required: true\\n        quality:\\n          - id: CCD-ELEM-V3-003\\n            type: custom\\n            engine: jsonlogic\\n            severity: CRITICAL\\n            stage: 10\\n            order: 1\\n            stopOnFailure: true\\n            path: survey\\n            description: Survey updatedAt timestamp must be greater than or equal to createdAt.\\n            message: Survey updatedAt cannot precede createdAt.\\n            implementation:\\n              \\\">=\\\":\\n                - var: survey.updatedAt\\n                - var: survey.createdAt\\n\\n          - id: CCD-ELEM-V3-004\\n            type: custom\\n            engine: cel\\n            severity: CRITICAL\\n            stage: 10\\n            order: 2\\n            stopOnFailure: true\\n            path: survey\\n            description: Core survey identifiers (id, surveyName, participantId) must be non-empty.\\n            message: Survey id, surveyName, and participantId must be populated.\\n            implementation: \\\"size(this.id) > 0 && size(this.surveyName) > 0 && size(this.participantId) > 0\\\"\\n\\n          - id: CCD-ELEM-V3-056\\n            type: custom\\n            engine: cel\\n            severity: ERROR\\n            stage: 20\\n            order: 10\\n            path: survey\\n            description: Completed surveys must include a surveyorEmail contact address.\\n            message: surveyorEmail is required when survey.isComplete is true.\\n            implementation: \\\"!this.isComplete || (has(this.surveyorEmail) && this.surveyorEmail != null && size(this.surveyorEmail) > 0)\\\"\\n\\n        properties:\\n          - name: id\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n            logicalTypeOptions:\\n              pattern: \\\"^SURV-[A-Za-z0-9-]+$\\\"\\n\\n          - name: surveyName\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n\\n          - name: participantId\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n\\n          - name: surveyorEmail\\n            physicalType: string\\n            logicalType: string\\n            required: false\\n            logicalTypeOptions:\\n              format: email\\n\\n          - name: surveyDate\\n            physicalType: string\\n            logicalType: date\\n            required: true\\n\\n          - name: isComplete\\n            physicalType: boolean\\n            logicalType: boolean\\n            required: true\\n\\n          - name: createdAt\\n            physicalType: string\\n            logicalType: timestamp\\n            required: true\\n\\n          - name: updatedAt\\n            physicalType: string\\n            logicalType: timestamp\\n            required: true\\n\\n      - name: school\\n        logicalType: object\\n        required: true\\n        quality:\\n          - id: CCD-ELEM-V3-005\\n            type: custom\\n            engine: cel\\n            severity: CRITICAL\\n            stage: 10\\n            order: 3\\n            stopOnFailure: true\\n            path: school\\n            description: Establishment identifier value must be non-empty.\\n            message: Establishment identifier (school.urn) must not be blank.\\n            implementation: \\\"size(this.urn) > 0\\\"\\n\\n        properties:\\n          - name: urn\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n\\n          - name: name\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n\\n          - name: localAuthorityCode\\n            physicalType: string\\n            logicalType: string\\n            required: false\\n\\n      - name: elements\\n        logicalType: array\\n        required: true\\n        items:\\n          logicalType: object\\n          required: true\\n          quality:\\n            - id: CCD-ELEM-V3-001\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 1\\n              dependsOn:\\n                - CCD-ELEM-V3-006\\n              path: \\\"elements[]\\\"\\n              description: Element productType must exist in the authoritative CCD reference catalogue.\\n              message: productType is not present in the CCD reference dataset.\\n              implementation: \\\"this.productType in ambient.reference.product_types\\\"\\n\\n            - id: CCD-ELEM-V3-007\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 2\\n              dependsOn:\\n                - CCD-ELEM-V3-006\\n              path: \\\"elements[]\\\"\\n              description: Element nrm3Code must exist in the NRM3 reference dataset.\\n              message: nrm3Code is not present in the NRM3 reference dataset.\\n              implementation: \\\"this.nrm3Code in ambient.reference.nrm3_codes\\\"\\n\\n            - id: CCD-ELEM-V3-008\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 3\\n              dependsOn:\\n                - CCD-ELEM-V3-006\\n              path: \\\"elements[]\\\"\\n              description: Element siteId must match a site identifier in sibling cross-submission records.\\n              message: siteId was not found in cross-submission known_site_ids for this establishment.\\n              implementation: \\\"this.siteId in ambient.cross_submission.known_site_ids\\\"\\n\\n            - id: CCD-ELEM-V3-009\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 4\\n              dependsOn:\\n                - CCD-ELEM-V3-008\\n              path: \\\"elements[]\\\"\\n              description: Non-site elements must reference a valid blockId from sibling cross-submission records.\\n              message: blockId must be provided and exist in cross-submission known_block_ids when assetType is block, floor, or space.\\n              implementation: \\\"this.assetType == 'site' || (has(this.blockId) && this.blockId != null && this.blockId in ambient.cross_submission.known_block_ids)\\\"\\n\\n            - id: CCD-ELEM-V3-010\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 5\\n              path: \\\"elements[]\\\"\\n              description: Floor-level elements must specify floorId.\\n              message: floorId is required when assetType is 'floor'.\\n              implementation: \\\"this.assetType != 'floor' || (has(this.floorId) && this.floorId != null && size(this.floorId) > 0)\\\"\\n\\n            - id: CCD-ELEM-V3-011\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 6\\n              path: \\\"elements[]\\\"\\n              description: Space-level elements must specify both floorId and spaceId.\\n              message: floorId and spaceId are required when assetType is 'space'.\\n              implementation: \\\"this.assetType != 'space' || (has(this.floorId) && this.floorId != null && size(this.floorId) > 0 && has(this.spaceId) && this.spaceId != null && size(this.spaceId) > 0)\\\"\\n\\n            - id: CCD-ELEM-V3-012\\n              type: custom\\n              engine: jsonlogic\\n              severity: ERROR\\n              stage: 20\\n              order: 7\\n              path: \\\"elements[]\\\"\\n              description: Elements marked as notAssessed must provide a non-empty notAssessedReason.\\n              message: notAssessedReason is required when notAssessed is true.\\n              implementation:\\n                \\\"if\\\":\\n                  - \\\"==\\\":\\n                      - var: notAssessed\\n                      - true\\n                  - \\\"and\\\":\\n                      - \\\"!=\\\":\\n                          - var: notAssessedReason\\n                          - null\\n                      - \\\">\\\":\\n                          - var: notAssessedReason.length\\n                          - 0\\n                  - true\\n\\n            - id: CCD-ELEM-V3-013\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 8\\n              path: \\\"elements[]\\\"\\n              description: Assessed elements (notAssessed != true) must contain at least one occurrence.\\n              message: Assessed elements must include at least one occurrence.\\n              implementation: \\\"(has(this.notAssessed) && this.notAssessed == true) || (has(this.occurrences) && this.occurrences != null && size(this.occurrences) > 0)\\\"\\n\\n            - id: CCD-ELEM-V3-014\\n              type: unique\\n              engine: unique\\n              severity: ERROR\\n              stage: 20\\n              order: 9\\n              path: \\\"elements[]\\\"\\n              description: Element id must be unique across the submission.\\n              message: Duplicate element id detected in submission.\\n              fields:\\n                - id\\n\\n            - id: CCD-ELEM-V3-015\\n              type: custom\\n              engine: cel\\n              severity: WARNING\\n              stage: 20\\n              order: 10\\n              path: \\\"elements[]\\\"\\n              description: Elements marked notAssessed should not normally contain occurrences.\\n              message: Element is marked notAssessed but still includes occurrences.\\n              implementation: \\\"!(has(this.notAssessed) && this.notAssessed == true) || !has(this.occurrences) || this.occurrences == null || size(this.occurrences) == 0\\\"\\n\\n          properties:\\n            - name: id\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n              logicalTypeOptions:\\n                pattern: \\\"^ELM-[A-Za-z0-9-]+$\\\"\\n\\n            - name: nrm3Code\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n\\n            - name: productType\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n\\n            - name: elementCategory\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n              enum:\\n                - value: Fabric\\n                - value: Mechanical\\n                - value: Electrical\\n                - value: External\\n                - value: Special\\n\\n            - name: assetType\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n              enum:\\n                - value: site\\n                - value: block\\n                - value: floor\\n                - value: space\\n\\n            - name: siteId\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n\\n            - name: blockId\\n              physicalType: string\\n              logicalType: string\\n              required: false\\n\\n            - name: floorId\\n              physicalType: string\\n              logicalType: string\\n              required: false\\n\\n            - name: spaceId\\n              physicalType: string\\n              logicalType: string\\n              required: false\\n\\n            - name: notAssessed\\n              physicalType: boolean\\n              logicalType: boolean\\n              required: false\\n\\n            - name: notAssessedReason\\n              physicalType: string\\n              logicalType: string\\n              required: false\\n\\n            - name: occurrences\\n              logicalType: array\\n              required: false\\n              items:\\n                logicalType: object\\n                quality:\\n                  - id: CCD-ELEM-V3-016\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 1\\n                    dependsOn:\\n                      - CCD-ELEM-V3-001\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Assessed element occurrences must specify basisOfAssessment.\\n                    message: basisOfAssessment is required for assessed element occurrences.\\n                    implementation: \\\"(has($parent.notAssessed) && $parent.notAssessed == true) || (has(this.basisOfAssessment) && this.basisOfAssessment != null)\\\"\\n\\n                  - id: CCD-ELEM-V3-017\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 2\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Assessed element occurrences must specify conditionGrade.\\n                    message: conditionGrade is required for assessed element occurrences.\\n                    implementation: \\\"(has($parent.notAssessed) && $parent.notAssessed == true) || (has(this.conditionGrade) && this.conditionGrade != null)\\\"\\n\\n                  - id: CCD-ELEM-V3-018\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 3\\n                    dependsOn:\\n                      - CCD-ELEM-V3-017\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Condition grades B, C, and D require a descriptive conditionDescription (min 5 chars).\\n                    message: conditionDescription (minimum 5 characters) is required when conditionGrade is B, C, or D.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade in ['B', 'C', 'D']) || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) >= 5)\\\"\\n\\n                  - id: CCD-ELEM-V3-002\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 4\\n                    dependsOn:\\n                      - CCD-ELEM-V3-017\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade C or D occurrences must declare a photoReference (binary attachment existence verified by upload manifest workflow).\\n                    message: photoReference is required when conditionGrade is C or D.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade in ['C', 'D']) || (has(this.photoReference) && this.photoReference != null && size(this.photoReference) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-020\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 5\\n                    dependsOn:\\n                      - CCD-ELEM-V3-017\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade D (Life Expired) occurrences must include at least one repair item.\\n                    message: At least one repair entry is required when conditionGrade is D.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'D') || (has(this.repairs) && this.repairs != null && size(this.repairs) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-021\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 6\\n                    dependsOn:\\n                      - CCD-ELEM-V3-017\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade C (Poor) occurrences should normally include at least one repair item.\\n                    message: Grade C occurrence does not include any repair entries.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'C') || (has(this.repairs) && this.repairs != null && size(this.repairs) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-022\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 7\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade A occurrences may only carry priorityGrade '1' when specified.\\n                    message: Grade A occurrence cannot have a priorityGrade above 1.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'A' && has(this.priorityGrade) && this.priorityGrade != null) || this.priorityGrade == '1'\\\"\\n\\n                  - id: CCD-ELEM-V3-023\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 8\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade D occurrences must carry priorityGrade '3' or '4'.\\n                    message: Grade D occurrence must specify priorityGrade '3' or '4'.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'D') || (has(this.priorityGrade) && this.priorityGrade in ['3', '4'])\\\"\\n\\n                  - id: CCD-ELEM-V3-024\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 9\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Assumed ('Not Seen') occurrences must explain the basis in conditionDescription.\\n                    message: conditionDescription is required when basisOfAssessment is 'Not Seen'.\\n                    implementation: \\\"!(has(this.basisOfAssessment) && this.basisOfAssessment == 'Not Seen') || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-025\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 10\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Suspected asbestos occurrences should include explanatory notes in conditionDescription.\\n                    message: conditionDescription should be populated when hasAsbestosSuspected is true.\\n                    implementation: \\\"!(has(this.hasAsbestosSuspected) && this.hasAsbestosSuspected == true) || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-027\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 11\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Condition score when provided must be between 0 and 100 inclusive.\\n                    message: conditionScore must be between 0 and 100.\\n                    implementation: \\\"!has(this.conditionScore) || this.conditionScore == null || (this.conditionScore >= 0.0 && this.conditionScore <= 100.0)\\\"\\n\\n                  - id: CCD-ELEM-V3-028\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 12\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade A occurrences should normally have a conditionScore of at least 85.\\n                    message: Grade A occurrence has a conditionScore below 85.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'A' && has(this.conditionScore) && this.conditionScore != null) || this.conditionScore >= 85.0\\\"\\n\\n                  - id: CCD-ELEM-V3-029\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 13\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade D occurrences should normally have a conditionScore of 25 or lower.\\n                    message: Grade D occurrence has a conditionScore above 25.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'D' && has(this.conditionScore) && this.conditionScore != null) || this.conditionScore <= 25.0\\\"\\n\\n                  - id: CCD-ELEM-V3-030\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 14\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Occurrence surveyLevel must align with parent element assetType.\\n                    message: Occurrence surveyLevel does not align with parent element assetType.\\n                    implementation: \\\"(this.surveyLevel == 'Site' && $parent.assetType == 'site') || (this.surveyLevel == 'Block' && $parent.assetType == 'block') || (this.surveyLevel == 'Floor' && $parent.assetType == 'floor') || (this.surveyLevel == 'Space' && $parent.assetType == 'space')\\\"\\n\\n                  - id: CCD-ELEM-V3-031\\n                    type: unique\\n                    engine: unique\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 15\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Occurrence id must be unique across all elements.\\n                    message: Duplicate occurrence id detected in submission.\\n                    fields:\\n                      - id\\n\\n                  - id: CCD-ELEM-V3-032\\n                    type: unique\\n                    engine: unique\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 16\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Duplicate occurrence combination across productType, surveyLevel, location, and conditionGrade.\\n                    message: Duplicate occurrence combination detected across productType, surveyLevel, occurrenceExtentOrLocationDescription, and conditionGrade.\\n                    fields:\\n                      - \\\"$parent.productType\\\"\\n                      - surveyLevel\\n                      - occurrenceExtentOrLocationDescription\\n                      - conditionGrade\\n\\n                  - id: CCD-ELEM-V3-033\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 17\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Occurrence assessedAt timestamp when specified must not precede survey createdAt.\\n                    message: Occurrence assessedAt timestamp precedes survey.createdAt.\\n                    implementation: \\\"!has(this.assessedAt) || this.assessedAt == null || timestamp(this.assessedAt) >= timestamp($root.survey.createdAt)\\\"\\n\\n                  - id: CCD-ELEM-V3-034\\n                    type: unique\\n                    engine: unique\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 18\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Advisory uniqueness check across nrm3Code, siteId, blockId, surveyLevel, and location.\\n                    message: Potential duplicate NRM3 occurrence detected at the same site/block/level/location.\\n                    fields:\\n                      - \\\"$parent.nrm3Code\\\"\\n                      - \\\"$parent.siteId\\\"\\n                      - \\\"$parent.blockId\\\"\\n                      - surveyLevel\\n                      - occurrenceExtentOrLocationDescription\\n\\n                  - id: CCD-ELEM-V3-038\\n                    type: custom\\n                    engine: cel\\n                    severity: INFO\\n                    stage: 30\\n                    order: 19\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Advisory notice that all recorded occurrences are included in DfE statutory lifecycle capital forecasting.\\n                    message: Occurrence included in statutory lifecycle capital forecasting.\\n\\n                  - id: CCD-ELEM-V3-057\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 20\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Completed surveys with 'Assumed' basisOfAssessment should include detailed justification (>= 10 chars).\\n                    message: Completed survey occurrence with basisOfAssessment 'Assumed' should provide at least 10 characters in conditionDescription.\\n                    implementation: \\\"!($root.survey.isComplete && has(this.basisOfAssessment) && this.basisOfAssessment == 'Assumed') || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) >= 10)\\\"\\n\\n                properties:\\n                  - name: id\\n                    physicalType: string\\n                    logicalType: string\\n                    required: true\\n                    logicalTypeOptions:\\n                      pattern: \\\"^OCC-[A-Za-z0-9-]+$\\\"\\n\\n                  - name: surveyLevel\\n                    physicalType: string\\n                    logicalType: string\\n                    required: true\\n                    enum:\\n                      - value: Site\\n                      - value: Block\\n                      - value: Floor\\n                      - value: Space\\n\\n                  - name: occurrenceExtentOrLocationDescription\\n                    physicalType: string\\n                    logicalType: string\\n                    required: true\\n\\n                  - name: basisOfAssessment\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n                    enum:\\n                      - value: Seen\\n                      - value: Not Seen\\n                      - value: Assumed\\n\\n                  - name: conditionGrade\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n                    enum:\\n                      - value: A\\n                      - value: B\\n                      - value: C\\n                      - value: D\\n\\n                  - name: conditionScore\\n                    physicalType: number\\n                    logicalType: number\\n                    required: false\\n\\n                  - name: conditionDescription\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n\\n                  - name: priorityGrade\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n                    enum:\\n                      - value: \\\"1\\\"\\n                      - value: \\\"2\\\"\\n                      - value: \\\"3\\\"\\n                      - value: \\\"4\\\"\\n\\n                  - name: hasAsbestosSuspected\\n                    physicalType: boolean\\n                    logicalType: boolean\\n                    required: false\\n\\n                  - name: photoReference\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n                    logicalTypeOptions:\\n                      pattern: \\\"^PHOTO-[A-Za-z0-9_.-]+$\\\"\\n\\n                  - name: assessedAt\\n                    physicalType: string\\n                    logicalType: timestamp\\n                    required: false\\n\\n                  - name: replacement\\n                    logicalType: object\\n                    required: false\\n                    quality:\\n                      - id: CCD-ELEM-V3-035\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 1\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: Remaining life (remLife) cannot be negative.\\n                        message: remLife must be greater than or equal to 0.\\n                        implementation: \\\"!has(this.remLife) || this.remLife == null || this.remLife >= 0\\\"\\n\\n                      - id: CCD-ELEM-V3-036\\n                        type: custom\\n                        engine: cel\\n                        severity: WARNING\\n                        stage: 40\\n                        order: 2\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: Remaining life (remLife) should not exceed 100 years.\\n                        message: remLife exceeds typical 100-year maximum lifecycle.\\n                        implementation: \\\"!has(this.remLife) || this.remLife == null || this.remLife <= 100\\\"\\n\\n                      - id: CCD-ELEM-V3-037\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 3\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: Grade D occurrences must report remLife <= 5 years.\\n                        message: Grade D occurrence cannot have remLife greater than 5 years.\\n                        implementation: \\\"!(has($parent.conditionGrade) && $parent.conditionGrade == 'D' && has(this.remLife) && this.remLife != null) || this.remLife <= 5\\\"\\n\\n                      - id: CCD-ELEM-V3-039\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 4\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: replacementQuantity when provided must be strictly positive.\\n                        message: replacementQuantity must be greater than 0.\\n                        implementation: \\\"!has(this.replacementQuantity) || this.replacementQuantity == null || this.replacementQuantity > 0.0\\\"\\n\\n                      - id: CCD-ELEM-V3-040\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 5\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: replacementRate when provided must be non-negative.\\n                        message: replacementRate must be greater than or equal to 0.\\n                        implementation: \\\"!has(this.replacementRate) || this.replacementRate == null || this.replacementRate >= 0.0\\\"\\n\\n                      - id: CCD-ELEM-V3-041\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 6\\n                        dependsOn:\\n                          - CCD-ELEM-V3-039\\n                          - CCD-ELEM-V3-040\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: replacementCost must equal replacementQuantity * replacementRate within automatic float tolerance.\\n                        message: replacementCost does not match replacementQuantity * replacementRate.\\n                        implementation: \\\"!has(this.replacementCost) || this.replacementCost == null || !has(this.replacementQuantity) || this.replacementQuantity == null || !has(this.replacementRate) || this.replacementRate == null || this.replacementCost == this.replacementQuantity * this.replacementRate\\\"\\n\\n                      - id: CCD-ELEM-V3-042\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 7\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: Unit of measure (uom) must be populated when replacementQuantity is provided.\\n                        message: replacement.uom is required when replacementQuantity is specified.\\n                        implementation: \\\"!has(this.replacementQuantity) || this.replacementQuantity == null || (has(this.uom) && this.uom != null)\\\"\\n\\n                    properties:\\n                      - name: uom\\n                        physicalType: string\\n                        logicalType: string\\n                        required: false\\n                        enum:\\n                          - value: m2\\n                          - value: m\\n                          - value: nr\\n                          - value: item\\n                          - value: sum\\n\\n                      - name: remLife\\n                        physicalType: integer\\n                        logicalType: integer\\n                        required: false\\n\\n                      - name: replacementQuantity\\n                        physicalType: number\\n                        logicalType: number\\n                        required: false\\n\\n                      - name: replacementRate\\n                        physicalType: number\\n                        logicalType: number\\n                        required: false\\n\\n                      - name: replacementCost\\n                        physicalType: number\\n                        logicalType: number\\n                        required: false\\n\\n                  - name: repairs\\n                    logicalType: array\\n                    required: false\\n                    items:\\n                      logicalType: object\\n                      quality:\\n                        - id: CCD-ELEM-V3-019\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 1\\n                          dependsOn:\\n                            - CCD-ELEM-V3-001\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair item must be valid for the grandparent element productType.\\n                          message: repairItem is not in ambient.reference.repair_items_by_product_type for this element's productType.\\n                          implementation: \\\"has(this.repairItem) && this.repairItem != null && ($parent.$parent.productType in ambient.reference.repair_items_by_product_type) && (this.repairItem in ambient.reference.repair_items_by_product_type[$parent.$parent.productType])\\\"\\n\\n                        - id: CCD-ELEM-V3-043\\n                          type: unique\\n                          engine: unique\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 2\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair id must be unique across all repairs.\\n                          message: Duplicate repair id detected in submission.\\n                          fields:\\n                            - id\\n\\n                        - id: CCD-ELEM-V3-044\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 3\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: repairQuantity must be strictly positive.\\n                          message: repairQuantity must be greater than 0.\\n                          implementation: \\\"has(this.repairQuantity) && this.repairQuantity != null && this.repairQuantity > 0.0\\\"\\n\\n                        - id: CCD-ELEM-V3-026\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 4\\n                          dependsOn:\\n                            - CCD-ELEM-V3-039\\n                            - CCD-ELEM-V3-044\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair quantity must not exceed parent occurrence replacementQuantity when units match.\\n                          message: repairQuantity cannot exceed parent replacement.replacementQuantity when using the same uom.\\n                          implementation: \\\"!has($parent.replacement) || $parent.replacement == null || !has($parent.replacement.replacementQuantity) || $parent.replacement.replacementQuantity == null || !has(this.uom) || this.uom == null || !has($parent.replacement.uom) || $parent.replacement.uom == null || this.uom != $parent.replacement.uom || $parent.replacement.replacementQuantity >= this.repairQuantity\\\"\\n\\n                        - id: CCD-ELEM-V3-045\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 5\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Urgent repairs must populate repairDescription and repairClassification.\\n                          message: repairDescription and repairClassification are required when urgentActionRequired is true.\\n                          implementation: \\\"!(has(this.urgentActionRequired) && this.urgentActionRequired == true) || (has(this.repairDescription) && this.repairDescription != null && size(this.repairDescription) > 0 && has(this.repairClassification) && this.repairClassification != null)\\\"\\n\\n                        - id: CCD-ELEM-V3-046\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 6\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: repairItemRate must be non-negative.\\n                          message: repairItemRate must be greater than or equal to 0.\\n                          implementation: \\\"has(this.repairItemRate) && this.repairItemRate != null && this.repairItemRate >= 0.0\\\"\\n\\n                        - id: CCD-ELEM-V3-047\\n                          type: custom\\n                          engine: jsonlogic\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 7\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Annual phased costs (year1Cost through year5Cost) must be non-negative.\\n                          message: Year 1..5 repair costs must all be greater than or equal to 0.\\n                          implementation:\\n                            \\\"and\\\":\\n                              - \\\">=\\\": [{ var: year1Cost }, 0]\\n                              - \\\">=\\\": [{ var: year2Cost }, 0]\\n                              - \\\">=\\\": [{ var: year3Cost }, 0]\\n                              - \\\">=\\\": [{ var: year4Cost }, 0]\\n                              - \\\">=\\\": [{ var: year5Cost }, 0]\\n\\n                        - id: CCD-ELEM-V3-048\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 8\\n                          dependsOn:\\n                            - CCD-ELEM-V3-044\\n                            - CCD-ELEM-V3-046\\n                            - CCD-ELEM-V3-047\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: totalRepairCost must equal the sum of year1Cost..year5Cost within automatic float tolerance.\\n                          message: totalRepairCost must equal year1Cost + year2Cost + year3Cost + year4Cost + year5Cost.\\n                          implementation: \\\"this.totalRepairCost == this.year1Cost + this.year2Cost + this.year3Cost + this.year4Cost + this.year5Cost\\\"\\n\\n                        - id: CCD-ELEM-V3-049\\n                          type: custom\\n                          engine: jsonlogic\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 9\\n                          dependsOn:\\n                            - CCD-ELEM-V3-044\\n                            - CCD-ELEM-V3-046\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: totalRepairCost must equal repairQuantity * repairItemRate within automatic float tolerance.\\n                          message: totalRepairCost must match repairQuantity * repairItemRate.\\n                          implementation:\\n                            \\\"==\\\":\\n                              - var: totalRepairCost\\n                              - \\\"*\\\":\\n                                  - var: repairQuantity\\n                                  - var: repairItemRate\\n\\n                        - id: CCD-ELEM-V3-050\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 10\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Classification 'X' (Immediate/Urgent) repairs must schedule non-zero spend in year1Cost.\\n                          message: year1Cost must be greater than 0 for repairClassification 'X'.\\n                          implementation: \\\"!(has(this.repairClassification) && this.repairClassification == 'X') || this.year1Cost > 0.0\\\"\\n\\n                        - id: CCD-ELEM-V3-051\\n                          type: custom\\n                          engine: cel\\n                          severity: WARNING\\n                          stage: 50\\n                          order: 11\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Classification 'Z' (Longer-term) repairs should normally schedule 0 in year1Cost.\\n                          message: repairClassification 'Z' typically has year1Cost equal to 0.\\n                          implementation: \\\"!(has(this.repairClassification) && this.repairClassification == 'Z') || this.year1Cost == 0.0\\\"\\n\\n                        - id: CCD-ELEM-V3-052\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 12\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Grade D occurrence repairs with classification 'X' must mark urgentActionRequired = true.\\n                          message: urgentActionRequired must be true for classification 'X' repairs on Grade D occurrences.\\n                          implementation: \\\"!(has($parent.conditionGrade) && $parent.conditionGrade == 'D' && has(this.repairClassification) && this.repairClassification == 'X') || (has(this.urgentActionRequired) && this.urgentActionRequired == true)\\\"\\n\\n                        - id: CCD-ELEM-V3-053\\n                          type: custom\\n                          engine: cel\\n                          severity: WARNING\\n                          stage: 50\\n                          order: 13\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair descriptions when supplied should be at least 10 characters long.\\n                          message: repairDescription should be at least 10 characters long for clarity.\\n                          implementation: \\\"!has(this.repairDescription) || this.repairDescription == null || size(this.repairDescription) >= 10\\\"\\n\\n                        - id: CCD-ELEM-V3-054\\n                          type: custom\\n                          engine: cel\\n                          severity: INFO\\n                          stage: 50\\n                          order: 14\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: High-value repair items exceeding 50,000 GBP are flagged for capital programme review.\\n                          message: High-value repair item exceeds 50,000 GBP threshold (advisory capital review).\\n                          implementation: \\\"this.totalRepairCost <= 50000.0\\\"\\n\\n                        - id: CCD-ELEM-V3-055\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 15\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair unit of measure (uom) must match parent replacement.uom when both are provided.\\n                          message: Repair uom must match parent replacement.uom.\\n                          implementation: \\\"!has($parent.replacement) || $parent.replacement == null || !has($parent.replacement.uom) || $parent.replacement.uom == null || !has(this.uom) || this.uom == null || this.uom == $parent.replacement.uom\\\"\\n\\n                      properties:\\n                        - name: id\\n                          physicalType: string\\n                          logicalType: string\\n                          required: true\\n                          logicalTypeOptions:\\n                            pattern: \\\"^REP-[A-Za-z0-9-]+$\\\"\\n\\n                        - name: repairItem\\n                          physicalType: string\\n                          logicalType: string\\n                          required: false\\n\\n                        - name: repairClassification\\n                          physicalType: string\\n                          logicalType: string\\n                          required: false\\n                          enum:\\n                            - value: X\\n                            - value: Y\\n                            - value: Z\\n\\n                        - name: repairDescription\\n                          physicalType: string\\n                          logicalType: string\\n                          required: false\\n\\n                        - name: uom\\n                          physicalType: string\\n                          logicalType: string\\n                          required: false\\n                          enum:\\n                            - value: m2\\n                            - value: m\\n                            - value: nr\\n                            - value: item\\n                            - value: sum\\n\\n                        - name: repairQuantity\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: repairItemRate\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year1Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year2Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year3Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year4Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year5Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: totalRepairCost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: urgentActionRequired\\n                          physicalType: boolean\\n                          logicalType: boolean\\n                          required: false\\n\\nteam:\\n  name: CDC2 Geospatial Programme\\n  members:\\n    - username: data-owner\\n      role: owner\\n\\ntags:\\n  - cdc2\\n  - ccd-elemental-v3\\n  - odcs-v3.2.0\\n  - geospatial\\n  - school-estate\\n\",\n  \"sampleValidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-CCD-V3-001\\\", \\\"surveyName\\\": \\\"CCD Elemental Condition Survey v3\\\", \\\"participantId\\\": \\\"PART-SURV-991\\\", \\\"surveyorEmail\\\": \\\"lead.surveyor@education.gov.uk\\\", \\\"surveyDate\\\": \\\"2026-04-10\\\", \\\"isComplete\\\": true, \\\"createdAt\\\": \\\"2026-04-10T08:30:00Z\\\", \\\"updatedAt\\\": \\\"2026-04-10T15:45:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"104521\\\", \\\"name\\\": \\\"St Mary's Church of England Academy\\\", \\\"localAuthorityCode\\\": \\\"380\\\"}, \\\"elements\\\": [{\\\"id\\\": \\\"ELM-001\\\", \\\"nrm3Code\\\": \\\"5.6.1\\\", \\\"productType\\\": \\\"Boiler\\\", \\\"elementCategory\\\": \\\"Mechanical\\\", \\\"assetType\\\": \\\"block\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-A\\\", \\\"notAssessed\\\": false, \\\"occurrences\\\": [{\\\"id\\\": \\\"OCC-001\\\", \\\"surveyLevel\\\": \\\"Block\\\", \\\"occurrenceExtentOrLocationDescription\\\": \\\"Plant Room Ground Floor Boiler 1\\\", \\\"basisOfAssessment\\\": \\\"Seen\\\", \\\"conditionGrade\\\": \\\"D\\\", \\\"conditionScore\\\": 18.5, \\\"conditionDescription\\\": \\\"Primary condensing boiler shell shows heavy corrosion and valve leakage.\\\", \\\"priorityGrade\\\": \\\"4\\\", \\\"hasAsbestosSuspected\\\": false, \\\"photoReference\\\": \\\"PHOTO-BLK-A-BOILER-01.jpg\\\", \\\"assessedAt\\\": \\\"2026-04-10T10:15:00Z\\\", \\\"replacement\\\": {\\\"uom\\\": \\\"nr\\\", \\\"remLife\\\": 2, \\\"replacementQuantity\\\": 5, \\\"replacementRate\\\": 1200.0, \\\"replacementCost\\\": 6000.0}, \\\"repairs\\\": [{\\\"id\\\": \\\"REP-001\\\", \\\"repairItem\\\": \\\"Boiler Valve\\\", \\\"repairClassification\\\": \\\"X\\\", \\\"repairDescription\\\": \\\"Replace corroded isolation valve assembly and pressure relief seal.\\\", \\\"uom\\\": \\\"nr\\\", \\\"repairQuantity\\\": 3, \\\"repairItemRate\\\": 0.1, \\\"year1Cost\\\": 0.1, \\\"year2Cost\\\": 0.2, \\\"year3Cost\\\": 0.0, \\\"year4Cost\\\": 0.0, \\\"year5Cost\\\": 0.0, \\\"totalRepairCost\\\": 0.3, \\\"urgentActionRequired\\\": true}]}]}, {\\\"id\\\": \\\"ELM-002\\\", \\\"nrm3Code\\\": \\\"2.3.1\\\", \\\"productType\\\": \\\"Roof\\\", \\\"elementCategory\\\": \\\"Fabric\\\", \\\"assetType\\\": \\\"block\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-B\\\", \\\"notAssessed\\\": false, \\\"occurrences\\\": [{\\\"id\\\": \\\"OCC-002\\\", \\\"surveyLevel\\\": \\\"Block\\\", \\\"occurrenceExtentOrLocationDescription\\\": \\\"South Wing Pitched Slate Roof\\\", \\\"basisOfAssessment\\\": \\\"Seen\\\", \\\"conditionGrade\\\": \\\"A\\\", \\\"conditionScore\\\": 95.0, \\\"conditionDescription\\\": \\\"Slate covering and ridge tiles intact with clean rainwater goods.\\\", \\\"priorityGrade\\\": \\\"1\\\", \\\"hasAsbestosSuspected\\\": false, \\\"assessedAt\\\": \\\"2026-04-10T11:20:00Z\\\", \\\"replacement\\\": {\\\"uom\\\": \\\"m2\\\", \\\"remLife\\\": 25, \\\"replacementQuantity\\\": 100.0, \\\"replacementRate\\\": 85.0, \\\"replacementCost\\\": 8500.0}}]}, {\\\"id\\\": \\\"ELM-003\\\", \\\"nrm3Code\\\": \\\"2.5.1\\\", \\\"productType\\\": \\\"Window\\\", \\\"elementCategory\\\": \\\"Fabric\\\", \\\"assetType\\\": \\\"floor\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-B\\\", \\\"floorId\\\": \\\"FLR-B1\\\", \\\"notAssessed\\\": true, \\\"notAssessedReason\\\": \\\"External scaffolding prevented safe close-up window inspection during this visit.\\\"}]}\"\n  ],\n  \"sampleInvalidFixtures\": [\n    \"{\\\"description\\\": \\\"Timestamp inversion halts critical stage\\\", \\\"payload\\\": {\\\"survey\\\": {\\\"id\\\": \\\"SURV-CCD-V3-001\\\", \\\"surveyName\\\": \\\"CCD Elemental Condition Survey v3\\\", \\\"participantId\\\": \\\"PART-SURV-991\\\", \\\"surveyorEmail\\\": \\\"lead.surveyor@education.gov.uk\\\", \\\"surveyDate\\\": \\\"2026-04-10\\\", \\\"isComplete\\\": true, \\\"createdAt\\\": \\\"2026-04-12T10:00:00Z\\\", \\\"updatedAt\\\": \\\"2026-04-10T08:00:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"104521\\\", \\\"name\\\": \\\"St Mary's Church of England Academy\\\", \\\"localAuthorityCode\\\": \\\"380\\\"}, \\\"elements\\\": [{\\\"id\\\": \\\"ELM-001\\\", \\\"nrm3Code\\\": \\\"5.6.1\\\", \\\"productType\\\": \\\"Boiler\\\", \\\"elementCategory\\\": \\\"Mechanical\\\", \\\"assetType\\\": \\\"block\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-A\\\", \\\"notAssessed\\\": false, \\\"occurrences\\\": [{\\\"id\\\": \\\"OCC-001\\\", \\\"surveyLevel\\\": \\\"Block\\\", \\\"occurrenceExtentOrLocationDescription\\\": \\\"Plant Room Ground Floor Boiler 1\\\", \\\"basisOfAssessment\\\": \\\"Seen\\\", \\\"conditionGrade\\\": \\\"D\\\", \\\"conditionScore\\\": 18.5, \\\"conditionDescription\\\": \\\"Primary condensing boiler shell shows heavy corrosion and valve leakage.\\\", \\\"priorityGrade\\\": \\\"4\\\", \\\"hasAsbestosSuspected\\\": false, \\\"photoReference\\\": \\\"PHOTO-BLK-A-BOILER-01.jpg\\\", \\\"assessedAt\\\": \\\"2026-04-10T10:15:00Z\\\", \\\"replacement\\\": {\\\"uom\\\": \\\"nr\\\", \\\"remLife\\\": 2, \\\"replacementQuantity\\\": 5, \\\"replacementRate\\\": 1200.0, \\\"replacementCost\\\": 6000.0}, \\\"repairs\\\": [{\\\"id\\\": \\\"REP-001\\\", \\\"repairItem\\\": \\\"Boiler Valve\\\", \\\"repairClassification\\\": \\\"X\\\", \\\"repairDescription\\\": \\\"Replace corroded isolation valve assembly and pressure relief seal.\\\", \\\"uom\\\": \\\"nr\\\", \\\"repairQuantity\\\": 3, \\\"repairItemRate\\\": 0.1, \\\"year1Cost\\\": 0.1, \\\"year2Cost\\\": 0.2, \\\"year3Cost\\\": 0.0, \\\"year4Cost\\\": 0.0, \\\"year5Cost\\\": 0.0, \\\"totalRepairCost\\\": 0.3, \\\"urgentActionRequired\\\": true}]}]}, {\\\"id\\\": \\\"ELM-002\\\", \\\"nrm3Code\\\": \\\"2.3.1\\\", \\\"productType\\\": \\\"Roof\\\", \\\"elementCategory\\\": \\\"Fabric\\\", \\\"assetType\\\": \\\"block\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-B\\\", \\\"notAssessed\\\": false, \\\"occurrences\\\": [{\\\"id\\\": \\\"OCC-002\\\", \\\"surveyLevel\\\": \\\"Block\\\", \\\"occurrenceExtentOrLocationDescription\\\": \\\"South Wing Pitched Slate Roof\\\", \\\"basisOfAssessment\\\": \\\"Seen\\\", \\\"conditionGrade\\\": \\\"A\\\", \\\"conditionScore\\\": 95.0, \\\"conditionDescription\\\": \\\"Slate covering and ridge tiles intact with clean rainwater goods.\\\", \\\"priorityGrade\\\": \\\"1\\\", \\\"hasAsbestosSuspected\\\": false, \\\"assessedAt\\\": \\\"2026-04-10T11:20:00Z\\\", \\\"replacement\\\": {\\\"uom\\\": \\\"m2\\\", \\\"remLife\\\": 25, \\\"replacementQuantity\\\": 100.0, \\\"replacementRate\\\": 85.0, \\\"replacementCost\\\": 8500.0}}]}, {\\\"id\\\": \\\"ELM-003\\\", \\\"nrm3Code\\\": \\\"2.5.1\\\", \\\"productType\\\": \\\"Window\\\", \\\"elementCategory\\\": \\\"Fabric\\\", \\\"assetType\\\": \\\"floor\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-B\\\", \\\"floorId\\\": \\\"FLR-B1\\\", \\\"notAssessed\\\": true, \\\"notAssessedReason\\\": \\\"External scaffolding prevented safe close-up window inspection during this visit.\\\"}]}, \\\"expectedErrors\\\": [\\\"CCD-ELEM-V3-003\\\"]}\",\n    \"{\\\"description\\\": \\\"Unknown productType fails reference check and skips downstream DependsOn rules\\\", \\\"payload\\\": {\\\"survey\\\": {\\\"id\\\": \\\"SURV-CCD-V3-001\\\", \\\"surveyName\\\": \\\"CCD Elemental Condition Survey v3\\\", \\\"participantId\\\": \\\"PART-SURV-991\\\", \\\"surveyorEmail\\\": \\\"lead.surveyor@education.gov.uk\\\", \\\"surveyDate\\\": \\\"2026-04-10\\\", \\\"isComplete\\\": true, \\\"createdAt\\\": \\\"2026-04-10T08:30:00Z\\\", \\\"updatedAt\\\": \\\"2026-04-10T15:45:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"104521\\\", \\\"name\\\": \\\"St Mary's Church of England Academy\\\", \\\"localAuthorityCode\\\": \\\"380\\\"}, \\\"elements\\\": [{\\\"id\\\": \\\"ELM-001\\\", \\\"nrm3Code\\\": \\\"5.6.1\\\", \\\"productType\\\": \\\"UnknownHeatPump\\\", \\\"elementCategory\\\": \\\"Mechanical\\\", \\\"assetType\\\": \\\"block\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-A\\\", \\\"notAssessed\\\": false, \\\"occurrences\\\": [{\\\"id\\\": \\\"OCC-001\\\", \\\"surveyLevel\\\": \\\"Block\\\", \\\"occurrenceExtentOrLocationDescription\\\": \\\"Plant Room Ground Floor Boiler 1\\\", \\\"basisOfAssessment\\\": \\\"Seen\\\", \\\"conditionGrade\\\": \\\"D\\\", \\\"conditionScore\\\": 18.5, \\\"conditionDescription\\\": \\\"Primary condensing boiler shell shows heavy corrosion and valve leakage.\\\", \\\"priorityGrade\\\": \\\"4\\\", \\\"hasAsbestosSuspected\\\": false, \\\"photoReference\\\": \\\"PHOTO-BLK-A-BOILER-01.jpg\\\", \\\"assessedAt\\\": \\\"2026-04-10T10:15:00Z\\\", \\\"replacement\\\": {\\\"uom\\\": \\\"nr\\\", \\\"remLife\\\": 2, \\\"replacementQuantity\\\": 5, \\\"replacementRate\\\": 1200.0, \\\"replacementCost\\\": 6000.0}, \\\"repairs\\\": [{\\\"id\\\": \\\"REP-001\\\", \\\"repairItem\\\": \\\"Boiler Valve\\\", \\\"repairClassification\\\": \\\"X\\\", \\\"repairDescription\\\": \\\"Replace corroded isolation valve assembly and pressure relief seal.\\\", \\\"uom\\\": \\\"nr\\\", \\\"repairQuantity\\\": 3, \\\"repairItemRate\\\": 0.1, \\\"year1Cost\\\": 0.1, \\\"year2Cost\\\": 0.2, \\\"year3Cost\\\": 0.0, \\\"year4Cost\\\": 0.0, \\\"year5Cost\\\": 0.0, \\\"totalRepairCost\\\": 0.3, \\\"urgentActionRequired\\\": true}]}]}, {\\\"id\\\": \\\"ELM-002\\\", \\\"nrm3Code\\\": \\\"2.3.1\\\", \\\"productType\\\": \\\"Roof\\\", \\\"elementCategory\\\": \\\"Fabric\\\", \\\"assetType\\\": \\\"block\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-B\\\", \\\"notAssessed\\\": false, \\\"occurrences\\\": [{\\\"id\\\": \\\"OCC-002\\\", \\\"surveyLevel\\\": \\\"Block\\\", \\\"occurrenceExtentOrLocationDescription\\\": \\\"South Wing Pitched Slate Roof\\\", \\\"basisOfAssessment\\\": \\\"Seen\\\", \\\"conditionGrade\\\": \\\"A\\\", \\\"conditionScore\\\": 95.0, \\\"conditionDescription\\\": \\\"Slate covering and ridge tiles intact with clean rainwater goods.\\\", \\\"priorityGrade\\\": \\\"1\\\", \\\"hasAsbestosSuspected\\\": false, \\\"assessedAt\\\": \\\"2026-04-10T11:20:00Z\\\", \\\"replacement\\\": {\\\"uom\\\": \\\"m2\\\", \\\"remLife\\\": 25, \\\"replacementQuantity\\\": 100.0, \\\"replacementRate\\\": 85.0, \\\"replacementCost\\\": 8500.0}}]}, {\\\"id\\\": \\\"ELM-003\\\", \\\"nrm3Code\\\": \\\"2.5.1\\\", \\\"productType\\\": \\\"Window\\\", \\\"elementCategory\\\": \\\"Fabric\\\", \\\"assetType\\\": \\\"floor\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-B\\\", \\\"floorId\\\": \\\"FLR-B1\\\", \\\"notAssessed\\\": true, \\\"notAssessedReason\\\": \\\"External scaffolding prevented safe close-up window inspection during this visit.\\\"}]}, \\\"expectedErrors\\\": [\\\"CCD-ELEM-V3-001\\\"]}\"\n  ],\n  \"identifierConfig\": {\n    \"type\": \"URN\",\n    \"jsonPointer\": \"/school/urn\",\n    \"required\": true\n  },\n  \"validationPolicy\": {\n    \"failOnMinimumSeverity\": \"Error\",\n    \"crossSubmissionDraftPolicy\": \"WarnOnDraftReferences\"\n  },\n  \"ambientFixtures\": {\n    \"cross_submission\": {\n      \"identifierType\": \"URN\",\n      \"identifierValue\": \"104521\",\n      \"known_site_ids\": [\n        \"SITE-MAIN\",\n        \"SITE-ANNEX\"\n      ],\n      \"known_block_ids\": [\n        \"BLK-A\",\n        \"BLK-B\",\n        \"BLK-C\"\n      ],\n      \"known_evidence_ids\": [\n        \"EVD-001\"\n      ],\n      \"has_draft_references\": false,\n      \"draft_submission_ids\": [],\n      \"submissions\": [\n        {\n          \"submissionId\": \"11111111-1111-1111-1111-111111111111\",\n          \"schemaName\": \"edc-survey-sites\",\n          \"schemaVersion\": 1,\n          \"status\": \"Finalised\",\n          \"siteIds\": [\n            \"SITE-MAIN\",\n            \"SITE-ANNEX\"\n          ],\n          \"blockIds\": [\n            \"BLK-A\",\n            \"BLK-B\",\n            \"BLK-C\"\n          ]\n        }\n      ]\n    },\n    \"reference\": {\n      \"product_types\": [\n        \"Boiler\",\n        \"Roof\",\n        \"Window\",\n        \"Electrical Distribution\",\n        \"Fire Alarm\",\n        \"External Paving\"\n      ],\n      \"nrm3_codes\": [\n        \"2.3.1\",\n        \"2.3.2\",\n        \"2.5.1\",\n        \"5.1.1\",\n        \"5.6.1\",\n        \"5.8.1\",\n        \"8.1.1\"\n      ],\n      \"repair_items_by_product_type\": {\n        \"Boiler\": [\n          \"Boiler Valve\",\n          \"Burner Assembly\",\n          \"Flue Replacement\",\n          \"Circulation Pump\"\n        ],\n        \"Roof\": [\n          \"Roof Tile\",\n          \"Lead Flashing\",\n          \"Flat Roof Felt\",\n          \"Gutter Replacement\"\n        ],\n        \"Window\": [\n          \"Window Glazing Unit\",\n          \"Window Frame\",\n          \"Ironmongery\"\n        ]\n      }\n    }\n  }\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"CCD Elemental v3 contract verified across all engines with expected invalid fixtures\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.resolvedIdentifierConfig.jsonPointer).to.eql(\"/school/urn\");",
+                  "    pm.expect(data.invalidFixtureOutcomes).to.be.an(\"array\").with.lengthOf(2);",
+                  "    data.invalidFixtureOutcomes.forEach(o => pm.expect(o.matchedExpected).to.be.true);",
+                  "    const traceIds = (data.engineTraces ?? []).map(t => t.engineId);",
+                  "    [\"json-schema\", \"cel\", \"jsonlogic\", \"unique\", \"reference-data-enrichment\", \"cross-submission-enrichment\", \"contract-consistency-analyzer\"]",
+                  "        .forEach(id => pm.expect(traceIds).to.include(id));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
@@ -703,6 +936,12 @@
                   "    pm.expect(data.fields).to.be.an(\"array\").that.is.not.empty;",
                   "    pm.expect(data.qualityRules).to.be.an(\"array\");",
                   "    pm.expect(data.rawJsonSchema).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "pm.test(\"Includes validationPolicy metadata\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.validationPolicy).to.be.an(\"object\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -971,6 +1210,336 @@
             "description": "Transitions Schema v2 to Deprecated state."
           },
           "response": []
+        },
+        {
+          "name": "2.10 Submit Invalid Schema v1 (.error.json Recorded)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{lifecycleSchemaName}}/versions/1",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{lifecycleSchemaName}}",
+                "versions",
+                "1"
+              ]
+            },
+            "description": "Submits a broken schema version. Persists .meta.json in State='Invalid' alongside .error.json so admins can inspect diagnostics.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\": \\\"https://json-schema.org/draft/2020-12/schema\\\", \\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"establishmentId\\\", \\\"quantity\\\"], \\\"properties\\\": {\\\"establishmentId\\\": {\\\"type\\\": \\\"string\\\", \\\"minLength\\\": 1}, \\\"quantity\\\": {\\\"type\\\": \\\"number\\\", \\\"minimum\\\": 0, \\\"maximum\\\": 100}}}\",\n  \"rulesJson\": \"[{\\\"id\\\": \\\"R-MISSING-FIELD\\\", \\\"description\\\": \\\"References non-existent field\\\", \\\"engine\\\": \\\"cel\\\", \\\"path\\\": \\\"/\\\", \\\"severity\\\": \\\"ERROR\\\", \\\"implementation\\\": \\\"this.nonExistentField > 0\\\"}]\",\n  \"sampleValidFixtures\": [\n    \"{\\\"establishmentId\\\": \\\"EST-104521\\\", \\\"quantity\\\": 60}\"\n  ],\n  \"identifierConfig\": {\n    \"type\": \"EstablishmentId\",\n    \"jsonPointer\": \"/establishmentId\",\n    \"required\": true\n  }\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created (or 409 if tombstone already exists)\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    pm.test(\"Saved as Invalid with .error.json diagnostics\", function () {",
+                  "        const jsonData = pm.response.json();",
+                  "        const data = jsonData.data ?? jsonData;",
+                  "        pm.expect(data.state.name).to.eql(\"Invalid\");",
+                  "        pm.expect(data.hasErrorReport).to.be.true;",
+                  "        pm.expect(data.issues.error).to.be.an(\"array\").that.is.not.empty;",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.11 Inspect Invalid Schema v1 Detail & .error.json Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{lifecycleSchemaName}}/versions/1?includeUnscheduled=true",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{lifecycleSchemaName}}",
+                "versions",
+                "1"
+              ],
+              "query": [
+                {
+                  "key": "includeUnscheduled",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Retrieves schema version detail including the persisted .error.json diagnostic report."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Includes persisted errorReport payload\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.hasErrorReport).to.be.true;",
+                  "    pm.expect(data.errorReport).to.be.an(\"object\");",
+                  "    pm.expect(data.errorReport.issues).to.be.an(\"object\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.12 Delete Schema v1 (Preserve .meta.json & .error.json Tombstones)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{lifecycleSchemaName}}/versions/1",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{lifecycleSchemaName}}",
+                "versions",
+                "1"
+              ]
+            },
+            "description": "Deletes contract/rules/fixture blobs for v1 while keeping .meta.json (State=Deleted) and .error.json as permanent tombstones so fixes must be pushed to v2."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Transitions to Deleted and preserves error report tombstone\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.state.name).to.eql(\"Deleted\");",
+                  "    pm.expect(data.errorReportPreserved).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.13 Attempt Reuse of Deleted Schema v1 Key (409 Conflict Guard)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{lifecycleSchemaName}}/versions/1",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{lifecycleSchemaName}}",
+                "versions",
+                "1"
+              ]
+            },
+            "description": "Confirms that attempting to re-submit deleted version v1 is blocked with 409 Conflict because the version tombstone remains reserved; fixes must be pushed to v2.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\": \\\"https://json-schema.org/draft/2020-12/schema\\\", \\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"establishmentId\\\", \\\"quantity\\\"], \\\"properties\\\": {\\\"establishmentId\\\": {\\\"type\\\": \\\"string\\\", \\\"minLength\\\": 1}, \\\"quantity\\\": {\\\"type\\\": \\\"number\\\", \\\"minimum\\\": 0, \\\"maximum\\\": 100}}}\",\n  \"sampleValidFixtures\": [\n    \"{\\\"establishmentId\\\": \\\"EST-104521\\\", \\\"quantity\\\": 60}\"\n  ],\n  \"identifierConfig\": {\n    \"type\": \"EstablishmentId\",\n    \"jsonPointer\": \"/establishmentId\",\n    \"required\": true\n  }\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 409 Conflict\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.14 Submit Fixed Schema v2 with Non-Blocking Warning (Unvalidated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{lifecycleSchemaName}}/versions/2",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{lifecycleSchemaName}}",
+                "versions",
+                "2"
+              ]
+            },
+            "description": "Submits fixed v2 whose Warning rule fires on the sample fixture while failOnMinimumSeverity='Error'. Persists State='Unvalidated' with .error.json warnings pending administrator sign-off.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\": \\\"https://json-schema.org/draft/2020-12/schema\\\", \\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"establishmentId\\\", \\\"quantity\\\"], \\\"properties\\\": {\\\"establishmentId\\\": {\\\"type\\\": \\\"string\\\", \\\"minLength\\\": 1}, \\\"quantity\\\": {\\\"type\\\": \\\"number\\\", \\\"minimum\\\": 0, \\\"maximum\\\": 100}}}\",\n  \"rulesJson\": \"[{\\\"id\\\": \\\"R-WARN-FLOOR\\\", \\\"description\\\": \\\"Advisory quantity check emits Warning on fixture\\\", \\\"engine\\\": \\\"cel\\\", \\\"path\\\": \\\"/\\\", \\\"severity\\\": \\\"WARNING\\\", \\\"implementation\\\": \\\"this.quantity >= 80\\\"}]\",\n  \"sampleValidFixtures\": [\n    \"{\\\"establishmentId\\\": \\\"EST-104521\\\", \\\"quantity\\\": 60}\"\n  ],\n  \"identifierConfig\": {\n    \"type\": \"EstablishmentId\",\n    \"jsonPointer\": \"/establishmentId\",\n    \"required\": true\n  },\n  \"validationPolicy\": {\n    \"failOnMinimumSeverity\": \"Error\",\n    \"crossSubmissionDraftPolicy\": \"WarnOnDraftReferences\"\n  }\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created (or 409 if already registered)\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    pm.test(\"Saved as Unvalidated with Warning report\", function () {",
+                  "        const jsonData = pm.response.json();",
+                  "        const data = jsonData.data ?? jsonData;",
+                  "        pm.expect(data.state.name).to.eql(\"Unvalidated\");",
+                  "        pm.expect(data.hasErrorReport).to.be.true;",
+                  "        pm.expect(data.issues.warning).to.be.an(\"array\").that.is.not.empty;",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.15 Sign Off Unvalidated Schema v2 (Promote to Validated)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{lifecycleSchemaName}}/versions/2/signoff",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{lifecycleSchemaName}}",
+                "versions",
+                "2",
+                "signoff"
+              ]
+            },
+            "description": "Records administrator sign-off on Unvalidated v2, promoting it to Validated so it can be scheduled.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signedOffBy\": \"qa.reviewer@education.gov.uk\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Promoted to Validated with signedOffBy audit stamp\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.state.name).to.eql(\"Validated\");",
+                  "    pm.expect(data.signedOffBy).to.eql(\"qa.reviewer@education.gov.uk\");",
+                  "    pm.expect(data.signedOffAtUtc).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
@@ -1389,6 +1958,12 @@
                   "pm.test(\"Reports missing required CDC sections as pending errors\", function () {",
                   "    pm.expect(data.isSuccessful).to.be.false;",
                   "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "});",
+                  "",
+                  "pm.test(\"Includes multi-severity issues dictionary\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.issues).to.be.an(\"object\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -1442,6 +2017,12 @@
                   "pm.test(\"Detects RULE-CONDITION-GRADE-D violation\", function () {",
                   "    pm.expect(data.isSuccessful).to.be.false;",
                   "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "});",
+                  "",
+                  "pm.test(\"Includes multi-severity issues dictionary\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.issues).to.be.an(\"object\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -1497,6 +2078,12 @@
                   "    pm.expect(data.hasDraftPayload).to.be.true;",
                   "    pm.expect(data.isReadyToFinalise).to.be.false;",
                   "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.not.empty;",
+                  "});",
+                  "",
+                  "pm.test(\"Includes multi-severity issues dictionary\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    pm.expect(data.issues).to.be.an(\"object\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -1698,6 +2285,13 @@
                   "    pm.expect(data.schemaName).to.eql(pm.variables.get(\"cdcSchemaName\"));",
                   "    pm.expect(data.processedBlobUri).to.be.a(\"string\").and.not.be.empty;",
                   "    pm.expect(data.finalisedAtUtc).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "pm.test(\"Processed submission uses bundle folder layout ({submissionId}/payload.json)\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const data = jsonData.data ?? jsonData;",
+                  "    const subId = pm.variables.get(\"submissionId\");",
+                  "    pm.expect(data.processedBlobUri).to.include(subId + \"/payload.json\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -2347,6 +2941,534 @@
             "description": "Finalises the CDC survey submission and promotes it to the 'processed' container."
           },
           "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. CCD Elemental Dataset v3 Workflow (ccd-elemental-v3)",
+      "description": "End-to-end CCD Elemental Dataset v3 workflow covering sibling cross-submission baseline seeding, ODCS v3.2.0 ingestion, multi-engine submission validation (CEL, JsonLogic, unique, float epsilon, reference data), and bundle-folder finalisation.\n\nPrerequisites for live Functions execution against Azurite: seed the reference-data container with the ccd-elemental-v3 reference-data JSONs defined in CcdElementalV3ReferenceDataBuilder (product-types.json, nrm3-codes.json, repair-items-by-product-type.json).",
+      "item": [
+        {
+          "name": "7.1 Submit Baseline Sites Schema v1 (Cross-Submission Prerequisite)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{ccdBaselineSchemaName}}/versions/1",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{ccdBaselineSchemaName}}",
+                "versions",
+                "1"
+              ]
+            },
+            "description": "Registers the sibling baseline sites schema so finalised site/block submissions enrich ambient.cross_submission for matching establishment identifiers.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaJson\": \"{\\\"$schema\\\": \\\"https://json-schema.org/draft/2020-12/schema\\\", \\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"urn\\\", \\\"sites\\\"], \\\"properties\\\": {\\\"urn\\\": {\\\"type\\\": \\\"string\\\", \\\"minLength\\\": 1}, \\\"sites\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"id\\\"], \\\"properties\\\": {\\\"id\\\": {\\\"type\\\": \\\"string\\\"}, \\\"blocks\\\": {\\\"type\\\": \\\"array\\\", \\\"items\\\": {\\\"type\\\": \\\"object\\\", \\\"required\\\": [\\\"id\\\"], \\\"properties\\\": {\\\"id\\\": {\\\"type\\\": \\\"string\\\"}}}}}}}}}\",\n  \"identifierConfig\": {\n    \"type\": \"URN\",\n    \"jsonPointer\": \"/urn\",\n    \"required\": true\n  }\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created or 409 Conflict\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.2 Schedule / Activate Baseline Sites Schema v1",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{ccdBaselineSchemaName}}/versions/1/schedule",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{ccdBaselineSchemaName}}",
+                "versions",
+                "1",
+                "schedule"
+              ]
+            },
+            "description": "Activates the sibling baseline sites schema.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"effectiveFromUtc\": \"2026-01-01T00:00:00Z\",\n  \"effectiveToUtc\": \"2028-12-31T23:59:59Z\",\n  \"lifecycleAction\": \"Schedule\",\n  \"identifierConfig\": {\n    \"type\": \"URN\",\n    \"jsonPointer\": \"/urn\",\n    \"required\": true\n  }\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.3 Create Baseline Sites Submission Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{ccdBaselineSchemaName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{ccdBaselineSchemaName}}"
+              ]
+            },
+            "description": "Creates a baseline sites submission session and stores ccdBaselineSubmissionId."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const jsonData = pm.response.json();",
+                  "const data = jsonData.data ?? jsonData;",
+                  "pm.collectionVariables.set(\"ccdBaselineSubmissionId\", data.submissionId);",
+                  "pm.variables.set(\"ccdBaselineSubmissionId\", data.submissionId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.4 Upload & Finalise Baseline Sites Payload (SITE-MAIN / BLK-A, BLK-B)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{ccdBaselineSubmissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{ccdBaselineSubmissionId}}"
+              ]
+            },
+            "description": "Uploads the baseline sites & blocks payload for establishment 104521.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"urn\": \"104521\",\n  \"sites\": [\n    {\n      \"id\": \"SITE-MAIN\",\n      \"blocks\": [\n        {\n          \"id\": \"BLK-A\"\n        },\n        {\n          \"id\": \"BLK-B\"\n        }\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK and baseline valid\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const data = pm.response.json().data ?? pm.response.json();",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.5 Finalise Baseline Sites Submission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{ccdBaselineSubmissionId}}/finalise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{ccdBaselineSubmissionId}}",
+                "finalise"
+              ]
+            },
+            "description": "Finalises the baseline sites submission so cross-submission lookup resolves SITE-MAIN, BLK-A, BLK-B."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.6 Submit CCD Elemental v3 ODCS Contract (v1)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{ccdV3SchemaName}}/versions/1",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{ccdV3SchemaName}}",
+                "versions",
+                "1"
+              ]
+            },
+            "description": "Ingests the CCD Elemental Dataset v3 ODCS v3.2.0 contract as Validated (or Unvalidated if ambient fixture references are deferred until runtime).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileName\": \"ccd-elemental-v3.odcs.yaml\",\n  \"odcsYaml\": \"version: \\\"3.0.0\\\"\\nkind: DataContract\\napiVersion: v3.2.0\\n\\nid: ccd-elemental-v3\\nname: ccd-elemental-v3\\nstatus: draft\\n\\ndomain: capital-delivery\\ntenant: DfE\\n\\ncustomProperties:\\n  - property: failOnMinimumSeverity\\n    value: Error\\n  - property: crossSubmissionDraftPolicy\\n    value: WarnOnDraftReferences\\n\\nservers:\\n  - server: databricks\\n    type: databricks\\n    environment: dev\\n    description: CCD Elemental Dataset v3 stored in Databricks Silver layer\\n    catalog: eed_catalogue_30_bronze\\n    schema: cde_edc_integration\\n\\ndescription:\\n  purpose: >\\n    Captures DfE Capital Condition Data (CCD) Elemental Dataset v3 submissions including\\n    survey metadata, establishment identifier, surveyed elements, occurrences, replacement data,\\n    and multi-year repair schedules.\\n  usage: >\\n    Used for public collection, multi-engine quality validation (JsonLogic, CEL, unique),\\n    cross-submission site/block integrity, and reference-data verification.\\n  limitations: >\\n    Binary photo attachment upload and Microsoft Defender malware scanning are handled separately\\n    by the upload manifest workflow; this contract validates photoReference format and requiredness.\\n\\nschema:\\n  - name: submission\\n    logicalType: object\\n    description: Top-level CCD Elemental Dataset v3 payload container\\n    quality:\\n      - id: CCD-ELEM-V3-006\\n        type: custom\\n        engine: cel\\n        severity: CRITICAL\\n        stage: 10\\n        order: 4\\n        stopOnFailure: true\\n        path: \\\"/\\\"\\n        description: Submission must contain at least one surveyed element.\\n        message: Submission must contain at least one element in 'elements'.\\n        implementation: \\\"size(this.elements) > 0\\\"\\n\\n    properties:\\n      - name: survey\\n        logicalType: object\\n        required: true\\n        quality:\\n          - id: CCD-ELEM-V3-003\\n            type: custom\\n            engine: jsonlogic\\n            severity: CRITICAL\\n            stage: 10\\n            order: 1\\n            stopOnFailure: true\\n            path: survey\\n            description: Survey updatedAt timestamp must be greater than or equal to createdAt.\\n            message: Survey updatedAt cannot precede createdAt.\\n            implementation:\\n              \\\">=\\\":\\n                - var: survey.updatedAt\\n                - var: survey.createdAt\\n\\n          - id: CCD-ELEM-V3-004\\n            type: custom\\n            engine: cel\\n            severity: CRITICAL\\n            stage: 10\\n            order: 2\\n            stopOnFailure: true\\n            path: survey\\n            description: Core survey identifiers (id, surveyName, participantId) must be non-empty.\\n            message: Survey id, surveyName, and participantId must be populated.\\n            implementation: \\\"size(this.id) > 0 && size(this.surveyName) > 0 && size(this.participantId) > 0\\\"\\n\\n          - id: CCD-ELEM-V3-056\\n            type: custom\\n            engine: cel\\n            severity: ERROR\\n            stage: 20\\n            order: 10\\n            path: survey\\n            description: Completed surveys must include a surveyorEmail contact address.\\n            message: surveyorEmail is required when survey.isComplete is true.\\n            implementation: \\\"!this.isComplete || (has(this.surveyorEmail) && this.surveyorEmail != null && size(this.surveyorEmail) > 0)\\\"\\n\\n        properties:\\n          - name: id\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n            logicalTypeOptions:\\n              pattern: \\\"^SURV-[A-Za-z0-9-]+$\\\"\\n\\n          - name: surveyName\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n\\n          - name: participantId\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n\\n          - name: surveyorEmail\\n            physicalType: string\\n            logicalType: string\\n            required: false\\n            logicalTypeOptions:\\n              format: email\\n\\n          - name: surveyDate\\n            physicalType: string\\n            logicalType: date\\n            required: true\\n\\n          - name: isComplete\\n            physicalType: boolean\\n            logicalType: boolean\\n            required: true\\n\\n          - name: createdAt\\n            physicalType: string\\n            logicalType: timestamp\\n            required: true\\n\\n          - name: updatedAt\\n            physicalType: string\\n            logicalType: timestamp\\n            required: true\\n\\n      - name: school\\n        logicalType: object\\n        required: true\\n        quality:\\n          - id: CCD-ELEM-V3-005\\n            type: custom\\n            engine: cel\\n            severity: CRITICAL\\n            stage: 10\\n            order: 3\\n            stopOnFailure: true\\n            path: school\\n            description: Establishment identifier value must be non-empty.\\n            message: Establishment identifier (school.urn) must not be blank.\\n            implementation: \\\"size(this.urn) > 0\\\"\\n\\n        properties:\\n          - name: urn\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n\\n          - name: name\\n            physicalType: string\\n            logicalType: string\\n            required: true\\n\\n          - name: localAuthorityCode\\n            physicalType: string\\n            logicalType: string\\n            required: false\\n\\n      - name: elements\\n        logicalType: array\\n        required: true\\n        items:\\n          logicalType: object\\n          required: true\\n          quality:\\n            - id: CCD-ELEM-V3-001\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 1\\n              dependsOn:\\n                - CCD-ELEM-V3-006\\n              path: \\\"elements[]\\\"\\n              description: Element productType must exist in the authoritative CCD reference catalogue.\\n              message: productType is not present in the CCD reference dataset.\\n              implementation: \\\"this.productType in ambient.reference.product_types\\\"\\n\\n            - id: CCD-ELEM-V3-007\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 2\\n              dependsOn:\\n                - CCD-ELEM-V3-006\\n              path: \\\"elements[]\\\"\\n              description: Element nrm3Code must exist in the NRM3 reference dataset.\\n              message: nrm3Code is not present in the NRM3 reference dataset.\\n              implementation: \\\"this.nrm3Code in ambient.reference.nrm3_codes\\\"\\n\\n            - id: CCD-ELEM-V3-008\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 3\\n              dependsOn:\\n                - CCD-ELEM-V3-006\\n              path: \\\"elements[]\\\"\\n              description: Element siteId must match a site identifier in sibling cross-submission records.\\n              message: siteId was not found in cross-submission known_site_ids for this establishment.\\n              implementation: \\\"this.siteId in ambient.cross_submission.known_site_ids\\\"\\n\\n            - id: CCD-ELEM-V3-009\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 4\\n              dependsOn:\\n                - CCD-ELEM-V3-008\\n              path: \\\"elements[]\\\"\\n              description: Non-site elements must reference a valid blockId from sibling cross-submission records.\\n              message: blockId must be provided and exist in cross-submission known_block_ids when assetType is block, floor, or space.\\n              implementation: \\\"this.assetType == 'site' || (has(this.blockId) && this.blockId != null && this.blockId in ambient.cross_submission.known_block_ids)\\\"\\n\\n            - id: CCD-ELEM-V3-010\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 5\\n              path: \\\"elements[]\\\"\\n              description: Floor-level elements must specify floorId.\\n              message: floorId is required when assetType is 'floor'.\\n              implementation: \\\"this.assetType != 'floor' || (has(this.floorId) && this.floorId != null && size(this.floorId) > 0)\\\"\\n\\n            - id: CCD-ELEM-V3-011\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 6\\n              path: \\\"elements[]\\\"\\n              description: Space-level elements must specify both floorId and spaceId.\\n              message: floorId and spaceId are required when assetType is 'space'.\\n              implementation: \\\"this.assetType != 'space' || (has(this.floorId) && this.floorId != null && size(this.floorId) > 0 && has(this.spaceId) && this.spaceId != null && size(this.spaceId) > 0)\\\"\\n\\n            - id: CCD-ELEM-V3-012\\n              type: custom\\n              engine: jsonlogic\\n              severity: ERROR\\n              stage: 20\\n              order: 7\\n              path: \\\"elements[]\\\"\\n              description: Elements marked as notAssessed must provide a non-empty notAssessedReason.\\n              message: notAssessedReason is required when notAssessed is true.\\n              implementation:\\n                \\\"if\\\":\\n                  - \\\"==\\\":\\n                      - var: notAssessed\\n                      - true\\n                  - \\\"and\\\":\\n                      - \\\"!=\\\":\\n                          - var: notAssessedReason\\n                          - null\\n                      - \\\">\\\":\\n                          - var: notAssessedReason.length\\n                          - 0\\n                  - true\\n\\n            - id: CCD-ELEM-V3-013\\n              type: custom\\n              engine: cel\\n              severity: ERROR\\n              stage: 20\\n              order: 8\\n              path: \\\"elements[]\\\"\\n              description: Assessed elements (notAssessed != true) must contain at least one occurrence.\\n              message: Assessed elements must include at least one occurrence.\\n              implementation: \\\"(has(this.notAssessed) && this.notAssessed == true) || (has(this.occurrences) && this.occurrences != null && size(this.occurrences) > 0)\\\"\\n\\n            - id: CCD-ELEM-V3-014\\n              type: unique\\n              engine: unique\\n              severity: ERROR\\n              stage: 20\\n              order: 9\\n              path: \\\"elements[]\\\"\\n              description: Element id must be unique across the submission.\\n              message: Duplicate element id detected in submission.\\n              fields:\\n                - id\\n\\n            - id: CCD-ELEM-V3-015\\n              type: custom\\n              engine: cel\\n              severity: WARNING\\n              stage: 20\\n              order: 10\\n              path: \\\"elements[]\\\"\\n              description: Elements marked notAssessed should not normally contain occurrences.\\n              message: Element is marked notAssessed but still includes occurrences.\\n              implementation: \\\"!(has(this.notAssessed) && this.notAssessed == true) || !has(this.occurrences) || this.occurrences == null || size(this.occurrences) == 0\\\"\\n\\n          properties:\\n            - name: id\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n              logicalTypeOptions:\\n                pattern: \\\"^ELM-[A-Za-z0-9-]+$\\\"\\n\\n            - name: nrm3Code\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n\\n            - name: productType\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n\\n            - name: elementCategory\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n              enum:\\n                - value: Fabric\\n                - value: Mechanical\\n                - value: Electrical\\n                - value: External\\n                - value: Special\\n\\n            - name: assetType\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n              enum:\\n                - value: site\\n                - value: block\\n                - value: floor\\n                - value: space\\n\\n            - name: siteId\\n              physicalType: string\\n              logicalType: string\\n              required: true\\n\\n            - name: blockId\\n              physicalType: string\\n              logicalType: string\\n              required: false\\n\\n            - name: floorId\\n              physicalType: string\\n              logicalType: string\\n              required: false\\n\\n            - name: spaceId\\n              physicalType: string\\n              logicalType: string\\n              required: false\\n\\n            - name: notAssessed\\n              physicalType: boolean\\n              logicalType: boolean\\n              required: false\\n\\n            - name: notAssessedReason\\n              physicalType: string\\n              logicalType: string\\n              required: false\\n\\n            - name: occurrences\\n              logicalType: array\\n              required: false\\n              items:\\n                logicalType: object\\n                quality:\\n                  - id: CCD-ELEM-V3-016\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 1\\n                    dependsOn:\\n                      - CCD-ELEM-V3-001\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Assessed element occurrences must specify basisOfAssessment.\\n                    message: basisOfAssessment is required for assessed element occurrences.\\n                    implementation: \\\"(has($parent.notAssessed) && $parent.notAssessed == true) || (has(this.basisOfAssessment) && this.basisOfAssessment != null)\\\"\\n\\n                  - id: CCD-ELEM-V3-017\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 2\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Assessed element occurrences must specify conditionGrade.\\n                    message: conditionGrade is required for assessed element occurrences.\\n                    implementation: \\\"(has($parent.notAssessed) && $parent.notAssessed == true) || (has(this.conditionGrade) && this.conditionGrade != null)\\\"\\n\\n                  - id: CCD-ELEM-V3-018\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 3\\n                    dependsOn:\\n                      - CCD-ELEM-V3-017\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Condition grades B, C, and D require a descriptive conditionDescription (min 5 chars).\\n                    message: conditionDescription (minimum 5 characters) is required when conditionGrade is B, C, or D.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade in ['B', 'C', 'D']) || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) >= 5)\\\"\\n\\n                  - id: CCD-ELEM-V3-002\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 4\\n                    dependsOn:\\n                      - CCD-ELEM-V3-017\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade C or D occurrences must declare a photoReference (binary attachment existence verified by upload manifest workflow).\\n                    message: photoReference is required when conditionGrade is C or D.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade in ['C', 'D']) || (has(this.photoReference) && this.photoReference != null && size(this.photoReference) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-020\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 5\\n                    dependsOn:\\n                      - CCD-ELEM-V3-017\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade D (Life Expired) occurrences must include at least one repair item.\\n                    message: At least one repair entry is required when conditionGrade is D.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'D') || (has(this.repairs) && this.repairs != null && size(this.repairs) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-021\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 6\\n                    dependsOn:\\n                      - CCD-ELEM-V3-017\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade C (Poor) occurrences should normally include at least one repair item.\\n                    message: Grade C occurrence does not include any repair entries.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'C') || (has(this.repairs) && this.repairs != null && size(this.repairs) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-022\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 7\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade A occurrences may only carry priorityGrade '1' when specified.\\n                    message: Grade A occurrence cannot have a priorityGrade above 1.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'A' && has(this.priorityGrade) && this.priorityGrade != null) || this.priorityGrade == '1'\\\"\\n\\n                  - id: CCD-ELEM-V3-023\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 8\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade D occurrences must carry priorityGrade '3' or '4'.\\n                    message: Grade D occurrence must specify priorityGrade '3' or '4'.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'D') || (has(this.priorityGrade) && this.priorityGrade in ['3', '4'])\\\"\\n\\n                  - id: CCD-ELEM-V3-024\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 9\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Assumed ('Not Seen') occurrences must explain the basis in conditionDescription.\\n                    message: conditionDescription is required when basisOfAssessment is 'Not Seen'.\\n                    implementation: \\\"!(has(this.basisOfAssessment) && this.basisOfAssessment == 'Not Seen') || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-025\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 10\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Suspected asbestos occurrences should include explanatory notes in conditionDescription.\\n                    message: conditionDescription should be populated when hasAsbestosSuspected is true.\\n                    implementation: \\\"!(has(this.hasAsbestosSuspected) && this.hasAsbestosSuspected == true) || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) > 0)\\\"\\n\\n                  - id: CCD-ELEM-V3-027\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 11\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Condition score when provided must be between 0 and 100 inclusive.\\n                    message: conditionScore must be between 0 and 100.\\n                    implementation: \\\"!has(this.conditionScore) || this.conditionScore == null || (this.conditionScore >= 0.0 && this.conditionScore <= 100.0)\\\"\\n\\n                  - id: CCD-ELEM-V3-028\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 12\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade A occurrences should normally have a conditionScore of at least 85.\\n                    message: Grade A occurrence has a conditionScore below 85.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'A' && has(this.conditionScore) && this.conditionScore != null) || this.conditionScore >= 85.0\\\"\\n\\n                  - id: CCD-ELEM-V3-029\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 13\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Grade D occurrences should normally have a conditionScore of 25 or lower.\\n                    message: Grade D occurrence has a conditionScore above 25.\\n                    implementation: \\\"!(has(this.conditionGrade) && this.conditionGrade == 'D' && has(this.conditionScore) && this.conditionScore != null) || this.conditionScore <= 25.0\\\"\\n\\n                  - id: CCD-ELEM-V3-030\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 14\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Occurrence surveyLevel must align with parent element assetType.\\n                    message: Occurrence surveyLevel does not align with parent element assetType.\\n                    implementation: \\\"(this.surveyLevel == 'Site' && $parent.assetType == 'site') || (this.surveyLevel == 'Block' && $parent.assetType == 'block') || (this.surveyLevel == 'Floor' && $parent.assetType == 'floor') || (this.surveyLevel == 'Space' && $parent.assetType == 'space')\\\"\\n\\n                  - id: CCD-ELEM-V3-031\\n                    type: unique\\n                    engine: unique\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 15\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Occurrence id must be unique across all elements.\\n                    message: Duplicate occurrence id detected in submission.\\n                    fields:\\n                      - id\\n\\n                  - id: CCD-ELEM-V3-032\\n                    type: unique\\n                    engine: unique\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 16\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Duplicate occurrence combination across productType, surveyLevel, location, and conditionGrade.\\n                    message: Duplicate occurrence combination detected across productType, surveyLevel, occurrenceExtentOrLocationDescription, and conditionGrade.\\n                    fields:\\n                      - \\\"$parent.productType\\\"\\n                      - surveyLevel\\n                      - occurrenceExtentOrLocationDescription\\n                      - conditionGrade\\n\\n                  - id: CCD-ELEM-V3-033\\n                    type: custom\\n                    engine: cel\\n                    severity: ERROR\\n                    stage: 30\\n                    order: 17\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Occurrence assessedAt timestamp when specified must not precede survey createdAt.\\n                    message: Occurrence assessedAt timestamp precedes survey.createdAt.\\n                    implementation: \\\"!has(this.assessedAt) || this.assessedAt == null || timestamp(this.assessedAt) >= timestamp($root.survey.createdAt)\\\"\\n\\n                  - id: CCD-ELEM-V3-034\\n                    type: unique\\n                    engine: unique\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 18\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Advisory uniqueness check across nrm3Code, siteId, blockId, surveyLevel, and location.\\n                    message: Potential duplicate NRM3 occurrence detected at the same site/block/level/location.\\n                    fields:\\n                      - \\\"$parent.nrm3Code\\\"\\n                      - \\\"$parent.siteId\\\"\\n                      - \\\"$parent.blockId\\\"\\n                      - surveyLevel\\n                      - occurrenceExtentOrLocationDescription\\n\\n                  - id: CCD-ELEM-V3-038\\n                    type: custom\\n                    engine: cel\\n                    severity: INFO\\n                    stage: 30\\n                    order: 19\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Advisory notice that all recorded occurrences are included in DfE statutory lifecycle capital forecasting.\\n                    message: Occurrence included in statutory lifecycle capital forecasting.\\n\\n                  - id: CCD-ELEM-V3-057\\n                    type: custom\\n                    engine: cel\\n                    severity: WARNING\\n                    stage: 30\\n                    order: 20\\n                    path: \\\"elements[].occurrences[]\\\"\\n                    description: Completed surveys with 'Assumed' basisOfAssessment should include detailed justification (>= 10 chars).\\n                    message: Completed survey occurrence with basisOfAssessment 'Assumed' should provide at least 10 characters in conditionDescription.\\n                    implementation: \\\"!($root.survey.isComplete && has(this.basisOfAssessment) && this.basisOfAssessment == 'Assumed') || (has(this.conditionDescription) && this.conditionDescription != null && size(this.conditionDescription) >= 10)\\\"\\n\\n                properties:\\n                  - name: id\\n                    physicalType: string\\n                    logicalType: string\\n                    required: true\\n                    logicalTypeOptions:\\n                      pattern: \\\"^OCC-[A-Za-z0-9-]+$\\\"\\n\\n                  - name: surveyLevel\\n                    physicalType: string\\n                    logicalType: string\\n                    required: true\\n                    enum:\\n                      - value: Site\\n                      - value: Block\\n                      - value: Floor\\n                      - value: Space\\n\\n                  - name: occurrenceExtentOrLocationDescription\\n                    physicalType: string\\n                    logicalType: string\\n                    required: true\\n\\n                  - name: basisOfAssessment\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n                    enum:\\n                      - value: Seen\\n                      - value: Not Seen\\n                      - value: Assumed\\n\\n                  - name: conditionGrade\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n                    enum:\\n                      - value: A\\n                      - value: B\\n                      - value: C\\n                      - value: D\\n\\n                  - name: conditionScore\\n                    physicalType: number\\n                    logicalType: number\\n                    required: false\\n\\n                  - name: conditionDescription\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n\\n                  - name: priorityGrade\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n                    enum:\\n                      - value: \\\"1\\\"\\n                      - value: \\\"2\\\"\\n                      - value: \\\"3\\\"\\n                      - value: \\\"4\\\"\\n\\n                  - name: hasAsbestosSuspected\\n                    physicalType: boolean\\n                    logicalType: boolean\\n                    required: false\\n\\n                  - name: photoReference\\n                    physicalType: string\\n                    logicalType: string\\n                    required: false\\n                    logicalTypeOptions:\\n                      pattern: \\\"^PHOTO-[A-Za-z0-9_.-]+$\\\"\\n\\n                  - name: assessedAt\\n                    physicalType: string\\n                    logicalType: timestamp\\n                    required: false\\n\\n                  - name: replacement\\n                    logicalType: object\\n                    required: false\\n                    quality:\\n                      - id: CCD-ELEM-V3-035\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 1\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: Remaining life (remLife) cannot be negative.\\n                        message: remLife must be greater than or equal to 0.\\n                        implementation: \\\"!has(this.remLife) || this.remLife == null || this.remLife >= 0\\\"\\n\\n                      - id: CCD-ELEM-V3-036\\n                        type: custom\\n                        engine: cel\\n                        severity: WARNING\\n                        stage: 40\\n                        order: 2\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: Remaining life (remLife) should not exceed 100 years.\\n                        message: remLife exceeds typical 100-year maximum lifecycle.\\n                        implementation: \\\"!has(this.remLife) || this.remLife == null || this.remLife <= 100\\\"\\n\\n                      - id: CCD-ELEM-V3-037\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 3\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: Grade D occurrences must report remLife <= 5 years.\\n                        message: Grade D occurrence cannot have remLife greater than 5 years.\\n                        implementation: \\\"!(has($parent.conditionGrade) && $parent.conditionGrade == 'D' && has(this.remLife) && this.remLife != null) || this.remLife <= 5\\\"\\n\\n                      - id: CCD-ELEM-V3-039\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 4\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: replacementQuantity when provided must be strictly positive.\\n                        message: replacementQuantity must be greater than 0.\\n                        implementation: \\\"!has(this.replacementQuantity) || this.replacementQuantity == null || this.replacementQuantity > 0.0\\\"\\n\\n                      - id: CCD-ELEM-V3-040\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 5\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: replacementRate when provided must be non-negative.\\n                        message: replacementRate must be greater than or equal to 0.\\n                        implementation: \\\"!has(this.replacementRate) || this.replacementRate == null || this.replacementRate >= 0.0\\\"\\n\\n                      - id: CCD-ELEM-V3-041\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 6\\n                        dependsOn:\\n                          - CCD-ELEM-V3-039\\n                          - CCD-ELEM-V3-040\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: replacementCost must equal replacementQuantity * replacementRate within automatic float tolerance.\\n                        message: replacementCost does not match replacementQuantity * replacementRate.\\n                        implementation: \\\"!has(this.replacementCost) || this.replacementCost == null || !has(this.replacementQuantity) || this.replacementQuantity == null || !has(this.replacementRate) || this.replacementRate == null || this.replacementCost == this.replacementQuantity * this.replacementRate\\\"\\n\\n                      - id: CCD-ELEM-V3-042\\n                        type: custom\\n                        engine: cel\\n                        severity: ERROR\\n                        stage: 40\\n                        order: 7\\n                        path: \\\"elements[].occurrences[].replacement\\\"\\n                        description: Unit of measure (uom) must be populated when replacementQuantity is provided.\\n                        message: replacement.uom is required when replacementQuantity is specified.\\n                        implementation: \\\"!has(this.replacementQuantity) || this.replacementQuantity == null || (has(this.uom) && this.uom != null)\\\"\\n\\n                    properties:\\n                      - name: uom\\n                        physicalType: string\\n                        logicalType: string\\n                        required: false\\n                        enum:\\n                          - value: m2\\n                          - value: m\\n                          - value: nr\\n                          - value: item\\n                          - value: sum\\n\\n                      - name: remLife\\n                        physicalType: integer\\n                        logicalType: integer\\n                        required: false\\n\\n                      - name: replacementQuantity\\n                        physicalType: number\\n                        logicalType: number\\n                        required: false\\n\\n                      - name: replacementRate\\n                        physicalType: number\\n                        logicalType: number\\n                        required: false\\n\\n                      - name: replacementCost\\n                        physicalType: number\\n                        logicalType: number\\n                        required: false\\n\\n                  - name: repairs\\n                    logicalType: array\\n                    required: false\\n                    items:\\n                      logicalType: object\\n                      quality:\\n                        - id: CCD-ELEM-V3-019\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 1\\n                          dependsOn:\\n                            - CCD-ELEM-V3-001\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair item must be valid for the grandparent element productType.\\n                          message: repairItem is not in ambient.reference.repair_items_by_product_type for this element's productType.\\n                          implementation: \\\"has(this.repairItem) && this.repairItem != null && ($parent.$parent.productType in ambient.reference.repair_items_by_product_type) && (this.repairItem in ambient.reference.repair_items_by_product_type[$parent.$parent.productType])\\\"\\n\\n                        - id: CCD-ELEM-V3-043\\n                          type: unique\\n                          engine: unique\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 2\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair id must be unique across all repairs.\\n                          message: Duplicate repair id detected in submission.\\n                          fields:\\n                            - id\\n\\n                        - id: CCD-ELEM-V3-044\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 3\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: repairQuantity must be strictly positive.\\n                          message: repairQuantity must be greater than 0.\\n                          implementation: \\\"has(this.repairQuantity) && this.repairQuantity != null && this.repairQuantity > 0.0\\\"\\n\\n                        - id: CCD-ELEM-V3-026\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 4\\n                          dependsOn:\\n                            - CCD-ELEM-V3-039\\n                            - CCD-ELEM-V3-044\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair quantity must not exceed parent occurrence replacementQuantity when units match.\\n                          message: repairQuantity cannot exceed parent replacement.replacementQuantity when using the same uom.\\n                          implementation: \\\"!has($parent.replacement) || $parent.replacement == null || !has($parent.replacement.replacementQuantity) || $parent.replacement.replacementQuantity == null || !has(this.uom) || this.uom == null || !has($parent.replacement.uom) || $parent.replacement.uom == null || this.uom != $parent.replacement.uom || $parent.replacement.replacementQuantity >= this.repairQuantity\\\"\\n\\n                        - id: CCD-ELEM-V3-045\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 5\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Urgent repairs must populate repairDescription and repairClassification.\\n                          message: repairDescription and repairClassification are required when urgentActionRequired is true.\\n                          implementation: \\\"!(has(this.urgentActionRequired) && this.urgentActionRequired == true) || (has(this.repairDescription) && this.repairDescription != null && size(this.repairDescription) > 0 && has(this.repairClassification) && this.repairClassification != null)\\\"\\n\\n                        - id: CCD-ELEM-V3-046\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 6\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: repairItemRate must be non-negative.\\n                          message: repairItemRate must be greater than or equal to 0.\\n                          implementation: \\\"has(this.repairItemRate) && this.repairItemRate != null && this.repairItemRate >= 0.0\\\"\\n\\n                        - id: CCD-ELEM-V3-047\\n                          type: custom\\n                          engine: jsonlogic\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 7\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Annual phased costs (year1Cost through year5Cost) must be non-negative.\\n                          message: Year 1..5 repair costs must all be greater than or equal to 0.\\n                          implementation:\\n                            \\\"and\\\":\\n                              - \\\">=\\\": [{ var: year1Cost }, 0]\\n                              - \\\">=\\\": [{ var: year2Cost }, 0]\\n                              - \\\">=\\\": [{ var: year3Cost }, 0]\\n                              - \\\">=\\\": [{ var: year4Cost }, 0]\\n                              - \\\">=\\\": [{ var: year5Cost }, 0]\\n\\n                        - id: CCD-ELEM-V3-048\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 8\\n                          dependsOn:\\n                            - CCD-ELEM-V3-044\\n                            - CCD-ELEM-V3-046\\n                            - CCD-ELEM-V3-047\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: totalRepairCost must equal the sum of year1Cost..year5Cost within automatic float tolerance.\\n                          message: totalRepairCost must equal year1Cost + year2Cost + year3Cost + year4Cost + year5Cost.\\n                          implementation: \\\"this.totalRepairCost == this.year1Cost + this.year2Cost + this.year3Cost + this.year4Cost + this.year5Cost\\\"\\n\\n                        - id: CCD-ELEM-V3-049\\n                          type: custom\\n                          engine: jsonlogic\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 9\\n                          dependsOn:\\n                            - CCD-ELEM-V3-044\\n                            - CCD-ELEM-V3-046\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: totalRepairCost must equal repairQuantity * repairItemRate within automatic float tolerance.\\n                          message: totalRepairCost must match repairQuantity * repairItemRate.\\n                          implementation:\\n                            \\\"==\\\":\\n                              - var: totalRepairCost\\n                              - \\\"*\\\":\\n                                  - var: repairQuantity\\n                                  - var: repairItemRate\\n\\n                        - id: CCD-ELEM-V3-050\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 10\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Classification 'X' (Immediate/Urgent) repairs must schedule non-zero spend in year1Cost.\\n                          message: year1Cost must be greater than 0 for repairClassification 'X'.\\n                          implementation: \\\"!(has(this.repairClassification) && this.repairClassification == 'X') || this.year1Cost > 0.0\\\"\\n\\n                        - id: CCD-ELEM-V3-051\\n                          type: custom\\n                          engine: cel\\n                          severity: WARNING\\n                          stage: 50\\n                          order: 11\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Classification 'Z' (Longer-term) repairs should normally schedule 0 in year1Cost.\\n                          message: repairClassification 'Z' typically has year1Cost equal to 0.\\n                          implementation: \\\"!(has(this.repairClassification) && this.repairClassification == 'Z') || this.year1Cost == 0.0\\\"\\n\\n                        - id: CCD-ELEM-V3-052\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 12\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Grade D occurrence repairs with classification 'X' must mark urgentActionRequired = true.\\n                          message: urgentActionRequired must be true for classification 'X' repairs on Grade D occurrences.\\n                          implementation: \\\"!(has($parent.conditionGrade) && $parent.conditionGrade == 'D' && has(this.repairClassification) && this.repairClassification == 'X') || (has(this.urgentActionRequired) && this.urgentActionRequired == true)\\\"\\n\\n                        - id: CCD-ELEM-V3-053\\n                          type: custom\\n                          engine: cel\\n                          severity: WARNING\\n                          stage: 50\\n                          order: 13\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair descriptions when supplied should be at least 10 characters long.\\n                          message: repairDescription should be at least 10 characters long for clarity.\\n                          implementation: \\\"!has(this.repairDescription) || this.repairDescription == null || size(this.repairDescription) >= 10\\\"\\n\\n                        - id: CCD-ELEM-V3-054\\n                          type: custom\\n                          engine: cel\\n                          severity: INFO\\n                          stage: 50\\n                          order: 14\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: High-value repair items exceeding 50,000 GBP are flagged for capital programme review.\\n                          message: High-value repair item exceeds 50,000 GBP threshold (advisory capital review).\\n                          implementation: \\\"this.totalRepairCost <= 50000.0\\\"\\n\\n                        - id: CCD-ELEM-V3-055\\n                          type: custom\\n                          engine: cel\\n                          severity: ERROR\\n                          stage: 50\\n                          order: 15\\n                          path: \\\"elements[].occurrences[].repairs[]\\\"\\n                          description: Repair unit of measure (uom) must match parent replacement.uom when both are provided.\\n                          message: Repair uom must match parent replacement.uom.\\n                          implementation: \\\"!has($parent.replacement) || $parent.replacement == null || !has($parent.replacement.uom) || $parent.replacement.uom == null || !has(this.uom) || this.uom == null || this.uom == $parent.replacement.uom\\\"\\n\\n                      properties:\\n                        - name: id\\n                          physicalType: string\\n                          logicalType: string\\n                          required: true\\n                          logicalTypeOptions:\\n                            pattern: \\\"^REP-[A-Za-z0-9-]+$\\\"\\n\\n                        - name: repairItem\\n                          physicalType: string\\n                          logicalType: string\\n                          required: false\\n\\n                        - name: repairClassification\\n                          physicalType: string\\n                          logicalType: string\\n                          required: false\\n                          enum:\\n                            - value: X\\n                            - value: Y\\n                            - value: Z\\n\\n                        - name: repairDescription\\n                          physicalType: string\\n                          logicalType: string\\n                          required: false\\n\\n                        - name: uom\\n                          physicalType: string\\n                          logicalType: string\\n                          required: false\\n                          enum:\\n                            - value: m2\\n                            - value: m\\n                            - value: nr\\n                            - value: item\\n                            - value: sum\\n\\n                        - name: repairQuantity\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: repairItemRate\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year1Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year2Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year3Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year4Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: year5Cost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: totalRepairCost\\n                          physicalType: number\\n                          logicalType: number\\n                          required: true\\n\\n                        - name: urgentActionRequired\\n                          physicalType: boolean\\n                          logicalType: boolean\\n                          required: false\\n\\nteam:\\n  name: CDC2 Geospatial Programme\\n  members:\\n    - username: data-owner\\n      role: owner\\n\\ntags:\\n  - cdc2\\n  - ccd-elemental-v3\\n  - odcs-v3.2.0\\n  - geospatial\\n  - school-estate\\n\",\n  \"sampleValidFixtures\": [\n    \"{\\\"survey\\\": {\\\"id\\\": \\\"SURV-CCD-V3-001\\\", \\\"surveyName\\\": \\\"CCD Elemental Condition Survey v3\\\", \\\"participantId\\\": \\\"PART-SURV-991\\\", \\\"surveyorEmail\\\": \\\"lead.surveyor@education.gov.uk\\\", \\\"surveyDate\\\": \\\"2026-04-10\\\", \\\"isComplete\\\": true, \\\"createdAt\\\": \\\"2026-04-10T08:30:00Z\\\", \\\"updatedAt\\\": \\\"2026-04-10T15:45:00Z\\\"}, \\\"school\\\": {\\\"urn\\\": \\\"104521\\\", \\\"name\\\": \\\"St Mary's Church of England Academy\\\", \\\"localAuthorityCode\\\": \\\"380\\\"}, \\\"elements\\\": [{\\\"id\\\": \\\"ELM-001\\\", \\\"nrm3Code\\\": \\\"5.6.1\\\", \\\"productType\\\": \\\"Boiler\\\", \\\"elementCategory\\\": \\\"Mechanical\\\", \\\"assetType\\\": \\\"block\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-A\\\", \\\"notAssessed\\\": false, \\\"occurrences\\\": [{\\\"id\\\": \\\"OCC-001\\\", \\\"surveyLevel\\\": \\\"Block\\\", \\\"occurrenceExtentOrLocationDescription\\\": \\\"Plant Room Ground Floor Boiler 1\\\", \\\"basisOfAssessment\\\": \\\"Seen\\\", \\\"conditionGrade\\\": \\\"D\\\", \\\"conditionScore\\\": 18.5, \\\"conditionDescription\\\": \\\"Primary condensing boiler shell shows heavy corrosion and valve leakage.\\\", \\\"priorityGrade\\\": \\\"4\\\", \\\"hasAsbestosSuspected\\\": false, \\\"photoReference\\\": \\\"PHOTO-BLK-A-BOILER-01.jpg\\\", \\\"assessedAt\\\": \\\"2026-04-10T10:15:00Z\\\", \\\"replacement\\\": {\\\"uom\\\": \\\"nr\\\", \\\"remLife\\\": 2, \\\"replacementQuantity\\\": 5, \\\"replacementRate\\\": 1200.0, \\\"replacementCost\\\": 6000.0}, \\\"repairs\\\": [{\\\"id\\\": \\\"REP-001\\\", \\\"repairItem\\\": \\\"Boiler Valve\\\", \\\"repairClassification\\\": \\\"X\\\", \\\"repairDescription\\\": \\\"Replace corroded isolation valve assembly and pressure relief seal.\\\", \\\"uom\\\": \\\"nr\\\", \\\"repairQuantity\\\": 3, \\\"repairItemRate\\\": 0.1, \\\"year1Cost\\\": 0.1, \\\"year2Cost\\\": 0.2, \\\"year3Cost\\\": 0.0, \\\"year4Cost\\\": 0.0, \\\"year5Cost\\\": 0.0, \\\"totalRepairCost\\\": 0.3, \\\"urgentActionRequired\\\": true}]}]}, {\\\"id\\\": \\\"ELM-002\\\", \\\"nrm3Code\\\": \\\"2.3.1\\\", \\\"productType\\\": \\\"Roof\\\", \\\"elementCategory\\\": \\\"Fabric\\\", \\\"assetType\\\": \\\"block\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-B\\\", \\\"notAssessed\\\": false, \\\"occurrences\\\": [{\\\"id\\\": \\\"OCC-002\\\", \\\"surveyLevel\\\": \\\"Block\\\", \\\"occurrenceExtentOrLocationDescription\\\": \\\"South Wing Pitched Slate Roof\\\", \\\"basisOfAssessment\\\": \\\"Seen\\\", \\\"conditionGrade\\\": \\\"A\\\", \\\"conditionScore\\\": 95.0, \\\"conditionDescription\\\": \\\"Slate covering and ridge tiles intact with clean rainwater goods.\\\", \\\"priorityGrade\\\": \\\"1\\\", \\\"hasAsbestosSuspected\\\": false, \\\"assessedAt\\\": \\\"2026-04-10T11:20:00Z\\\", \\\"replacement\\\": {\\\"uom\\\": \\\"m2\\\", \\\"remLife\\\": 25, \\\"replacementQuantity\\\": 100.0, \\\"replacementRate\\\": 85.0, \\\"replacementCost\\\": 8500.0}}]}, {\\\"id\\\": \\\"ELM-003\\\", \\\"nrm3Code\\\": \\\"2.5.1\\\", \\\"productType\\\": \\\"Window\\\", \\\"elementCategory\\\": \\\"Fabric\\\", \\\"assetType\\\": \\\"floor\\\", \\\"siteId\\\": \\\"SITE-MAIN\\\", \\\"blockId\\\": \\\"BLK-B\\\", \\\"floorId\\\": \\\"FLR-B1\\\", \\\"notAssessed\\\": true, \\\"notAssessedReason\\\": \\\"External scaffolding prevented safe close-up window inspection during this visit.\\\"}]}\"\n  ],\n  \"identifierConfig\": {\n    \"type\": \"URN\",\n    \"jsonPointer\": \"/school/urn\",\n    \"required\": true\n  },\n  \"validationPolicy\": {\n    \"failOnMinimumSeverity\": \"Error\",\n    \"crossSubmissionDraftPolicy\": \"WarnOnDraftReferences\"\n  }\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created or 409 Conflict\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.7 Schedule / Activate CCD Elemental v3 Contract",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{adminFunctionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{adminBaseUrl}}/schemas/{{ccdV3SchemaName}}/versions/1/schedule",
+              "host": [
+                "{{adminBaseUrl}}"
+              ],
+              "path": [
+                "schemas",
+                "{{ccdV3SchemaName}}",
+                "versions",
+                "1",
+                "schedule"
+              ]
+            },
+            "description": "Activates CCD Elemental Dataset v3 v1.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"effectiveFromUtc\": \"2026-01-01T00:00:00Z\",\n  \"effectiveToUtc\": \"2028-12-31T23:59:59Z\",\n  \"lifecycleAction\": \"Schedule\",\n  \"identifierConfig\": {\n    \"type\": \"URN\",\n    \"jsonPointer\": \"/school/urn\",\n    \"required\": true\n  }\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.8 Create CCD Elemental v3 Submission Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{ccdV3SchemaName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{ccdV3SchemaName}}"
+              ]
+            },
+            "description": "Creates a new submission session pinned to ccd-elemental-v3."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "const data = pm.response.json().data ?? pm.response.json();",
+                  "pm.collectionVariables.set(\"ccdV3SubmissionId\", data.submissionId);",
+                  "pm.variables.set(\"ccdV3SubmissionId\", data.submissionId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.9 Upload Invalid CCD Elemental v3 Draft (Stage-Halting Critical Violation)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{ccdV3SubmissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{ccdV3SubmissionId}}"
+              ]
+            },
+            "description": "Uploads an invalid CCD Elemental v3 draft with updatedAt < createdAt, triggering Critical rule CCD-ELEM-V3-003 and severity-grouped issues.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-CCD-V3-001\",\n    \"surveyName\": \"CCD Elemental Condition Survey v3\",\n    \"participantId\": \"PART-SURV-991\",\n    \"surveyorEmail\": \"lead.surveyor@education.gov.uk\",\n    \"surveyDate\": \"2026-04-10\",\n    \"isComplete\": true,\n    \"createdAt\": \"2026-04-12T10:00:00Z\",\n    \"updatedAt\": \"2026-04-10T08:00:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"104521\",\n    \"name\": \"St Mary's Church of England Academy\",\n    \"localAuthorityCode\": \"380\"\n  },\n  \"elements\": [\n    {\n      \"id\": \"ELM-001\",\n      \"nrm3Code\": \"5.6.1\",\n      \"productType\": \"Boiler\",\n      \"elementCategory\": \"Mechanical\",\n      \"assetType\": \"block\",\n      \"siteId\": \"SITE-MAIN\",\n      \"blockId\": \"BLK-A\",\n      \"notAssessed\": false,\n      \"occurrences\": [\n        {\n          \"id\": \"OCC-001\",\n          \"surveyLevel\": \"Block\",\n          \"occurrenceExtentOrLocationDescription\": \"Plant Room Ground Floor Boiler 1\",\n          \"basisOfAssessment\": \"Seen\",\n          \"conditionGrade\": \"D\",\n          \"conditionScore\": 18.5,\n          \"conditionDescription\": \"Primary condensing boiler shell shows heavy corrosion and valve leakage.\",\n          \"priorityGrade\": \"4\",\n          \"hasAsbestosSuspected\": false,\n          \"photoReference\": \"PHOTO-BLK-A-BOILER-01.jpg\",\n          \"assessedAt\": \"2026-04-10T10:15:00Z\",\n          \"replacement\": {\n            \"uom\": \"nr\",\n            \"remLife\": 2,\n            \"replacementQuantity\": 5,\n            \"replacementRate\": 1200.0,\n            \"replacementCost\": 6000.0\n          },\n          \"repairs\": [\n            {\n              \"id\": \"REP-001\",\n              \"repairItem\": \"Boiler Valve\",\n              \"repairClassification\": \"X\",\n              \"repairDescription\": \"Replace corroded isolation valve assembly and pressure relief seal.\",\n              \"uom\": \"nr\",\n              \"repairQuantity\": 3,\n              \"repairItemRate\": 0.1,\n              \"year1Cost\": 0.1,\n              \"year2Cost\": 0.2,\n              \"year3Cost\": 0.0,\n              \"year4Cost\": 0.0,\n              \"year5Cost\": 0.0,\n              \"totalRepairCost\": 0.3,\n              \"urgentActionRequired\": true\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"id\": \"ELM-002\",\n      \"nrm3Code\": \"2.3.1\",\n      \"productType\": \"Roof\",\n      \"elementCategory\": \"Fabric\",\n      \"assetType\": \"block\",\n      \"siteId\": \"SITE-MAIN\",\n      \"blockId\": \"BLK-B\",\n      \"notAssessed\": false,\n      \"occurrences\": [\n        {\n          \"id\": \"OCC-002\",\n          \"surveyLevel\": \"Block\",\n          \"occurrenceExtentOrLocationDescription\": \"South Wing Pitched Slate Roof\",\n          \"basisOfAssessment\": \"Seen\",\n          \"conditionGrade\": \"A\",\n          \"conditionScore\": 95.0,\n          \"conditionDescription\": \"Slate covering and ridge tiles intact with clean rainwater goods.\",\n          \"priorityGrade\": \"1\",\n          \"hasAsbestosSuspected\": false,\n          \"assessedAt\": \"2026-04-10T11:20:00Z\",\n          \"replacement\": {\n            \"uom\": \"m2\",\n            \"remLife\": 25,\n            \"replacementQuantity\": 100.0,\n            \"replacementRate\": 85.0,\n            \"replacementCost\": 8500.0\n          }\n        }\n      ]\n    },\n    {\n      \"id\": \"ELM-003\",\n      \"nrm3Code\": \"2.5.1\",\n      \"productType\": \"Window\",\n      \"elementCategory\": \"Fabric\",\n      \"assetType\": \"floor\",\n      \"siteId\": \"SITE-MAIN\",\n      \"blockId\": \"BLK-B\",\n      \"floorId\": \"FLR-B1\",\n      \"notAssessed\": true,\n      \"notAssessedReason\": \"External scaffolding prevented safe close-up window inspection during this visit.\"\n    }\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK with Critical severity violation\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const data = pm.response.json().data ?? pm.response.json();",
+                  "    pm.expect(data.isSuccessful).to.be.false;",
+                  "    pm.expect(data.issues).to.be.an(\"object\");",
+                  "    pm.expect(data.issues.critical).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.10 Upload Valid CCD Elemental v3 Draft",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{ccdV3SubmissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{ccdV3SubmissionId}}"
+              ]
+            },
+            "description": "Uploads the complete, valid CCD Elemental v3 payload (passes CEL, JsonLogic, unique, float epsilon 0.1+0.2==0.3, reference data, and cross-submission checks).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"survey\": {\n    \"id\": \"SURV-CCD-V3-001\",\n    \"surveyName\": \"CCD Elemental Condition Survey v3\",\n    \"participantId\": \"PART-SURV-991\",\n    \"surveyorEmail\": \"lead.surveyor@education.gov.uk\",\n    \"surveyDate\": \"2026-04-10\",\n    \"isComplete\": true,\n    \"createdAt\": \"2026-04-10T08:30:00Z\",\n    \"updatedAt\": \"2026-04-10T15:45:00Z\"\n  },\n  \"school\": {\n    \"urn\": \"104521\",\n    \"name\": \"St Mary's Church of England Academy\",\n    \"localAuthorityCode\": \"380\"\n  },\n  \"elements\": [\n    {\n      \"id\": \"ELM-001\",\n      \"nrm3Code\": \"5.6.1\",\n      \"productType\": \"Boiler\",\n      \"elementCategory\": \"Mechanical\",\n      \"assetType\": \"block\",\n      \"siteId\": \"SITE-MAIN\",\n      \"blockId\": \"BLK-A\",\n      \"notAssessed\": false,\n      \"occurrences\": [\n        {\n          \"id\": \"OCC-001\",\n          \"surveyLevel\": \"Block\",\n          \"occurrenceExtentOrLocationDescription\": \"Plant Room Ground Floor Boiler 1\",\n          \"basisOfAssessment\": \"Seen\",\n          \"conditionGrade\": \"D\",\n          \"conditionScore\": 18.5,\n          \"conditionDescription\": \"Primary condensing boiler shell shows heavy corrosion and valve leakage.\",\n          \"priorityGrade\": \"4\",\n          \"hasAsbestosSuspected\": false,\n          \"photoReference\": \"PHOTO-BLK-A-BOILER-01.jpg\",\n          \"assessedAt\": \"2026-04-10T10:15:00Z\",\n          \"replacement\": {\n            \"uom\": \"nr\",\n            \"remLife\": 2,\n            \"replacementQuantity\": 5,\n            \"replacementRate\": 1200.0,\n            \"replacementCost\": 6000.0\n          },\n          \"repairs\": [\n            {\n              \"id\": \"REP-001\",\n              \"repairItem\": \"Boiler Valve\",\n              \"repairClassification\": \"X\",\n              \"repairDescription\": \"Replace corroded isolation valve assembly and pressure relief seal.\",\n              \"uom\": \"nr\",\n              \"repairQuantity\": 3,\n              \"repairItemRate\": 0.1,\n              \"year1Cost\": 0.1,\n              \"year2Cost\": 0.2,\n              \"year3Cost\": 0.0,\n              \"year4Cost\": 0.0,\n              \"year5Cost\": 0.0,\n              \"totalRepairCost\": 0.3,\n              \"urgentActionRequired\": true\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"id\": \"ELM-002\",\n      \"nrm3Code\": \"2.3.1\",\n      \"productType\": \"Roof\",\n      \"elementCategory\": \"Fabric\",\n      \"assetType\": \"block\",\n      \"siteId\": \"SITE-MAIN\",\n      \"blockId\": \"BLK-B\",\n      \"notAssessed\": false,\n      \"occurrences\": [\n        {\n          \"id\": \"OCC-002\",\n          \"surveyLevel\": \"Block\",\n          \"occurrenceExtentOrLocationDescription\": \"South Wing Pitched Slate Roof\",\n          \"basisOfAssessment\": \"Seen\",\n          \"conditionGrade\": \"A\",\n          \"conditionScore\": 95.0,\n          \"conditionDescription\": \"Slate covering and ridge tiles intact with clean rainwater goods.\",\n          \"priorityGrade\": \"1\",\n          \"hasAsbestosSuspected\": false,\n          \"assessedAt\": \"2026-04-10T11:20:00Z\",\n          \"replacement\": {\n            \"uom\": \"m2\",\n            \"remLife\": 25,\n            \"replacementQuantity\": 100.0,\n            \"replacementRate\": 85.0,\n            \"replacementCost\": 8500.0\n          }\n        }\n      ]\n    },\n    {\n      \"id\": \"ELM-003\",\n      \"nrm3Code\": \"2.5.1\",\n      \"productType\": \"Window\",\n      \"elementCategory\": \"Fabric\",\n      \"assetType\": \"floor\",\n      \"siteId\": \"SITE-MAIN\",\n      \"blockId\": \"BLK-B\",\n      \"floorId\": \"FLR-B1\",\n      \"notAssessed\": true,\n      \"notAssessedReason\": \"External scaffolding prevented safe close-up window inspection during this visit.\"\n    }\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK and payload passes all quality rules\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const data = pm.response.json().data ?? pm.response.json();",
+                  "    pm.expect(data.isSuccessful).to.be.true;",
+                  "    pm.expect(data.pendingErrors).to.be.an(\"array\").that.is.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "7.11 Finalise CCD Elemental v3 Submission (Processed Bundle Layout)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "x-functions-key",
+                "value": "{{functionKey}}",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/submissions/{{ccdV3SubmissionId}}/finalise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submissions",
+                "{{ccdV3SubmissionId}}",
+                "finalise"
+              ]
+            },
+            "description": "Finalises the CCD Elemental v3 submission and verifies the processed bundle folder URI ({submissionId}/payload.json)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK and promoted into bundle folder\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const data = pm.response.json().data ?? pm.response.json();",
+                  "    const subId = pm.variables.get(\"ccdV3SubmissionId\");",
+                  "    pm.expect(data.status).to.eql(\"Finalised\");",
+                  "    pm.expect(data.processedBlobUri).to.include(subId + \"/payload.json\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     }

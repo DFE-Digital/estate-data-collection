@@ -7,7 +7,7 @@ using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Application.Validators.Schema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
-using EstateDataCollection.Infrastructure.Validation;
+using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Builders;
 using EstateDataCollection.Tests.Common.Extensions;
 using EstateDataCollection.Tests.Common.Fixtures;
@@ -25,7 +25,7 @@ public class GetSubmissionStatusUseCaseTests
 
     public GetSubmissionStatusUseCaseTests()
     {
-        var validationService = new PayloadValidationService(_validator, new JsonLogicValidator());
+        var validationService = new PayloadValidationService(_validator, new QualityRuleCoordinator());
         var evaluationService = new SubmissionEvaluationService(_repository, _registry, validationService);
         _sut = new GetSubmissionStatusUseCase(_repository, evaluationService);
     }
@@ -33,18 +33,24 @@ public class GetSubmissionStatusUseCaseTests
     [Fact]
     public async Task When_Session_Does_Not_Exist_It_Should_Return_Submission_Not_Found()
     {
+        // Arrange
         var submissionId = Guid.NewGuid();
         _repository.GetSessionAsync(submissionId, Arg.Any<CancellationToken>())
             .Returns(Result<SubmissionSession>.Failure(Error.NotFound(ErrorCodes.SubmissionNotFound, new { submissionId })));
 
-        var result = await _sut.ExecuteAsync(new GetSubmissionStatusRequest(submissionId));
+        var request = new GetSubmissionStatusRequest(submissionId);
 
+        // Act
+        var result = await _sut.ExecuteAsync(request);
+
+        // Assert
         result.ShouldFailWith("Submission.NotFound");
     }
 
     [Fact]
     public async Task When_Submission_Is_Already_Finalised_It_Should_Return_Finalised_Status_Without_Reading_Draft()
     {
+        // Arrange
         var session = new SubmissionSessionBuilder()
             .WithIdentifier("URN", "104521")
             .Finalised()
@@ -53,8 +59,12 @@ public class GetSubmissionStatusUseCaseTests
         _repository.GetSessionAsync(session.SubmissionId, Arg.Any<CancellationToken>())
             .Returns(Result<SubmissionSession>.Success(session));
 
-        var result = (await _sut.ExecuteAsync(new GetSubmissionStatusRequest(session.SubmissionId))).ShouldSucceed();
+        var request = new GetSubmissionStatusRequest(session.SubmissionId);
 
+        // Act
+        var result = (await _sut.ExecuteAsync(request)).ShouldSucceed();
+
+        // Assert
         result.Status.Should().Be("Finalised");
         result.FinalisedAtUtc.Should().NotBeNull();
         result.HasDraftPayload.Should().BeFalse();
@@ -68,6 +78,7 @@ public class GetSubmissionStatusUseCaseTests
     [Fact]
     public async Task When_Draft_Session_Has_No_Payload_Yet_It_Should_Return_Draft_Not_Ready_With_Pending_Error()
     {
+        // Arrange
         var session = new SubmissionSessionBuilder().Build();
 
         _repository.GetSessionAsync(session.SubmissionId, Arg.Any<CancellationToken>())
@@ -75,8 +86,12 @@ public class GetSubmissionStatusUseCaseTests
         _repository.GetDraftPayloadAsync(session.SubmissionId, Arg.Any<CancellationToken>())
             .Returns(Result<string>.Failure(Error.Failure(ErrorCodes.SubmissionNotFound, new { session.SubmissionId })));
 
-        var result = (await _sut.ExecuteAsync(new GetSubmissionStatusRequest(session.SubmissionId))).ShouldSucceed();
+        var request = new GetSubmissionStatusRequest(session.SubmissionId);
 
+        // Act
+        var result = (await _sut.ExecuteAsync(request)).ShouldSucceed();
+
+        // Assert
         result.Status.Should().Be("Draft");
         result.HasDraftPayload.Should().BeFalse();
         result.IsReadyToFinalise.Should().BeFalse();
@@ -86,6 +101,7 @@ public class GetSubmissionStatusUseCaseTests
     [Fact]
     public async Task When_Draft_Payload_Has_Validation_Or_Identifier_Errors_It_Should_Return_Not_Ready_With_Pending_Errors()
     {
+        // Arrange
         var session = new SubmissionSessionBuilder().Build();
         var resolved = new ResolvedSchemaBuilder().Build();
 
@@ -99,8 +115,12 @@ public class GetSubmissionStatusUseCaseTests
             .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult(
                 [new ValidationError("#/urn", "Required property 'urn' not found")])));
 
-        var result = (await _sut.ExecuteAsync(new GetSubmissionStatusRequest(session.SubmissionId))).ShouldSucceed();
+        var request = new GetSubmissionStatusRequest(session.SubmissionId);
 
+        // Act
+        var result = (await _sut.ExecuteAsync(request)).ShouldSucceed();
+
+        // Assert
         result.Status.Should().Be("Draft");
         result.HasDraftPayload.Should().BeTrue();
         result.IsReadyToFinalise.Should().BeFalse();
@@ -111,6 +131,7 @@ public class GetSubmissionStatusUseCaseTests
     [Fact]
     public async Task When_Draft_Payload_Is_Valid_It_Should_Return_Ready_To_Finalise_With_Extracted_Identifier()
     {
+        // Arrange
         var session = new SubmissionSessionBuilder().Build();
         var resolved = new ResolvedSchemaBuilder().Build();
 
@@ -123,8 +144,12 @@ public class GetSubmissionStatusUseCaseTests
         _validator.ValidateAsync(SurveyPayloadFixtures.ValidPayloadJson, resolved.Schema, Arg.Any<CancellationToken>())
             .Returns(Result<SchemaValidationResult>.Success(new SchemaValidationResult([])));
 
-        var result = (await _sut.ExecuteAsync(new GetSubmissionStatusRequest(session.SubmissionId))).ShouldSucceed();
+        var request = new GetSubmissionStatusRequest(session.SubmissionId);
 
+        // Act
+        var result = (await _sut.ExecuteAsync(request)).ShouldSucceed();
+
+        // Assert
         result.Status.Should().Be("Draft");
         result.HasDraftPayload.Should().BeTrue();
         result.IsReadyToFinalise.Should().BeTrue();

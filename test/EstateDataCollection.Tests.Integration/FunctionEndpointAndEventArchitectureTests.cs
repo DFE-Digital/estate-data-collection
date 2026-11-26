@@ -42,12 +42,16 @@ public class FunctionEndpointAndEventArchitectureTests
     public void Every_Azure_Function_Class_Should_Be_Sealed_Single_Operation_And_Implement_Endpoint_Or_Event_Contract(
         Assembly hostAssembly)
     {
+        // Arrange — hostAssembly supplied by theory data
+
+        // Act
         var functionTypes = hostAssembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false } &&
                         t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                             .Any(m => m.GetCustomAttribute<FunctionAttribute>() is not null))
             .ToList();
 
+        // Assert
         functionTypes.Should().NotBeEmpty();
 
         foreach (var type in functionTypes)
@@ -73,12 +77,16 @@ public class FunctionEndpointAndEventArchitectureTests
     [MemberData(nameof(FunctionHostAssemblies))]
     public void Every_Function_Class_Should_Follow_HttpMethod_And_Role_Naming_Conventions(Assembly hostAssembly)
     {
+        // Arrange — hostAssembly supplied by theory data
+
+        // Act
         var functionTypes = hostAssembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false } &&
                         t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                             .Any(m => m.GetCustomAttribute<FunctionAttribute>() is not null))
             .ToList();
 
+        // Assert
         functionTypes.Should().NotBeEmpty();
 
         foreach (var type in functionTypes)
@@ -139,6 +147,7 @@ public class FunctionEndpointAndEventArchitectureTests
     [MemberData(nameof(FunctionHostAssemblies))]
     public void AddFunctions_Should_Resolve_All_Registered_Endpoints_And_Events_From_DI(Assembly hostAssembly)
     {
+        // Arrange
         var config = BuildBaseConfiguration();
 
         var services = new ServiceCollection();
@@ -155,13 +164,36 @@ public class FunctionEndpointAndEventArchitectureTests
             services.AddScoped<RazorComponentRenderer>();
         }
 
-        AssertAllEndpointsResolve(services, hostAssembly);
+        // Act
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+
+        var endpointAndEventTypes = hostAssembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } &&
+                        (typeof(IFunctionEndpoint).IsAssignableFrom(t) || typeof(IFunctionEvent).IsAssignableFrom(t)))
+            .ToList();
+
+        // Assert
+        endpointAndEventTypes.Should().NotBeEmpty();
+
+        using var scope = provider.CreateScope();
+        foreach (var type in endpointAndEventTypes)
+        {
+            var resolved = scope.ServiceProvider.GetRequiredService(type);
+            resolved.Should().NotBeNull();
+        }
     }
 
     [Fact]
     public void AdminHost_Routes_Should_Partition_Api_Manage_And_Assets_With_Expected_Auth_Levels()
     {
+        // Arrange
         var adminAssembly = typeof(GetAdminSchemasEndpoint).Assembly;
+
+        // Act
         var triggers = adminAssembly.GetTypes()
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             .Select(m => m.GetParameters()
@@ -171,6 +203,7 @@ public class FunctionEndpointAndEventArchitectureTests
             .Cast<HttpTriggerAttribute>()
             .ToList();
 
+        // Assert
         triggers.Should().NotBeEmpty();
 
         foreach (var trigger in triggers)
@@ -195,19 +228,25 @@ public class FunctionEndpointAndEventArchitectureTests
     [Fact]
     public void Every_HttpTrigger_Route_Should_Be_Declared_In_AppRoutes_Templates()
     {
+        // Arrange
         var adminTemplates = GetTemplateConstants(
             typeof(AppRoutes.AdminUi.Templates),
             typeof(AppRoutes.AdminApi.Templates),
             typeof(AppRoutes.Assets.Templates));
         var publicTemplates = GetTemplateConstants(typeof(AppRoutes.PublicApi.Templates));
 
-        foreach (var (endpointType, trigger) in GetTriggers(typeof(GetAdminSchemasEndpoint).Assembly))
+        // Act
+        var adminTriggers = GetTriggers(typeof(GetAdminSchemasEndpoint).Assembly);
+        var publicTriggers = GetTriggers(typeof(GetSchemasEndpoint).Assembly);
+
+        // Assert
+        foreach (var (endpointType, trigger) in adminTriggers)
         {
             trigger.Route.Should().NotBeNullOrWhiteSpace($"{endpointType.Name} must declare a non-empty route.");
             adminTemplates.Should().Contain(trigger.Route!, $"{endpointType.Name} route must come from AppRoutes.");
         }
 
-        foreach (var (endpointType, trigger) in GetTriggers(typeof(GetSchemasEndpoint).Assembly))
+        foreach (var (endpointType, trigger) in publicTriggers)
         {
             trigger.Route.Should().NotBeNullOrWhiteSpace($"{endpointType.Name} must declare a non-empty route.");
             publicTemplates.Should().Contain(trigger.Route!, $"{endpointType.Name} route must come from AppRoutes.PublicApi.Templates.");
@@ -247,28 +286,5 @@ public class FunctionEndpointAndEventArchitectureTests
                 ["BlobSubmissionRepository:ProcessedContainerName"] = "processed"
             })
             .Build();
-    }
-
-    private static void AssertAllEndpointsResolve(IServiceCollection services, Assembly hostAssembly)
-    {
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
-        {
-            ValidateOnBuild = true,
-            ValidateScopes = true
-        });
-
-        var endpointAndEventTypes = hostAssembly.GetTypes()
-            .Where(t => t is { IsClass: true, IsAbstract: false } &&
-                        (typeof(IFunctionEndpoint).IsAssignableFrom(t) || typeof(IFunctionEvent).IsAssignableFrom(t)))
-            .ToList();
-
-        endpointAndEventTypes.Should().NotBeEmpty();
-
-        using var scope = provider.CreateScope();
-        foreach (var type in endpointAndEventTypes)
-        {
-            var resolved = scope.ServiceProvider.GetRequiredService(type);
-            resolved.Should().NotBeNull();
-        }
     }
 }

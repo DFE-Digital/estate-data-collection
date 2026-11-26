@@ -15,9 +15,9 @@ namespace EstateDataCollection.AzureFunctions.Admin.Routes.Api;
 
 /// <summary>
 /// Dry-run verification endpoint for the Data Team / CI pipelines.
-/// Evaluates schema syntax (Draft-07 / Draft 2020-12), validates quality rules (JsonLogic / CEL),
-/// validates identifier extraction alignment, supports direct ODCS YAML contracts or raw JSON rule arrays,
-/// and runs in-flight golden fixture checks without persisting to Blob.
+/// Always returns 200 OK with a structured verification report (issues grouped by severity,
+/// contract consistency analyser findings, valid/invalid fixture outcomes, and engine traces),
+/// returning 400 Bad Request only when the HTTP request body is empty or completely unreadable.
 /// Route: POST /api/schemas/verify
 /// </summary>
 public sealed class PostVerifySchemaEndpoint(
@@ -94,7 +94,7 @@ public sealed class PostVerifySchemaEndpoint(
 
         if (body is null ||
             (string.IsNullOrWhiteSpace(body.SchemaJson) &&
-             string.IsNullOrWhiteSpace(body.EffectiveRulesJson) &&
+             string.IsNullOrWhiteSpace(body.RulesJson) &&
              string.IsNullOrWhiteSpace(body.OdcsYaml)))
         {
             return Error.Failure(ErrorCodes.PayloadEmpty);
@@ -104,9 +104,11 @@ public sealed class PostVerifySchemaEndpoint(
             SchemaJson: body.SchemaJson,
             SampleValidFixtures: body.SampleValidFixtures ?? [],
             SampleInvalidFixtures: body.SampleInvalidFixtures ?? [],
-            RulesJson: body.EffectiveRulesJson,
+            RulesJson: body.RulesJson,
             OdcsYaml: body.OdcsYaml,
             FileName: body.FileName ?? AdminRequestHelpers.GetFileNameHint(http),
-            IdentifierConfig: body.IdentifierConfig ?? AdminRequestHelpers.GetIdentifierConfigHint(http));
+            IdentifierConfig: body.IdentifierConfig ?? AdminRequestHelpers.GetIdentifierConfigHint(http),
+            ValidationPolicy: body.ValidationPolicy,
+            AmbientFixtures: body.AmbientFixtures);
     }
 }

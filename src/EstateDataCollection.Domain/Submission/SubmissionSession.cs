@@ -18,10 +18,10 @@ public sealed class SubmissionSession
     [JsonInclude]
     public DateTimeOffset? FinalisedAtUtc { get; private set; }
 
-    public bool IsFinalised
-    {
-        get { return FinalisedAtUtc.HasValue; }
-    }
+    [JsonInclude]
+    public string? ProcessedBundlePrefix { get; private set; }
+
+    public bool IsFinalised => FinalisedAtUtc.HasValue;
 
     public static SubmissionSession Create(string schemaName, int schemaVersion)
     {
@@ -42,8 +42,13 @@ public sealed class SubmissionSession
         IdentifierValue = string.IsNullOrWhiteSpace(identifierValue) ? null : identifierValue.Trim();
     }
 
-    public void Finalise()
+    public void Finalise(string? processedBundlePrefix = null)
     {
         FinalisedAtUtc = DateTimeOffset.UtcNow;
+        if (!string.IsNullOrWhiteSpace(processedBundlePrefix))
+        {
+            var normalised = processedBundlePrefix.Trim().TrimStart('/');
+            ProcessedBundlePrefix = normalised.EndsWith('/') ? normalised : $"{normalised}/";
+        }
     }
 }

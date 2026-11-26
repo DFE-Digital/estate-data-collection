@@ -2,7 +2,9 @@ using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Options;
 using EstateDataCollection.Application.Validators;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
+using EstateDataCollection.Domain.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -33,10 +35,37 @@ public sealed class ScheduleSchemaUseCase(
         }
 
         var metadata = existing.Value.Metadata;
+        if (metadata.IsDeleted)
+        {
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, SchemaValidationMessages.SchemaDeletedLogReason);
+            return Error.Validation(ErrorCodes.SchemaDeleted, new { request.SchemaName, request.Version });
+        }
+
+        if (metadata.State == SchemaLifecycleState.Invalid)
+        {
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, SchemaValidationMessages.SchemaInvalidLogReason);
+            return Error.Validation(ErrorCodes.SchemaInvalid, new { request.SchemaName, request.Version, metadata.ErrorSummary });
+        }
+
+        if (metadata.State == SchemaLifecycleState.Unvalidated)
+        {
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, SchemaValidationMessages.SchemaUnvalidatedLogReason);
+            return Error.Validation(ErrorCodes.SchemaUnvalidated, new { request.SchemaName, request.Version, metadata.ErrorSummary });
+        }
+
         if (metadata.IsRetired)
         {
-            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, "Schema is already retired.");
+            _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, SchemaValidationMessages.SchemaRetiredLogReason);
             return Error.Validation(ErrorCodes.SchemaRetired, new { request.SchemaName, request.Version });
+        }
+
+        if (request.ValidationPolicy is not null)
+        {
+            var policyValidation = request.ValidationPolicy.ValidateDefinition();
+            if (policyValidation.IsFailure)
+            {
+                return policyValidation.Error;
+            }
         }
 
         var action = request.LifecycleAction?.Trim();
@@ -50,8 +79,8 @@ public sealed class ScheduleSchemaUseCase(
             var alignment = IdentifierSchemaValidator.ValidateAndAlign(
                 metadata.RawJsonSchema,
                 effectiveCandidate,
-                _validationOptions.UrnJsonPaths,
-                _validationOptions.RequireUrnOnFinalise);
+                _validationOptions.DefaultIdentifierJsonPaths,
+                _validationOptions.RequireIdentifierOnFinalise);
 
             if (!alignment.IsValid)
             {
@@ -73,6 +102,11 @@ public sealed class ScheduleSchemaUseCase(
             {
                 metadata.ConfigureIdentifier(alignment.EffectiveConfig);
             }
+        }
+
+        if (request.ValidationPolicy is not null)
+        {
+            metadata.ConfigureValidationPolicy(request.ValidationPolicy);
         }
 
         try
@@ -99,7 +133,7 @@ public sealed class ScheduleSchemaUseCase(
                 }
                 else
                 {
-                    var msg = $"Unsupported LifecycleAction '{request.LifecycleAction}'. Allowed values: Schedule, Activate, Deprecate, Retire.";
+                    var msg = SchemaValidationMessages.UnsupportedLifecycleAction(request.LifecycleAction);
                     _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, msg);
                     return Error.Validation(ErrorCodes.SchemaInvalidSchedule, msg);
                 }
@@ -108,9 +142,9 @@ public sealed class ScheduleSchemaUseCase(
             {
                 metadata.ScheduleActivation(request.EffectiveFromUtc.Value, request.EffectiveToUtc);
             }
-            else if (request.IdentifierConfig is null)
+            else if (request.IdentifierConfig is null && request.ValidationPolicy is null)
             {
-                var msg = "Either EffectiveFromUtc, LifecycleAction, or IdentifierConfig must be provided.";
+                var msg = SchemaValidationMessages.ScheduleRequiresInputField;
                 _instrumentation.SchemaScheduleFailed(request.SchemaName, request.Version, msg);
                 return Error.Validation(ErrorCodes.SchemaInvalidSchedule, msg);
             }
@@ -142,6 +176,7 @@ public sealed class ScheduleSchemaUseCase(
             EffectiveFromUtc: metadata.EffectiveFromUtc,
             EffectiveToUtc: metadata.EffectiveToUtc,
             Sha256Hash: metadata.Sha256Hash,
-            IdentifierConfig: metadata.IdentifierConfig);
+            IdentifierConfig: metadata.IdentifierConfig,
+            ValidationPolicy: metadata.ValidationPolicy);
     }
 }

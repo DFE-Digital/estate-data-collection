@@ -487,7 +487,7 @@ public sealed class SubmissionExecutionScope : IDisposable
         if (error.ValidationErrors is { Count: > 0 } validationErrors)
         {
             return validationErrors
-                .Select(e => new SubmissionAuditValidationIssue(e.PropertyPath, e.Message, e.RuleId))
+                .Select(e => new SubmissionAuditValidationIssue(e.PropertyPath, e.Message, e.RuleId, e.Severity))
                 .ToArray();
         }
 

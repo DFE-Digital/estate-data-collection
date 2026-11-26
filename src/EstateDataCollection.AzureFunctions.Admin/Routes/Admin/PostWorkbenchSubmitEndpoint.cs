@@ -5,6 +5,7 @@ using EstateDataCollection.Application.UseCases;
 using EstateDataCollection.Application.UseCases.Schema.SubmitSchema;
 using EstateDataCollection.AzureFunctions.Admin.Helpers;
 using EstateDataCollection.AzureFunctions.Admin.PageBase;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Routing;
 using EstateDataCollection.Common.Web.Endpoints;
 using Microsoft.AspNetCore.Http;
@@ -30,7 +31,7 @@ public sealed class PostWorkbenchSubmitEndpoint(
         InstrumentInvoked(EndpointName, "submit");
 
         var form = await ReadFormSafeAsync(http, cancellationToken);
-        var meta = CreatePageMeta(http, "Contract Workbench", activeNav: "workbench");
+        var meta = CreatePageMeta(http, AdminUiMessages.WorkbenchTitle, activeNav: "workbench");
 
         var parseResult = WorkbenchFormParser.Parse(form, requireSchemaIdentity: true);
         if (parseResult.IsFailure)

@@ -24,20 +24,14 @@ public interface ISchemaRegistry : IInfrastructure
     /// </summary>
     Task<Result<IReadOnlyList<SchemaMetadata>>> ListSchemasAsync(
         string? schemaNameFilter = null,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult<Result<IReadOnlyList<SchemaMetadata>>>(Array.Empty<SchemaMetadata>());
-    }
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Updates the lifecycle schedule / state metadata (.meta.json) for an existing schema version.
     /// </summary>
     Task<Result> UpdateSchemaMetadataAsync(
         SchemaMetadata metadata,
-        CancellationToken cancellationToken = default)
-    {
-        return SaveSchemaAsync(metadata, cancellationToken);
-    }
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Updates the stored valid/invalid golden test fixtures (.valid.json / .invalid.json) for an existing schema version.
@@ -47,13 +41,10 @@ public interface ISchemaRegistry : IInfrastructure
         int version,
         IReadOnlyList<string> validFixtures,
         IReadOnlyList<string> invalidFixtures,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(Result.Success());
-    }
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Checks whether a schema version already exists in storage.
+    /// Checks whether a schema version key has already been consumed in storage (including Deleted tombstones).
     /// </summary>
     Task<Result<bool>> ExistsAsync(string schemaName, int version, CancellationToken cancellationToken = default);
 
@@ -71,10 +62,39 @@ public interface ISchemaRegistry : IInfrastructure
         string? rawOdcsYaml,
         IReadOnlyList<string>? sampleValidFixtures,
         IReadOnlyList<string>? sampleInvalidFixtures,
-        CancellationToken cancellationToken = default)
-    {
-        return SaveSchemaAsync(metadata, rawRulesJson, rawOdcsYaml, cancellationToken);
-    }
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Persists a <c>{schemaName}/v{version}.error.json</c> diagnostic report in the schemas container.
+    /// </summary>
+    Task<Result> SaveErrorReportAsync(
+        SchemaErrorReport report,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Loads a <c>{schemaName}/v{version}.error.json</c> diagnostic report if present.
+    /// </summary>
+    Task<Result<SchemaErrorReport?>> GetErrorReportAsync(
+        string schemaName,
+        int version,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a <c>{schemaName}/v{version}.error.json</c> diagnostic report if present.
+    /// </summary>
+    Task<Result> DeleteErrorReportAsync(
+        string schemaName,
+        int version,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes contract/rule/fixture blobs for a schema version while marking <c>.meta.json</c> as
+    /// <see cref="SchemaLifecycleState.Deleted"/> and preserving <c>.meta.json</c> + <c>.error.json</c>.
+    /// </summary>
+    Task<Result<SchemaMetadata>> DeleteSchemaVersionAsync(
+        string schemaName,
+        int version,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Reads a newly uploaded contract (ODCS YAML, .schema.json, or .rules.json) and any companion files
@@ -82,11 +102,7 @@ public interface ISchemaRegistry : IInfrastructure
     /// </summary>
     Task<Result<DraftSchemaArtifact>> GetDraftArtefactAsync(
         string blobPath,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult<Result<DraftSchemaArtifact>>(
-            Error.NotFound(ErrorCodes.SchemaNotFound, new { blobPath }));
-    }
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes the processed draft contract files (and any prior .error.json diagnostic blob) from the draft container
@@ -94,10 +110,7 @@ public interface ISchemaRegistry : IInfrastructure
     /// </summary>
     Task<Result> CompleteDraftIngestionAsync(
         DraftSchemaArtifact artifact,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(Result.Success());
-    }
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Writes a .error.json diagnostic file alongside the failed draft blob in the draft container.
@@ -107,8 +120,5 @@ public interface ISchemaRegistry : IInfrastructure
         string? schemaName,
         int? version,
         IReadOnlyList<string> errors,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(Result.Success());
-    }
+        CancellationToken cancellationToken = default);
 }

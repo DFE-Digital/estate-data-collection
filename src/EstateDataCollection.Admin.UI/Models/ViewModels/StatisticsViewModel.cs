@@ -8,75 +8,33 @@ public sealed record StatisticsViewModel(
     GetSubmissionStatisticsResult? Statistics,
     Error? PageError = null)
 {
-    public ErrorSummaryViewModel? ErrorSummary
-    {
-        get { return ErrorSummaryViewModel.From(PageError); }
-    }
+    public ErrorSummaryViewModel? ErrorSummary => ErrorSummaryViewModel.From(PageError);
 
-    public bool HasStatistics
-    {
-        get { return Statistics is not null; }
-    }
+    public bool HasStatistics => Statistics is not null;
 
-    public int TotalSubmissions
-    {
-        get { return Statistics?.TotalSubmissions ?? 0; }
-    }
+    public int TotalSubmissions => Statistics?.TotalSubmissions ?? 0;
 
-    public int DraftSubmissions
-    {
-        get { return Statistics?.DraftSubmissions ?? 0; }
-    }
+    public int DraftSubmissions => Statistics?.DraftSubmissions ?? 0;
 
-    public int DraftWithPayloadSubmissions
-    {
-        get { return Statistics?.DraftWithPayloadSubmissions ?? 0; }
-    }
+    public int DraftWithPayloadSubmissions => Statistics?.DraftWithPayloadSubmissions ?? 0;
 
-    public int EmptyDraftSubmissions
-    {
-        get { return Statistics?.EmptyDraftSubmissions ?? 0; }
-    }
+    public int EmptyDraftSubmissions => Statistics?.EmptyDraftSubmissions ?? 0;
 
-    public int FinalisedSubmissions
-    {
-        get { return Statistics?.FinalisedSubmissions ?? 0; }
-    }
+    public int FinalisedSubmissions => Statistics?.FinalisedSubmissions ?? 0;
 
-    public int SubmissionsLast24Hours
-    {
-        get { return Statistics?.SubmissionsLast24Hours ?? 0; }
-    }
+    public int SubmissionsLast24Hours => Statistics?.SubmissionsLast24Hours ?? 0;
 
-    public int SubmissionsLast7Days
-    {
-        get { return Statistics?.SubmissionsLast7Days ?? 0; }
-    }
+    public int SubmissionsLast7Days => Statistics?.SubmissionsLast7Days ?? 0;
 
-    public int TotalDraftChunks
-    {
-        get { return Statistics?.TotalDraftChunks ?? 0; }
-    }
+    public int TotalDraftChunks => Statistics?.TotalDraftChunks ?? 0;
 
-    public int TotalAuditEvents
-    {
-        get { return Statistics?.TotalAuditEvents ?? 0; }
-    }
+    public int TotalAuditEvents => Statistics?.TotalAuditEvents ?? 0;
 
-    public string FinalisationRateDisplay
-    {
-        get { return TotalSubmissions > 0 ? $"{Statistics!.FinalisationRatePercent}%" : "—"; }
-    }
+    public string FinalisationRateDisplay => TotalSubmissions > 0 ? $"{Statistics!.FinalisationRatePercent}%" : "—";
 
-    public string FilteredSchemaName
-    {
-        get { return Statistics?.FilteredSchemaName ?? string.Empty; }
-    }
+    public string FilteredSchemaName => Statistics?.FilteredSchemaName ?? string.Empty;
 
-    public bool HasSchemaFilter
-    {
-        get { return !string.IsNullOrWhiteSpace(FilteredSchemaName); }
-    }
+    public bool HasSchemaFilter => !string.IsNullOrWhiteSpace(FilteredSchemaName);
 
     public IReadOnlyList<SelectSchemaFilterOptionViewModel> SchemaOptions
     {
@@ -105,10 +63,7 @@ public sealed record StatisticsViewModel(
 
     private IReadOnlyList<SchemaStatRowViewModel>? _schemaRows;
 
-    public bool HasSchemaRows
-    {
-        get { return SchemaRows.Count > 0; }
-    }
+    public bool HasSchemaRows => SchemaRows.Count > 0;
 
     public IReadOnlyList<SubmissionListItemViewModel> RecentSubmissions
     {
@@ -122,8 +77,5 @@ public sealed record StatisticsViewModel(
 
     private IReadOnlyList<SubmissionListItemViewModel>? _recentSubmissions;
 
-    public bool HasRecentSubmissions
-    {
-        get { return RecentSubmissions.Count > 0; }
-    }
+    public bool HasRecentSubmissions => RecentSubmissions.Count > 0;
 }

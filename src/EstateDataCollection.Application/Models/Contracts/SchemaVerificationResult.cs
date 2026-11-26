@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Common.Helpers;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
@@ -10,41 +11,150 @@ public sealed record SchemaVerificationResult(
     SchemaIdentifierConfig? ResolvedIdentifierConfig = null,
     IReadOnlyList<InvalidFixtureOutcome>? InvalidFixtureOutcomes = null,
     IReadOnlyList<ValidationMessage>? Warnings = null,
-    IReadOnlyList<ValidationEngineTrace>? EngineTraces = null
+    IReadOnlyList<ValidationEngineTrace>? EngineTraces = null,
+    IReadOnlyList<ValidationError>? AnalyserFindings = null,
+    IReadOnlyList<ValidationError>? AdditionalIssues = null
 )
 {
-    public bool IsSuccessful
-    {
-        get { return SyntaxErrors.Count == 0 && FixtureErrors.Count == 0; }
-    }
+    public bool IsSuccessful => SyntaxErrors.Count == 0 && FixtureErrors.Count == 0;
+
+    public bool HasWarnings =>
+        Warnings is { Count: > 0 } 
+        || (AnalyserFindings?.Any(f => f.Severity == RuleSeverity.Warning) == true);
 
     public IReadOnlyList<string> Errors
-    {
-        get { return [.. SyntaxErrors.Select(e => e.Message), .. FixtureErrors.Select(e => e.Message)]; }
-    }
+        =>
+        [
+            .. SyntaxErrors.Select(e => e.Message),
+            .. FixtureErrors.Select(e => e.Message)
+        ];
 
     public IReadOnlyList<string> WarningMessages
-    {
-        get { return [.. (Warnings ?? []).Select(w => w.Message)]; }
-    }
+        =>
+        [
+            .. (Warnings ?? []).Select(w => w.Message)
+        ];
 
     public IReadOnlyList<ValidationMessage> ValidationMessages
-    {
-        get { return [.. SyntaxErrors, .. FixtureErrors]; }
-    }
+        =>
+        [
+            .. SyntaxErrors,
+            .. FixtureErrors
+        ];
+
+    public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> Issues => BuildIssues();
 
     public IReadOnlyList<ValidationError> ToValidationErrors(string defaultPropertyPath = "schema")
-    {
-        return
+        =>
         [
             .. SyntaxErrors.Select(e => new ValidationError(
-                string.IsNullOrWhiteSpace(e.Identifier) ? defaultPropertyPath : e.Identifier,
+                string.IsNullOrWhiteSpace(e.Path)
+                    ? (string.IsNullOrWhiteSpace(e.Identifier) 
+                        ? defaultPropertyPath 
+                        : e.Identifier)
+                    : e.Path,
                 e.Message,
-                e.RuleId)),
+                e.RuleId,
+                EngineId: e.EngineType?.Name)),
             .. FixtureErrors.Select(e => new ValidationError(
-                string.IsNullOrWhiteSpace(e.Identifier) ? "fixtures" : e.Identifier,
+                string.IsNullOrWhiteSpace(e.Path)
+                    ? (string.IsNullOrWhiteSpace(e.Identifier) 
+                        ? "fixtures" 
+                        : e.Identifier)
+                    : e.Path,
                 e.Message,
-                e.RuleId))
+                e.RuleId,
+                EngineId: e.EngineType?.Name))
         ];
+
+    public SchemaErrorReport ToErrorReport(string schemaName, int version)
+    {
+        var summary = !IsSuccessful
+            ? string.Join("; ", Errors.Take(3))
+            : WarningMessages.Count > 0
+                ? string.Join("; ", WarningMessages.Take(3))
+                : null;
+
+        return new SchemaErrorReport(
+            SchemaName: schemaName,
+            Version: version,
+            RecordedAtUtc: DateTimeOffset.UtcNow,
+            Issues: Issues,
+            SyntaxErrors: SyntaxErrors.Select(e => e.Message).ToArray(),
+            FixtureErrors: FixtureErrors.Select(e => e.Message).ToArray(),
+            Warnings: WarningMessages,
+            Summary: summary);
+    }
+
+    private IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> BuildIssues()
+    {
+        var list = new List<ValidationError>();
+        if (AnalyserFindings is { Count: > 0 })
+        {
+            list.AddRange(AnalyserFindings);
+        }
+
+        if (AdditionalIssues is { Count: > 0 })
+        {
+            list.AddRange(AdditionalIssues);
+        }
+
+        foreach (var err in SyntaxErrors)
+        {
+            if (string.Equals(err.Source, "Consistency", StringComparison.OrdinalIgnoreCase) ||
+                err.Metadata?.ContainsKey("capturedInIssues") == true)
+            {
+                continue;
+            }
+
+            list.Add(new ValidationError(
+                PropertyPath: string.IsNullOrWhiteSpace(err.Path)
+                    ? (string.IsNullOrWhiteSpace(err.Identifier) ? "schema" : err.Identifier)
+                    : err.Path,
+                Message: err.Message,
+                RuleId: err.RuleId,
+                Severity: RuleSeverity.Error,
+                Action: "reject_schema",
+                EngineId: err.EngineType?.Name));
+        }
+
+        foreach (var err in FixtureErrors)
+        {
+            if (err.Metadata?.ContainsKey("capturedInIssues") == true)
+            {
+                continue;
+            }
+
+            list.Add(new ValidationError(
+                PropertyPath: string.IsNullOrWhiteSpace(err.Path)
+                    ? (string.IsNullOrWhiteSpace(err.Identifier) ? "fixtures" : err.Identifier)
+                    : err.Path,
+                Message: err.Message,
+                RuleId: err.RuleId,
+                Severity: RuleSeverity.Error,
+                Action: "reject_schema",
+                EngineId: err.EngineType?.Name));
+        }
+
+        foreach (var warn in Warnings ?? [])
+        {
+            if (string.Equals(warn.Source, "Consistency", StringComparison.OrdinalIgnoreCase) ||
+                warn.Metadata?.ContainsKey("capturedInIssues") == true)
+            {
+                continue;
+            }
+
+            list.Add(new ValidationError(
+                PropertyPath: string.IsNullOrWhiteSpace(warn.Path)
+                    ? (string.IsNullOrWhiteSpace(warn.Identifier) ? "fixtures" : warn.Identifier)
+                    : warn.Path,
+                Message: warn.Message,
+                RuleId: warn.RuleId,
+                Severity: RuleSeverity.Warning,
+                Action: "highlight_issue",
+                EngineId: warn.EngineType?.Name));
+        }
+
+        return ValidationIssuesHelper.GroupBySeverity(list);
     }
 }

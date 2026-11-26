@@ -1,4 +1,4 @@
-using EstateDataCollection.Infrastructure.Validation;
+using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Fixtures;
 using AwesomeAssertions;
 using Json.Schema;

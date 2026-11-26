@@ -36,12 +36,14 @@ public sealed class BlobSubmissionAuditStore(
 
         try
         {
-            var container = blobServiceClient.GetBlobContainerClient(options.Value.PayloadContainerName);
-            var blobName = BuildAuditBlobName(entry.SubmissionId, entry.TimestampUtc, entry.EventId);
-            var blobClient = container.GetBlobClient(blobName);
+            var payloadContainer = blobServiceClient.GetBlobContainerClient(options.Value.PayloadContainerName);
+            var fileName = SubmissionBlobPathResolver.BuildAuditFileName(entry.TimestampUtc, entry.EventId);
+            var prefix = ResolvePrefix(entry.SubmissionId);
+            var blobName = $"{prefix}{fileName}";
+            var blobClient = payloadContainer.GetBlobClient(blobName);
 
-            var json = JsonSerializer.Serialize(entry, JsonOptions);
-            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+            var jsonBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(entry, JsonOptions));
+            using var stream = new MemoryStream(jsonBytes);
 
             var metadata = new Dictionary<string, string>
             {
@@ -71,6 +73,16 @@ public sealed class BlobSubmissionAuditStore(
             };
 
             await blobClient.UploadAsync(stream, uploadOptions, cancellationToken);
+
+            // Mirror post-promotion audit entries (e.g. FinaliseSubmission Succeeded written after PromoteToProcessedAsync returns)
+            await TryMirrorToProcessedBundleAsync(
+                payloadContainer,
+                entry.SubmissionId,
+                fileName,
+                jsonBytes,
+                metadata,
+                cancellationToken);
+
             _instrumentation.AuditEntryAppended(
                 entry.SubmissionId,
                 entry.EventId,
@@ -132,19 +144,72 @@ public sealed class BlobSubmissionAuditStore(
         }
     }
 
-    private string ResolvePrefix(Guid submissionId)
+    private async Task TryMirrorToProcessedBundleAsync(
+        BlobContainerClient payloadContainer,
+        Guid submissionId,
+        string fileName,
+        byte[] jsonBytes,
+        Dictionary<string, string> metadata,
+        CancellationToken cancellationToken)
     {
-        var prefix = options.Value.AuditBlobPrefixFormat
-            .FormatWith(new { submissionId })
-            .TrimStart('/');
+        var sessionBlobName = options.Value.SessionBlobNameFormat.FormatWith(new { submissionId });
+        var sessionBlob = payloadContainer.GetBlobClient(sessionBlobName);
+        if (sessionBlob is null)
+        {
+            return;
+        }
 
-        return prefix.EndsWith('/') ? prefix : $"{prefix}/";
+        var existsResponse = await sessionBlob.ExistsAsync(cancellationToken);
+        if (existsResponse?.Value != true)
+        {
+            return;
+        }
+
+        var sessionDownload = await sessionBlob.DownloadContentAsync(cancellationToken);
+        if (sessionDownload?.Value is null)
+        {
+            return;
+        }
+
+        var session = JsonSerializer.Deserialize<SubmissionSession>(sessionDownload.Value.Content.ToString());
+        if (session is null || string.IsNullOrWhiteSpace(session.ProcessedBundlePrefix))
+        {
+            return;
+        }
+
+        var processedContainer = blobServiceClient.GetBlobContainerClient(options.Value.ProcessedContainerName);
+        if (processedContainer is null)
+        {
+            return;
+        }
+
+        var mirrorBlobName = SubmissionBlobPathResolver.BuildProcessedAuditBlobName(session.ProcessedBundlePrefix, fileName);
+        var mirrorBlob = processedContainer.GetBlobClient(mirrorBlobName);
+        if (mirrorBlob is null)
+        {
+            return;
+        }
+
+        using var mirrorStream = new MemoryStream(jsonBytes);
+        var mirrorUploadOptions = new BlobUploadOptions
+        {
+            HttpHeaders = new BlobHttpHeaders { ContentType = "application/json" },
+            Metadata = new Dictionary<string, string>(metadata),
+            Conditions = new BlobRequestConditions { IfNoneMatch = ETag.All }
+        };
+
+        try
+        {
+            await mirrorBlob.UploadAsync(mirrorStream, mirrorUploadOptions, cancellationToken);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 409)
+        {
+            // Already mirrored (idempotent)
+        }
     }
 
-    private string BuildAuditBlobName(Guid submissionId, DateTimeOffset timestampUtc, Guid eventId)
+    private string ResolvePrefix(Guid submissionId)
     {
-        var prefix = ResolvePrefix(submissionId);
-        var formattedTs = timestampUtc.ToUniversalTime().ToString("yyyyMMddTHHmmssfffffffZ");
-        return $"{prefix}{formattedTs}_{eventId:N}.json";
+        return SubmissionBlobPathResolver.ResolveAuditPrefix(options.Value.AuditBlobPrefixFormat, submissionId);
     }
 }

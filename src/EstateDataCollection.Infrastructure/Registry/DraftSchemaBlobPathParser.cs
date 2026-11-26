@@ -23,7 +23,6 @@ internal static partial class DraftSchemaBlobPathParser
         ".odcs.yml",
         ".schema.json",
         ".rules.json",
-        ".logic.json",
         ".yaml",
         ".yml",
         ".json"
@@ -37,8 +36,7 @@ internal static partial class DraftSchemaBlobPathParser
 
     public static bool IsRulesBlob(string blobPath, string content)
     {
-        if (blobPath.EndsWith(".rules.json", StringComparison.OrdinalIgnoreCase) ||
-            blobPath.EndsWith(".logic.json", StringComparison.OrdinalIgnoreCase))
+        if (blobPath.EndsWith(".rules.json", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

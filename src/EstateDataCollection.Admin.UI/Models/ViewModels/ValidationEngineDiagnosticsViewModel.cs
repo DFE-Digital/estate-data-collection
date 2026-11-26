@@ -1,6 +1,7 @@
 using System.Globalization;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Domain.Submission;
 
@@ -15,76 +16,61 @@ public sealed record ValidationEngineDiagnosticsViewModel(
     string? RegisteredSubtitle = null)
 {
     public static readonly ValidationEngineDiagnosticsViewModel Empty = new(
-        Heading: "Validation Engine Diagnostics",
+        Heading: AdminUiMessages.EngineDiagnosticsDefaultHeading,
         Subtitle: null,
         TraceRows: [],
-        RegisteredHeading: "Registered Validation Engines",
+        RegisteredHeading: AdminUiMessages.RegisteredEnginesDefaultHeading,
         RegisteredEngines: [],
         RegisteredSubtitle: null);
 
-    public bool HasTraces
-    {
-        get { return TraceRows.Count > 0; }
-    }
+    public bool HasTraces => TraceRows.Count > 0;
 
-    public bool HasSubtitle
-    {
-        get { return !string.IsNullOrWhiteSpace(Subtitle); }
-    }
+    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
 
-    public bool HasRegisteredEngines
-    {
-        get { return RegisteredEngines.Count > 0; }
-    }
+    public bool HasRegisteredEngines => RegisteredEngines.Count > 0;
 
-    public bool HasRegisteredSubtitle
-    {
-        get { return !string.IsNullOrWhiteSpace(RegisteredSubtitle); }
-    }
+    public bool HasRegisteredSubtitle => !string.IsNullOrWhiteSpace(RegisteredSubtitle);
 
-    public bool HasContent
-    {
-        get { return HasTraces || HasRegisteredEngines; }
-    }
+    public bool HasContent => HasTraces || HasRegisteredEngines;
 
     public static ValidationEngineDiagnosticsViewModel FromTraces(
         IReadOnlyList<ValidationEngineTrace>? traces,
-        string heading = "Validation Engine Diagnostics",
+        string heading = AdminUiMessages.EngineDiagnosticsDefaultHeading,
         string? subtitle = null)
     {
         var rows = MapTraceRows(traces);
         var resolvedSubtitle = subtitle ?? (rows.Count > 0
-            ? $"Execution outcomes, evaluated items, violations, and timings recorded across {rows.Count} validation engine(s)."
+            ? AdminUiMessages.EngineDiagnosticsTraceCountSubtitle(rows.Count)
             : null);
 
         return new ValidationEngineDiagnosticsViewModel(
             Heading: heading,
             Subtitle: resolvedSubtitle,
             TraceRows: rows,
-            RegisteredHeading: "Registered Validation Engines",
+            RegisteredHeading: AdminUiMessages.RegisteredEnginesDefaultHeading,
             RegisteredEngines: [],
             RegisteredSubtitle: null);
     }
 
     public static ValidationEngineDiagnosticsViewModel FromDetail(
         IReadOnlyList<ValidationEngineTrace>? traces,
-        IReadOnlyList<ValidationEngineDescriptor>? registeredEngines,
+        IReadOnlyList<WorkflowEngineDescriptor>? registeredEngines,
         IReadOnlyList<SchemaQualityRuleSummary>? qualityRules,
         SchemaIdentifierConfig? identifierConfig,
-        string traceHeading = "Last Test Run Engine Diagnostics",
+        string traceHeading = AdminUiMessages.LastTestRunEngineDiagnosticsHeading,
         string? traceSubtitle = null,
-        string registeredHeading = "Registered Validation Engines",
+        string registeredHeading = AdminUiMessages.RegisteredEnginesDefaultHeading,
         string? registeredSubtitle = null)
     {
         var traceRows = MapTraceRows(traces);
         var registeredRows = MapRegisteredEngines(registeredEngines, qualityRules, identifierConfig);
         var resolvedTraceSubtitle = traceSubtitle ?? (traceRows.Count > 0
-            ? $"Execution outcomes, evaluated items, violations, and timings recorded across {traceRows.Count} validation engine(s) in the latest regression test run."
+            ? AdminUiMessages.LastTestRunEngineDiagnosticsSubtitle(traceRows.Count)
             : null);
         var applicableCount = registeredRows.Count(r =>
             string.Equals(r.ApplicabilityTagCssClass, "govuk-tag govuk-tag--green", StringComparison.Ordinal));
         var resolvedRegisteredSubtitle = registeredSubtitle ?? (registeredRows.Count > 0
-            ? $"All validation engines currently registered in this environment and whether they apply to this schema version ({applicableCount} of {registeredRows.Count} active or applicable)."
+            ? AdminUiMessages.RegisteredEnginesApplicabilitySubtitle(applicableCount, registeredRows.Count)
             : null);
 
         return new ValidationEngineDiagnosticsViewModel(
@@ -135,7 +121,7 @@ public sealed record ValidationEngineDiagnosticsViewModel(
     }
 
     private static IReadOnlyList<RegisteredValidationEngineRowViewModel> MapRegisteredEngines(
-        IReadOnlyList<ValidationEngineDescriptor>? registeredEngines,
+        IReadOnlyList<WorkflowEngineDescriptor>? registeredEngines,
         IReadOnlyList<SchemaQualityRuleSummary>? qualityRules,
         SchemaIdentifierConfig? identifierConfig)
     {
@@ -154,19 +140,19 @@ public sealed record ValidationEngineDiagnosticsViewModel(
 
                 if (string.Equals(d.Kind, ValidationEngineKinds.StructuralSchema, StringComparison.OrdinalIgnoreCase))
                 {
-                    appText = "Applicable";
+                    appText = AdminUiMessages.EngineApplicableLabel;
                     appCss = "govuk-tag govuk-tag--green";
                 }
                 else if (string.Equals(d.Kind, ValidationEngineKinds.IdentifierExtraction, StringComparison.OrdinalIgnoreCase))
                 {
                     if (identifierConfig?.IsDisabled == true)
                     {
-                        appText = "Disabled";
+                        appText = AdminUiMessages.EngineDisabledLabel;
                         appCss = "govuk-tag govuk-tag--grey";
                     }
                     else
                     {
-                        appText = "Applicable";
+                        appText = AdminUiMessages.EngineApplicableLabel;
                         appCss = "govuk-tag govuk-tag--green";
                     }
                 }
@@ -176,12 +162,12 @@ public sealed record ValidationEngineDiagnosticsViewModel(
                         string.Equals(r.Engine, d.EngineId, StringComparison.OrdinalIgnoreCase));
                     if (matchingCount > 0)
                     {
-                        appText = $"Active ({matchingCount} rule{(matchingCount == 1 ? string.Empty : "s")})";
+                        appText = AdminUiMessages.EngineActiveRulesLabel(matchingCount);
                         appCss = "govuk-tag govuk-tag--green";
                     }
                     else
                     {
-                        appText = "Idle (0 rules)";
+                        appText = AdminUiMessages.EngineIdleZeroRulesLabel;
                         appCss = "govuk-tag govuk-tag--grey";
                     }
                 }
@@ -201,10 +187,10 @@ public sealed record ValidationEngineDiagnosticsViewModel(
     {
         return kind switch
         {
-            ValidationEngineKinds.StructuralSchema => "Structural Schema",
-            ValidationEngineKinds.QualityRule => "Quality Rule",
-            ValidationEngineKinds.IdentifierExtraction => "Identifier Extraction",
-            _ => string.IsNullOrWhiteSpace(kind) ? "Unknown" : kind
+            ValidationEngineKinds.StructuralSchema => AdminUiMessages.EngineKindStructuralSchema,
+            ValidationEngineKinds.QualityRule => AdminUiMessages.EngineKindQualityRule,
+            ValidationEngineKinds.IdentifierExtraction => AdminUiMessages.EngineKindIdentifierExtraction,
+            _ => string.IsNullOrWhiteSpace(kind) ? AdminUiMessages.UnknownLabel : kind
         };
     }
 

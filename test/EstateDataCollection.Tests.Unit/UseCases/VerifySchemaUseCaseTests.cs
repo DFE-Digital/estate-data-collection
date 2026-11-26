@@ -1,10 +1,11 @@
+using System.Text.Json.Nodes;
+using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.UseCases.Schema.VerifySchema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Fixtures;
-using AwesomeAssertions;
 using NSubstitute;
 using Xunit;
 
@@ -27,7 +28,7 @@ public class VerifySchemaUseCaseTests
         ValidationEngineTrace[] traces =
         [
             new(
-                new ValidationEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates structure"),
+                new WorkflowEngineDescriptor("json-schema", "JsonSchema.Net Validator", ValidationEngineKinds.StructuralSchema, "Validates structure"),
                 "Succeeded",
                 ItemsEvaluated: 3,
                 ViolationCount: 0,
@@ -36,56 +37,60 @@ public class VerifySchemaUseCaseTests
         ];
 
         _verifier.VerifyCandidateSchemaAsync(
-            JsonSchemaFixtures.ValidV1Schema,
-            null,
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<SchemaIdentifierConfig?>(),
-            Arg.Any<CancellationToken>())
+                JsonSchemaFixtures.ValidV1Schema,
+                null,
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [], EngineTraces: traces)));
 
         var request = new VerifySchemaRequest(
             JsonSchemaFixtures.ValidV1Schema,
             [SurveyPayloadFixtures.ValidPayloadJson],
-            [SurveyPayloadFixtures.MissingUrnJson]
-        );
+            [SurveyPayloadFixtures.MissingUrnJson]);
 
         // Act
         var result = await _sut.ExecuteAsync(request);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
+        result.Value.IsSuccessful.Should().BeTrue();
         result.Value.EngineTraces.Should().NotBeNull().And.ContainSingle(t => t.Descriptor.EngineId == "json-schema");
     }
 
     [Fact]
-    public async Task When_Schema_Contains_Syntax_Or_Fixture_Violations_It_Should_Return_Validation_Failed()
+    public async Task When_Schema_Contains_Syntax_Or_Fixture_Violations_It_Should_Return_Diagnostic_Report_With_IsSuccessful_False()
     {
         // Arrange
         _verifier.VerifyCandidateSchemaAsync(
-            Arg.Any<string>(),
-            Arg.Any<string>(),
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<SchemaIdentifierConfig?>(),
-            Arg.Any<CancellationToken>())
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<IReadOnlyList<string>>(),
+                Arg.Any<SchemaIdentifierConfig?>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult(
                 ["Meta-schema violation: type must be string"],
-                ["SampleValidFixtures[0] rejected by schema"]
-            )));
+                ["SampleValidFixtures[0] rejected by schema"])));
 
         var request = new VerifySchemaRequest(
             "{}",
             [],
-            []
-        );
+            []);
 
         // Act
         var result = await _sut.ExecuteAsync(request);
 
         // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Schema.VerificationFailed");
-        result.Error.ValidationErrors.Should().HaveCount(2);
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsSuccessful.Should().BeFalse();
+        result.Value.SyntaxErrors.Should().HaveCount(1);
+        result.Value.FixtureErrors.Should().HaveCount(1);
+        result.Value.Issues![RuleSeverity.Error].Should().HaveCount(2);
     }
 }

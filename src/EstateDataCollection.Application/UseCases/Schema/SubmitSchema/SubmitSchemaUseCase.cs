@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Extensions;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,19 +20,16 @@ public class SubmitSchemaUseCase(
 
     public async Task<Result<SubmitSchemaResult>> ExecuteAsync(SubmitSchemaRequest request, CancellationToken cancellationToken = default)
     {
-        _instrumentation.SubmittingSchema(request.SchemaName, request.Version);
-
-        if (request.IdentifierConfig is not null)
+        if (string.IsNullOrWhiteSpace(request.SchemaName) || request.Version <= 0)
         {
-            var idDefValidation = request.IdentifierConfig.ValidateDefinition();
-            if (idDefValidation.IsFailure)
-            {
-                return idDefValidation.Error;
-            }
+            return Error.Validation(
+                ErrorCodes.SchemaInvalidSchedule,
+                SchemaValidationMessages.SchemaNameAndPositiveVersionRequired);
         }
 
-        var exists = await schemaRegistry.ExistsAsync(request.SchemaName, request.Version, cancellationToken);
+        _instrumentation.SubmittingSchema(request.SchemaName, request.Version);
 
+        var exists = await schemaRegistry.ExistsAsync(request.SchemaName, request.Version, cancellationToken);
         if (exists.IsFailure)
         {
             return exists.Error;
@@ -43,6 +41,27 @@ public class SubmitSchemaUseCase(
             return Error.Conflict(ErrorCodes.SchemaAlreadyExists, new { request.SchemaName, request.Version });
         }
 
+        var validFixtures = request.SampleValidFixtures ?? [];
+        var invalidFixtures = request.SampleInvalidFixtures ?? [];
+
+        if (request.IdentifierConfig is not null)
+        {
+            var idDefValidation = request.IdentifierConfig.ValidateDefinition();
+            if (idDefValidation.IsFailure)
+            {
+                return await PersistInvalidRequestAsync(request, validFixtures, invalidFixtures, idDefValidation.Error, "identifierConfig", cancellationToken);
+            }
+        }
+
+        if (request.ValidationPolicy is not null)
+        {
+            var policyValidation = request.ValidationPolicy.ValidateDefinition();
+            if (policyValidation.IsFailure)
+            {
+                return await PersistInvalidRequestAsync(request, validFixtures, invalidFixtures, policyValidation.Error, "validationPolicy", cancellationToken);
+            }
+        }
+
         var resolvedInputs = odcsParser.ResolveInputs(
             request.SchemaJson,
             request.RulesJson,
@@ -51,13 +70,12 @@ public class SubmitSchemaUseCase(
 
         if (resolvedInputs.IsFailure)
         {
-            return resolvedInputs.Error;
+            return await PersistInvalidRequestAsync(request, validFixtures, invalidFixtures, resolvedInputs.Error, "odcs", cancellationToken);
         }
 
-        var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, _, _) = resolvedInputs.Value;
+        var (effectiveSchemaJson, effectiveRulesJson, rawOdcsYaml, _, _, parsedValidationPolicy) = resolvedInputs.Value;
+        var effectiveValidationPolicy = request.ValidationPolicy ?? parsedValidationPolicy;
         var rulesParam = string.IsNullOrWhiteSpace(effectiveRulesJson) ? null : effectiveRulesJson;
-        var validFixtures = request.SampleValidFixtures ?? [];
-        var invalidFixtures = request.SampleInvalidFixtures ?? [];
 
         var verification = await schemaVerifier.VerifyCandidateSchemaAsync(
             effectiveSchemaJson,
@@ -65,39 +83,61 @@ public class SubmitSchemaUseCase(
             validFixtures,
             invalidFixtures,
             request.IdentifierConfig,
-            cancellationToken);
+            cancellationToken,
+            effectiveValidationPolicy);
 
         if (verification.IsFailure)
         {
             return verification.Error;
         }
 
-        if (!verification.Value.IsSuccessful)
-        {
-            var errors = verification.Value.ToValidationErrors("schema").ToList();
+        var report = verification.Value;
+        var effectiveIdentifierConfig = report.ResolvedIdentifierConfig ?? request.IdentifierConfig;
 
+        if (!report.IsSuccessful)
+        {
             _instrumentation.SchemaCandidateVerificationFailed(
                 request.SchemaName,
                 request.Version,
-                errors.Count,
-                string.Join("; ", verification.Value.Errors));
+                report.Errors.Count,
+                string.Join("; ", report.Errors));
 
-            return Error.Validation(ErrorCodes.SchemaVerificationFailed, errors: errors);
+            var invalidPersist = await SchemaCandidatePersistence.PersistFailedVerificationAsync(
+                schemaRegistry,
+                request.SchemaName,
+                request.Version,
+                effectiveSchemaJson ?? request.SchemaJson,
+                effectiveRulesJson,
+                rawOdcsYaml,
+                validFixtures,
+                invalidFixtures,
+                effectiveIdentifierConfig,
+                effectiveValidationPolicy,
+                report,
+                cancellationToken);
+
+            if (invalidPersist.IsFailure)
+            {
+                return invalidPersist.Error;
+            }
+
+            var (invalidMeta, errorReport) = invalidPersist.Value;
+            _instrumentation.SchemaSaved(invalidMeta.Name, invalidMeta.Version, invalidMeta.Sha256Hash);
+            return ToResult(invalidMeta, hasErrorReport: true, errorReport.Issues);
         }
 
-        var effectiveIdentifierConfig = verification.Value.ResolvedIdentifierConfig ?? request.IdentifierConfig;
-
         SchemaMetadata metadata;
+        SchemaErrorReport? warningReport;
         try
         {
-            metadata = SchemaMetadata.CreateDraft(
+            metadata = SchemaCandidatePersistence.CreateVerifiedMetadata(
                 request.SchemaName,
                 request.Version,
                 effectiveSchemaJson ?? string.Empty,
-                effectiveIdentifierConfig);
-            // Submitted schema packs are always stored in Validated state (unscheduled);
-            // effective dates are assigned separately via the Admin API.
-            metadata.MarkValidated();
+                effectiveIdentifierConfig,
+                effectiveValidationPolicy,
+                report,
+                out warningReport);
         }
         catch (Exception ex)
         {
@@ -105,12 +145,14 @@ public class SubmitSchemaUseCase(
             return Error.Validation(ErrorCodes.SchemaInvalidSchedule, ex.Message);
         }
 
-        var hasFixtures = validFixtures.Count > 0 || invalidFixtures.Count > 0;
-        var result = hasFixtures
-            ? await schemaRegistry.SaveSchemaAsync(metadata, effectiveRulesJson, rawOdcsYaml, validFixtures, invalidFixtures, cancellationToken)
-            : (effectiveRulesJson is not null || rawOdcsYaml is not null
-                ? await schemaRegistry.SaveSchemaAsync(metadata, effectiveRulesJson, rawOdcsYaml, cancellationToken)
-                : await schemaRegistry.SaveSchemaAsync(metadata, cancellationToken));
+        var result = await SchemaCandidatePersistence.SaveWithArtifactsAsync(
+            schemaRegistry,
+            metadata,
+            effectiveRulesJson,
+            rawOdcsYaml,
+            validFixtures,
+            invalidFixtures,
+            cancellationToken);
 
         if (result.IsFailure)
         {
@@ -121,8 +163,64 @@ public class SubmitSchemaUseCase(
             return result.Error;
         }
 
-        _instrumentation.SchemaSaved(metadata.Name, metadata.Version, metadata.Sha256Hash);
+        if (warningReport is not null)
+        {
+            var errSave = await schemaRegistry.SaveErrorReportAsync(warningReport, cancellationToken);
+            if (errSave.IsFailure)
+            {
+                return errSave.Error;
+            }
+        }
 
+        _instrumentation.SchemaSaved(metadata.Name, metadata.Version, metadata.Sha256Hash);
+        return ToResult(metadata, metadata.HasErrorReport, warningReport?.Issues ?? report.Issues);
+    }
+
+    private async Task<Result<SubmitSchemaResult>> PersistInvalidRequestAsync(
+        SubmitSchemaRequest request,
+        IReadOnlyList<string> validFixtures,
+        IReadOnlyList<string> invalidFixtures,
+        Error error,
+        string defaultPath,
+        CancellationToken cancellationToken)
+    {
+        var normalised = SchemaCandidatePersistence.NormaliseError(error, defaultPath);
+        _instrumentation.SchemaCandidateVerificationFailed(
+            request.SchemaName,
+            request.Version,
+            normalised.Messages.Count,
+            normalised.Summary);
+
+        var persist = await SchemaCandidatePersistence.PersistInvalidCandidateAsync(
+            schemaRegistry,
+            request.SchemaName,
+            request.Version,
+            request.SchemaJson,
+            request.RulesJson,
+            request.OdcsYaml,
+            validFixtures,
+            invalidFixtures,
+            request.IdentifierConfig,
+            request.ValidationPolicy,
+            error,
+            defaultPath,
+            cancellationToken);
+
+        if (persist.IsFailure)
+        {
+            return persist.Error;
+        }
+
+        var (metadata, report) = persist.Value;
+        _instrumentation.SchemaSaved(metadata.Name, metadata.Version, metadata.Sha256Hash);
+        return ToResult(metadata, hasErrorReport: true, report.Issues);
+    }
+
+    private static SubmitSchemaResult ToResult(
+        SchemaMetadata metadata,
+        bool hasErrorReport,
+        IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>>? issues)
+    {
         return new SubmitSchemaResult(
             SchemaName: metadata.Name,
             Version: metadata.Version,
@@ -130,7 +228,10 @@ public class SubmitSchemaUseCase(
             Sha256Hash: metadata.Sha256Hash,
             EffectiveFromUtc: metadata.EffectiveFromUtc,
             EffectiveToUtc: metadata.EffectiveToUtc,
-            IdentifierConfig: metadata.IdentifierConfig
-        );
+            IdentifierConfig: metadata.IdentifierConfig,
+            ValidationPolicy: metadata.ValidationPolicy,
+            HasErrorReport: hasErrorReport,
+            ErrorSummary: metadata.ErrorSummary,
+            Issues: issues);
     }
 }

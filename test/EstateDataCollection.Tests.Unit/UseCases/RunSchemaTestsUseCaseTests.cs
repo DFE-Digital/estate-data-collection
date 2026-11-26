@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
@@ -28,6 +29,7 @@ public sealed class RunSchemaTestsUseCaseTests
     [Fact]
     public async Task When_Running_Single_Schema_Tests_Should_Verify_Schema_Rules_Fixtures_And_Record_Audit_Metadata()
     {
+        // Arrange
         var metadata = SchemaMetadata.CreateDraft(
             "school-site",
             1,
@@ -49,7 +51,7 @@ public sealed class RunSchemaTestsUseCaseTests
         ValidationEngineTrace[] traces =
         [
             new(
-                new ValidationEngineDescriptor("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule, "CEL expressions"),
+                new WorkflowEngineDescriptor("cel", "Google CEL Engine", ValidationEngineKinds.QualityRule, "CEL expressions"),
                 "Succeeded",
                 ItemsEvaluated: 3,
                 ViolationCount: 0,
@@ -63,14 +65,20 @@ public sealed class RunSchemaTestsUseCaseTests
                 Arg.Is<IReadOnlyList<string>>(v => v.Count == 1),
                 Arg.Is<IReadOnlyList<string>>(inv => inv.Count == 1),
                 metadata.IdentifierConfig,
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult([], [], EngineTraces: traces)));
 
         _registry.UpdateSchemaMetadataAsync(metadata, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var result = (await _sut.ExecuteAsync(new RunSchemaTestsRequest("school-site", 1))).ShouldSucceed();
+        var request = new RunSchemaTestsRequest("school-site", 1);
 
+        // Act
+        var result = (await _sut.ExecuteAsync(request)).ShouldSucceed();
+
+        // Assert
         result.TotalSchemasChecked.Should().Be(1);
         result.PassedCount.Should().Be(1);
         result.FailedCount.Should().Be(0);
@@ -96,6 +104,7 @@ public sealed class RunSchemaTestsUseCaseTests
     [Fact]
     public async Task When_Running_All_Schemas_Should_Skip_Retired_By_Default_And_Surface_Regression_Failures()
     {
+        // Arrange
         var activeMeta = SchemaMetadata.CreateDraft("active-schema", 1, JsonSchemaFixtures.ValidV1Schema);
         activeMeta.ScheduleActivation(DateTimeOffset.UtcNow.AddDays(-1));
 
@@ -119,7 +128,9 @@ public sealed class RunSchemaTestsUseCaseTests
                 Arg.Any<IReadOnlyList<string>>(),
                 Arg.Any<IReadOnlyList<string>>(),
                 Arg.Any<SchemaIdentifierConfig?>(),
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(),
+                Arg.Any<SchemaValidationPolicy?>(),
+                Arg.Any<IReadOnlyDictionary<string, JsonNode?>?>())
             .Returns(Result<SchemaVerificationResult>.Success(new SchemaVerificationResult(
                 [],
                 [new ValidationMessage(typeof(RunSchemaTestsUseCaseTests), "SampleValidFixtures:0", "SampleValidFixtures:0 violated quality rules: capacity-positive")])));
@@ -127,8 +138,12 @@ public sealed class RunSchemaTestsUseCaseTests
         _registry.UpdateSchemaMetadataAsync(activeMeta, Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var result = (await _sut.ExecuteAsync(new RunSchemaTestsRequest())).ShouldSucceed();
+        var request = new RunSchemaTestsRequest();
 
+        // Act
+        var result = (await _sut.ExecuteAsync(request)).ShouldSucceed();
+
+        // Assert
         result.TotalSchemasChecked.Should().Be(1);
         result.PassedCount.Should().Be(0);
         result.FailedCount.Should().Be(1);
@@ -145,11 +160,16 @@ public sealed class RunSchemaTestsUseCaseTests
     [Fact]
     public async Task When_Single_Schema_Version_Is_Missing_Should_Return_NotFound()
     {
+        // Arrange
         _registry.GetExplicitSchemaAsync("missing-schema", 9, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Failure(Error.NotFound(ErrorCodes.SchemaNotFound)));
 
-        var result = await _sut.ExecuteAsync(new RunSchemaTestsRequest("missing-schema", 9));
+        var request = new RunSchemaTestsRequest("missing-schema", 9);
 
+        // Act
+        var result = await _sut.ExecuteAsync(request);
+
+        // Assert
         result.ShouldFailWith("Schema.NotFound");
     }
 }

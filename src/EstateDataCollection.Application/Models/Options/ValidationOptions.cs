@@ -5,17 +5,14 @@ namespace EstateDataCollection.Application.Models.Options;
 
 public sealed class ValidationOptions : IOption<ValidationOptions>
 {
-    public static string SectionName
-    {
-        get { return "Validation"; }
-    }
+    public static string SectionName => "Validation";
 
     /// <summary>
     /// Quality rule engines enabled at runtime and during schema verification.
-    /// Defaults to "jsonlogic" and "cel".
+    /// Defaults to "jsonlogic", "cel", and "unique".
     /// </summary>
     [Required]
-    public IReadOnlyList<string> EnabledEngines { get; init; } = ["jsonlogic", "cel"];
+    public IReadOnlyList<string> EnabledEngines { get; init; } = ["jsonlogic", "cel", "unique"];
 
     /// <summary>
     /// Default engine used when a rule does not explicitly specify an "engine" field.
@@ -30,13 +27,13 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
     public UnknownEngineBehavior UnknownEngineBehavior { get; init; } = UnknownEngineBehavior.Fail;
 
     /// <summary>
-    /// Whether quality rules (JsonLogic, CEL) are evaluated during draft updates (PUT /submissions/{id}).
+    /// Whether quality rules (JsonLogic, CEL, unique) are evaluated during draft updates (PUT /submissions/{id}).
     /// </summary>
     public bool RunQualityRulesOnDraftUpdate { get; init; } = true;
 
     /// <summary>
-    /// Whether school/establishment identifier extraction is checked during draft updates (PUT /submissions/{id})
-    /// and surfaced in PendingErrors.
+    /// Whether establishment identifier extraction is checked during draft updates (PUT /submissions/{id})
+    /// and surfaced in validation issues.
     /// </summary>
     public bool ValidateIdentifierOnDraftUpdate { get; init; } = true;
 
@@ -65,20 +62,56 @@ public sealed class ValidationOptions : IOption<ValidationOptions>
     ];
 
     /// <summary>
-    /// Whether a school identifier (URN) is required by default when a schema lacks an explicit IdentifierConfig
+    /// Whether an establishment identifier is required by default when a schema lacks an explicit IdentifierConfig
     /// and does not declare one as optional.
     /// </summary>
-    public bool RequireUrnOnFinalise { get; init; } = true;
+    public bool RequireIdentifierOnFinalise { get; init; } = true;
+
+    /// <summary>
+    /// Default identifier type/label used when a schema does not specify an explicit IdentifierConfig.Type.
+    /// Defaults to "URN".
+    /// </summary>
+    [Required, MinLength(1)]
+    public string DefaultIdentifierType { get; init; } = "URN";
 
     /// <summary>
     /// Ordered JSON paths searched to extract the identifier when a schema does not specify an explicit JsonPointer.
-    /// Supports both nested ODCS schemas ("school.urn") and flat schemas ("urn").
+    /// Defaults to ["school.urn", "urn"].
     /// </summary>
     [Required]
-    public IReadOnlyList<string> UrnJsonPaths { get; init; } = ["school.urn", "urn"];
+    public IReadOnlyList<string> DefaultIdentifierJsonPaths { get; init; } = ["school.urn", "urn"];
+
+    /// <summary>
+    /// Fallback JSON Pointer reported in diagnostics when no explicit or matched identifier pointer is available.
+    /// Defaults to "/urn".
+    /// </summary>
+    [Required, MinLength(1)]
+    public string DefaultIdentifierPointerFallback { get; init; } = "/urn";
 
     /// <summary>
     /// Maximum comprehension/loop iterations allowed per CEL evaluation.
     /// </summary>
     public int CelMaxIterations { get; init; } = 10_000;
+
+    /// <summary>
+    /// Automatic epsilon tolerance applied to floating-point comparisons to absorb binary float rounding noise
+    /// (e.g. 0.1 + 0.2 == 0.30000000000000004) without masking genuine multi-decimal mismatches like 0.001 == 0.
+    /// </summary>
+    public double FloatArtifactEpsilon { get; init; } = 1e-9;
+
+    /// <summary>
+    /// Optional global currency rounding tolerance override (e.g. 0.005m) for financial total equality checks.
+    /// </summary>
+    public decimal? CurrencyRoundingTolerance { get; init; }
+
+    /// <summary>
+    /// Optional local filesystem directory searched for reference datasets when blob storage is unavailable
+    /// or during offline test/verification runs.
+    /// </summary>
+    public string? ReferenceDataLocalPath { get; init; }
+
+    /// <summary>
+    /// Cache TTL (in seconds) for loaded reference datasets. Defaults to 300 seconds.
+    /// </summary>
+    public int ReferenceDataCacheSeconds { get; init; } = 300;
 }

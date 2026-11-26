@@ -25,39 +25,40 @@ public sealed class SubmitSchemaEndpointTests(AzuriteFixture fixture)
     [InlineData("""{"schemaJson": null, "odcsYaml": null}""")]
     public async Task When_Body_Is_Empty_Malformed_Or_Missing_Schema_Should_Return_400_BadRequest(string rawBody)
     {
-        var result = await _harness.Endpoint.HandleAsync(
-            HttpRequestBuilder.FromRaw(rawBody),
-            "bad_submit_schema",
-            1,
-            CancellationToken.None);
+        // Arrange
+        var request = HttpRequestBuilder.FromRaw(rawBody);
 
+        // Act
+        var result = await _harness.Endpoint.HandleAsync(
+            request, "bad_submit_schema", 1, CancellationToken.None);
+
+        // Assert
         result.ShouldHaveStatusCode(StatusCodes.Status400BadRequest);
     }
 
     [Fact]
     public async Task When_Same_Schema_Version_Submitted_Twice_Should_Return_409_Conflict()
     {
+        // Arrange
         var schemaName = IntegrationEndpointHarness.UniqueName("dup_schema");
         var dto = new SubmitSchemaBodyDto(SchemaJson: JsonSchemaFixtures.ValidV1Schema);
 
         var first = await _harness.Endpoint.HandleAsync(
-            HttpRequestBuilder.FromJson(dto),
-            schemaName,
-            1,
-            CancellationToken.None);
+            HttpRequestBuilder.FromJson(dto), schemaName, 1, CancellationToken.None);
         first.ShouldHaveStatusCode(StatusCodes.Status201Created);
 
+        // Act
         var duplicate = await _harness.Endpoint.HandleAsync(
-            HttpRequestBuilder.FromJson(dto),
-            schemaName,
-            1,
-            CancellationToken.None);
+            HttpRequestBuilder.FromJson(dto), schemaName, 1, CancellationToken.None);
+
+        // Assert
         duplicate.ShouldHaveStatusCode(StatusCodes.Status409Conflict);
     }
 
     [Fact]
     public async Task When_Raw_Odcs_Yaml_Submitted_With_Urn_Headers_Should_Persist_IdentifierConfig()
     {
+        // Arrange
         var schemaName = IntegrationEndpointHarness.UniqueName("yaml_hdr");
         var rawOdcsYaml = new OdcsContractYamlBuilder()
             .WithId("edc-yaml-hdr")
@@ -71,8 +72,10 @@ public sealed class SubmitSchemaEndpointTests(AzuriteFixture fixture)
             .WithUrnHeaders("/school/urn", required: true)
             .Build();
 
+        // Act
         var result = await _harness.Endpoint.HandleAsync(http, schemaName, 1, CancellationToken.None);
 
+        // Assert
         var data = result.ShouldBeApiSuccess<SubmitSchemaResult>(StatusCodes.Status201Created);
         data.State.Name.Should().Be("Validated");
         data.EffectiveFromUtc.Should().BeNull();

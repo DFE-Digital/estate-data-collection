@@ -5,8 +5,8 @@ using EstateDataCollection.Application.UseCases.Schema.ScheduleSchema;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 using EstateDataCollection.Tests.Common.Builders;
+using EstateDataCollection.Tests.Common.Builders.Contracts;
 using EstateDataCollection.Tests.Common.Extensions;
-using EstateDataCollection.Tests.Common.Fixtures;
 using NSubstitute;
 using Xunit;
 
@@ -34,8 +34,9 @@ public class ScheduleSchemaUseCaseTests
     [Fact]
     public async Task Should_Assign_Effective_Dates_And_Verified_IdentifierConfig_To_Unscheduled_Schema()
     {
+        // Arrange
         var registry = Substitute.For<ISchemaRegistry>();
-        var nestedSchemaJson = CdeContractFixtureLoader.LoadFile("schemas/edc-school-site.schema.json");
+        var nestedSchemaJson = EdcSchoolSiteContractBuilder.DefaultSchemaJson;
         var existingContract = new ResolvedSchemaBuilder()
             .ConfigureMetadata(m => m.WithName("school-workforce").WithSchema(nestedSchemaJson).Unscheduled())
             .WithSchemaJson(nestedSchemaJson)
@@ -46,15 +47,16 @@ public class ScheduleSchemaUseCaseTests
         registry.UpdateSchemaMetadataAsync(Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var useCase = new ScheduleSchemaUseCase(registry);
+        var sut = new ScheduleSchemaUseCase(registry);
         var from = DateTimeOffset.UtcNow.AddMinutes(-5);
         var to = DateTimeOffset.UtcNow.AddDays(30);
         var idConfig = new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/school/urn", Required = null };
+        var request = new ScheduleSchemaRequest("school-workforce", 1, from, to, IdentifierConfig: idConfig);
 
-        var result = (await useCase.ExecuteAsync(
-            new ScheduleSchemaRequest("school-workforce", 1, from, to, IdentifierConfig: idConfig),
-            CancellationToken.None)).ShouldSucceed();
+        // Act
+        var result = (await sut.ExecuteAsync(request, CancellationToken.None)).ShouldSucceed();
 
+        // Assert
         result.State.Name.Should().Be(nameof(SchemaLifecycleState.Active));
         result.EffectiveFromUtc.Should().Be(from);
         result.EffectiveToUtc.Should().Be(to);
@@ -75,6 +77,7 @@ public class ScheduleSchemaUseCaseTests
     [Fact]
     public async Task When_IdentifierPointer_Does_Not_Exist_In_Schema_Should_Fail_And_Not_Save()
     {
+        // Arrange
         var registry = Substitute.For<ISchemaRegistry>();
         var existingContract = new ResolvedSchemaBuilder()
             .ConfigureMetadata(m => m.WithName("school-workforce").Unscheduled())
@@ -83,13 +86,14 @@ public class ScheduleSchemaUseCaseTests
         registry.GetExplicitSchemaAsync("school-workforce", 1, Arg.Any<CancellationToken>())
             .Returns(Result<ResolvedSchema>.Success(existingContract));
 
-        var useCase = new ScheduleSchemaUseCase(registry);
+        var sut = new ScheduleSchemaUseCase(registry);
         var invalidConfig = new SchemaIdentifierConfig { Type = "URN", JsonPointer = "/school/urn" };
+        var request = new ScheduleSchemaRequest("school-workforce", 1, IdentifierConfig: invalidConfig);
 
-        var result = await useCase.ExecuteAsync(
-            new ScheduleSchemaRequest("school-workforce", 1, IdentifierConfig: invalidConfig),
-            CancellationToken.None);
+        // Act
+        var result = await sut.ExecuteAsync(request, CancellationToken.None);
 
+        // Assert
         result.ShouldFailWith("Schema.InvalidIdentifierConfig");
         await registry.DidNotReceive().UpdateSchemaMetadataAsync(Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>());
     }
@@ -97,6 +101,7 @@ public class ScheduleSchemaUseCaseTests
     [Fact]
     public async Task Should_Derive_Required_From_Schema_Required_Array_Even_If_Caller_Passes_Override()
     {
+        // Arrange
         var registry = Substitute.For<ISchemaRegistry>();
         var existingContract = new ResolvedSchemaBuilder()
             .ConfigureMetadata(m => m.WithName("optional-ukprn").WithSchema(OptionalUkprnSchema).Unscheduled())
@@ -108,18 +113,19 @@ public class ScheduleSchemaUseCaseTests
         registry.UpdateSchemaMetadataAsync(Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var useCase = new ScheduleSchemaUseCase(registry);
+        var sut = new ScheduleSchemaUseCase(registry);
         var idConfig = new SchemaIdentifierConfig
         {
             Type = "UKPRN",
             JsonPointer = "/establishment/ukprn",
             Required = true
         };
+        var request = new ScheduleSchemaRequest("optional-ukprn", 1, IdentifierConfig: idConfig);
 
-        var result = (await useCase.ExecuteAsync(
-            new ScheduleSchemaRequest("optional-ukprn", 1, IdentifierConfig: idConfig),
-            CancellationToken.None)).ShouldSucceed();
+        // Act
+        var result = (await sut.ExecuteAsync(request, CancellationToken.None)).ShouldSucceed();
 
+        // Assert
         result.IdentifierConfig!.Type.Should().Be("UKPRN");
         result.IdentifierConfig.JsonPointer.Should().Be("/establishment/ukprn");
         result.IdentifierConfig.Required.Should().BeFalse();
@@ -128,6 +134,7 @@ public class ScheduleSchemaUseCaseTests
     [Fact]
     public async Task Should_Allow_Updating_IdentifierConfig_To_None_Independently()
     {
+        // Arrange
         var registry = Substitute.For<ISchemaRegistry>();
         var existingContract = new ResolvedSchemaBuilder()
             .ConfigureMetadata(m => m.WithName("edc-survey-elements").Unscheduled())
@@ -138,13 +145,14 @@ public class ScheduleSchemaUseCaseTests
         registry.UpdateSchemaMetadataAsync(Arg.Any<SchemaMetadata>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success());
 
-        var useCase = new ScheduleSchemaUseCase(registry);
+        var sut = new ScheduleSchemaUseCase(registry);
         var idConfig = new SchemaIdentifierConfig { Type = "None", JsonPointer = null, Required = false };
+        var request = new ScheduleSchemaRequest("edc-survey-elements", 1, IdentifierConfig: idConfig);
 
-        var result = (await useCase.ExecuteAsync(
-            new ScheduleSchemaRequest("edc-survey-elements", 1, IdentifierConfig: idConfig),
-            CancellationToken.None)).ShouldSucceed();
+        // Act
+        var result = (await sut.ExecuteAsync(request, CancellationToken.None)).ShouldSucceed();
 
+        // Assert
         result.State.Name.Should().Be(nameof(SchemaLifecycleState.Validated));
         result.IdentifierConfig!.Type.Should().Be("None");
         result.IdentifierConfig.Required.Should().BeFalse();

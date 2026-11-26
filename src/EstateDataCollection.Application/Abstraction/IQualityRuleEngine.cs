@@ -8,24 +8,19 @@ namespace EstateDataCollection.Application.Abstraction;
 public interface IQualityRuleEngine : IInfrastructure
 {
     /// <summary>
-    /// Case-insensitive engine identifier (e.g. "jsonlogic", "cel").
+    /// Case-insensitive engine identifier (e.g. "jsonlogic", "cel", "unique").
     /// </summary>
     string EngineName { get; }
 
     /// <summary>
     /// Declarative metadata describing this engine's identity.
     /// </summary>
-    ValidationEngineDescriptor Descriptor
-    {
-        get
-        {
-            return new ValidationEngineDescriptor(
-                EngineName,
-                EngineName,
-                ValidationEngineKinds.QualityRule,
-                $"Quality rule engine '{EngineName}'.");
-        }
-    }
+    WorkflowEngineDescriptor Descriptor =>
+        new(
+            EngineName,
+            EngineName,
+            ValidationEngineKinds.QualityRule,
+            $"Quality rule engine '{EngineName}'.");
 
     /// <summary>
     /// Validates the syntax/structure of the rule's implementation during schema verification.
