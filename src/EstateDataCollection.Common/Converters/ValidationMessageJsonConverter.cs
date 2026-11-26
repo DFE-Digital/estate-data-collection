@@ -1,7 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EstateDataCollection.Common.Results;
 
-namespace EstateDataCollection.Common.Results;
+namespace EstateDataCollection.Common.Converters;
 
 public sealed class ValidationMessageJsonConverter : JsonConverter<ValidationMessage>
 {

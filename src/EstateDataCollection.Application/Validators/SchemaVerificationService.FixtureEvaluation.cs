@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Extensions;
+using EstateDataCollection.Common.Helpers;
 using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;

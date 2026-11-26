@@ -1,4 +1,7 @@
-namespace EstateDataCollection.Common.Results;
+using EstateDataCollection.Common.Extensions;
+using EstateDataCollection.Common.Results;
+
+namespace EstateDataCollection.Common.Helpers;
 
 public static class ValidationIssuesHelper
 {

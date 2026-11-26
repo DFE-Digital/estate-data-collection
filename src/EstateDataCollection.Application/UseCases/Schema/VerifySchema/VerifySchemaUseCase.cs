@@ -26,7 +26,7 @@ public class VerifySchemaUseCase(
             var idDefValidation = request.IdentifierConfig.ValidateDefinition();
             if (idDefValidation.IsFailure)
             {
-                return BuildErrorReportResult(idDefValidation.Error, "identifierConfig");
+                return BuildErrorReportResult(idDefValidation.Error, nameof(request.IdentifierConfig));
             }
         }
 
@@ -35,7 +35,7 @@ public class VerifySchemaUseCase(
             var policyValidation = request.ValidationPolicy.ValidateDefinition();
             if (policyValidation.IsFailure)
             {
-                return BuildErrorReportResult(policyValidation.Error, "validationPolicy");
+                return BuildErrorReportResult(policyValidation.Error, nameof(request.ValidationPolicy));
             }
         }
 

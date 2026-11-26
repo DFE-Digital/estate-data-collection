@@ -34,27 +34,3 @@ public interface IQualityRuleEngine : IInfrastructure
     /// </summary>
     Result<bool> Evaluate(BusinessRule rule, JsonNode enrichedContextNode, JsonNode rootNode);
 }
-
-public sealed record BatchRuleViolation(
-    string TargetPath,
-    string? Message = null);
-
-public sealed record ResolvedTargetItem(
-    string TargetPath,
-    JsonNode EnrichedContextNode,
-    JsonNode? ChildFocusNode = null,
-    IReadOnlyList<JsonNode>? Ancestors = null,
-    int? Index = null,
-    IReadOnlyDictionary<string, JsonNode?>? AmbientContext = null);
-
-/// <summary>
-/// Optional extension interface for engines that evaluate across an entire collection of resolved
-/// targets in a single O(N) pass (e.g. composite uniqueness checks).
-/// </summary>
-public interface IBatchQualityRuleEngine : IQualityRuleEngine
-{
-    Result<IReadOnlyList<BatchRuleViolation>> EvaluateBatch(
-        BusinessRule rule,
-        IReadOnlyList<ResolvedTargetItem> targets,
-        JsonNode rootNode);
-}

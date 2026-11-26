@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Application.Validators;
+using EstateDataCollection.Common.Helpers;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Submission;
 

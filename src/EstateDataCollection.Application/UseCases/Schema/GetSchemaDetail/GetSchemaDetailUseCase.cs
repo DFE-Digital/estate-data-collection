@@ -1,6 +1,7 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
 using EstateDataCollection.Common;
+using EstateDataCollection.Common.Extensions;
 using EstateDataCollection.Common.Results;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -47,9 +48,10 @@ public sealed class GetSchemaDetailUseCase(
             return Error.NotFound(ErrorCodes.SchemaNotFound, new { request.SchemaName, request.Version });
         }
 
-        var fields = string.IsNullOrWhiteSpace(metadata.RawJsonSchema)
-            ? []
-            : JsonSchemaFieldExtractor.ExtractFields(metadata.RawJsonSchema);
+        var fields = !string.IsNullOrWhiteSpace(metadata.RawJsonSchema)
+            ? JsonSchemaFieldExtractor.ExtractFields(metadata.RawJsonSchema)
+            : [];
+        
         var rules = (resolvedResult.Value.Rules ?? [])
             .Select(r => new SchemaQualityRuleSummary(
                 Id: r.Id,
@@ -60,9 +62,6 @@ public sealed class GetSchemaDetailUseCase(
                 ErrorMessage: r.EffectiveMessage,
                 Description: r.Description))
             .ToList();
-
-        var lastRunEngineTraces = ValidationEngineTraceMapper.ToApplicationTraces(metadata.LastTestRunEngineTraces);
-        var registeredEngines = validationService?.GetRegisteredEngines() ?? [];
 
         return new SchemaVersionDetail(
             SchemaName: metadata.Name,
@@ -86,8 +85,8 @@ public sealed class GetSchemaDetailUseCase(
             LastTestRunErrors: metadata.LastTestRunErrors ?? [],
             LastTestRunInvalidFixtures: metadata.LastTestRunInvalidFixtures ?? [],
             LastTestRunWarnings: metadata.LastTestRunWarnings ?? [],
-            LastTestRunEngineTraces: lastRunEngineTraces,
-            RegisteredEngines: registeredEngines,
+            LastTestRunEngineTraces: ValidationEngineTraceMapper.ToApplicationTraces(metadata.LastTestRunEngineTraces),
+            RegisteredEngines: validationService?.GetRegisteredEngines() ?? [],
             ValidationPolicy: metadata.ValidationPolicy,
             HasErrorReport: metadata.HasErrorReport,
             ErrorSummary: metadata.ErrorSummary,

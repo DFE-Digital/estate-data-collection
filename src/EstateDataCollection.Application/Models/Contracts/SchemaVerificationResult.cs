@@ -1,4 +1,5 @@
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Common.Helpers;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
@@ -17,51 +18,54 @@ public sealed record SchemaVerificationResult(
 {
     public bool IsSuccessful => SyntaxErrors.Count == 0 && FixtureErrors.Count == 0;
 
-    public bool HasWarnings
-    {
-        get
-        {
-            return Warnings is { Count: > 0 } ||
-                   (AnalyserFindings?.Any(f => f.Severity == RuleSeverity.Warning) == true);
-        }
-    }
+    public bool HasWarnings =>
+        Warnings is { Count: > 0 } 
+        || (AnalyserFindings?.Any(f => f.Severity == RuleSeverity.Warning) == true);
 
     public IReadOnlyList<string> Errors
-    {
-        get { return [.. SyntaxErrors.Select(e => e.Message), .. FixtureErrors.Select(e => e.Message)]; }
-    }
+        =>
+        [
+            .. SyntaxErrors.Select(e => e.Message),
+            .. FixtureErrors.Select(e => e.Message)
+        ];
 
     public IReadOnlyList<string> WarningMessages
-    {
-        get { return [.. (Warnings ?? []).Select(w => w.Message)]; }
-    }
+        =>
+        [
+            .. (Warnings ?? []).Select(w => w.Message)
+        ];
 
-    public IReadOnlyList<ValidationMessage> ValidationMessages => [.. SyntaxErrors, .. FixtureErrors];
+    public IReadOnlyList<ValidationMessage> ValidationMessages
+        =>
+        [
+            .. SyntaxErrors,
+            .. FixtureErrors
+        ];
 
     public IReadOnlyDictionary<RuleSeverity, IReadOnlyList<ValidationError>> Issues => BuildIssues();
 
     public IReadOnlyList<ValidationError> ToValidationErrors(string defaultPropertyPath = "schema")
-    {
-        return
+        =>
         [
             .. SyntaxErrors.Select(e => new ValidationError(
                 string.IsNullOrWhiteSpace(e.Path)
-                    ? (string.IsNullOrWhiteSpace(e.Identifier) ? defaultPropertyPath : e.Identifier)
+                    ? (string.IsNullOrWhiteSpace(e.Identifier) 
+                        ? defaultPropertyPath 
+                        : e.Identifier)
                     : e.Path,
                 e.Message,
                 e.RuleId,
-                RuleSeverity.Error,
                 EngineId: e.EngineType?.Name)),
             .. FixtureErrors.Select(e => new ValidationError(
                 string.IsNullOrWhiteSpace(e.Path)
-                    ? (string.IsNullOrWhiteSpace(e.Identifier) ? "fixtures" : e.Identifier)
+                    ? (string.IsNullOrWhiteSpace(e.Identifier) 
+                        ? "fixtures" 
+                        : e.Identifier)
                     : e.Path,
                 e.Message,
                 e.RuleId,
-                RuleSeverity.Error,
                 EngineId: e.EngineType?.Name))
         ];
-    }
 
     public SchemaErrorReport ToErrorReport(string schemaName, int version)
     {

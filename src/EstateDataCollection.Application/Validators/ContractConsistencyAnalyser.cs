@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using EstateDataCollection.Application.Abstraction;
+using EstateDataCollection.Application.Models;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Extensions;
 using EstateDataCollection.Common.Messages;
 using EstateDataCollection.Common.Results;
 

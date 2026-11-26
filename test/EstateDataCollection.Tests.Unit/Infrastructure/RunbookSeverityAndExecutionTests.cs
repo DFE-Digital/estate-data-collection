@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AwesomeAssertions;
 using EstateDataCollection.Application.Validators.Logic;
+using EstateDataCollection.Common.Helpers;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Infrastructure.Workflow;
 using EstateDataCollection.Tests.Common.Extensions;

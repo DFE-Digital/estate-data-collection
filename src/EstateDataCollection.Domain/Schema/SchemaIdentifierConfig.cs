@@ -13,13 +13,11 @@ namespace EstateDataCollection.Domain.Schema;
 public sealed record SchemaIdentifierConfig
 {
     public const string NoneType = "None";
-    public const string DefaultIdentifierType = "URN";
 
     /// <summary>
     /// Identifier type/label (e.g. "URN", "UKPRN", "LAEstab", custom label, or "None" to disable).
-    /// Defaults to <see cref="DefaultIdentifierType"/>.
     /// </summary>
-    public string Type { get; init; } = DefaultIdentifierType;
+    public string Type { get; init; } = NoneType;
 
     /// <summary>
     /// JSON Pointer or dot-notation path to the identifier within the submission payload
@@ -87,7 +85,7 @@ public sealed record SchemaIdentifierConfig
 
     public SchemaIdentifierConfig Normalise(string? defaultType = null)
     {
-        var fallbackType = string.IsNullOrWhiteSpace(defaultType) ? DefaultIdentifierType : defaultType.Trim();
+        var fallbackType = string.IsNullOrWhiteSpace(defaultType) ? NoneType : defaultType.Trim();
         var trimmedType = string.IsNullOrWhiteSpace(Type) ? fallbackType : Type.Trim();
         if (string.Equals(trimmedType, NoneType, StringComparison.OrdinalIgnoreCase))
         {

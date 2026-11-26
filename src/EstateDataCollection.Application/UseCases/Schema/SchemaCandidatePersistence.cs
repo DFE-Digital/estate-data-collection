@@ -1,5 +1,6 @@
 using EstateDataCollection.Application.Abstraction;
 using EstateDataCollection.Application.Models.Contracts;
+using EstateDataCollection.Common.Helpers;
 using EstateDataCollection.Common.Results;
 using EstateDataCollection.Domain.Schema;
 
